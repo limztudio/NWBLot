@@ -1023,6 +1023,7 @@ class SoftBodyRuntimeMeshCpuState{
         ++this.editRevision;
         if(this.editRevision == 0u)
             this.editRevision = 1u;
+        this.solidTriangleWords.clear();
 
         return this.updateDeformation(sb, xf);
     }
@@ -1132,8 +1133,34 @@ class SoftBodyRuntimeMeshCpuState{
         hk = HashCombineValue(hk, sb.topologyVersion);
         hk = HashCombineValue(hk, this.gpuVertTriList.size());
         hk = HashCombineValue(hk, this.gpuMeshletVertList.size());
-        if(this.m_useCageBinding)
+        if(this.m_useCageBinding){
             hk = HashCombineValue(hk, 1u);
+            for(usize i = 0u; i < this.gpuCageParticleIndices.size(); ++i){
+                const u32x4 cp = this.gpuCageParticleIndices[i];
+                const f32x4 bw = this.gpuCageBaryWeights[i];
+                hk = HashCombineValue(hk, cp.x);
+                hk = HashCombineValue(hk, cp.y);
+                hk = HashCombineValue(hk, cp.z);
+                hk = HashCombineValue(hk, cp.w);
+                hk = HashCombineValue(hk, BitCast<u32>(bw.x));
+                hk = HashCombineValue(hk, BitCast<u32>(bw.y));
+                hk = HashCombineValue(hk, BitCast<u32>(bw.z));
+                hk = HashCombineValue(hk, BitCast<u32>(bw.w));
+            }
+        }
+        else{
+            for(usize i = 0u; i < this.gpuVertToParticle.size(); ++i)
+                hk = HashCombineValue(hk, this.gpuVertToParticle[i]);
+        }
+        for(usize i = 0u; i < this.triangleIndices.size(); ++i)
+            hk = HashCombineValue(hk, this.triangleIndices[i]);
+        for(usize i = 0u; i < this.gpuMeshletMeta.size(); ++i){
+            const u32x4 mm = this.gpuMeshletMeta[i];
+            hk = HashCombineValue(hk, mm.x);
+            hk = HashCombineValue(hk, mm.y);
+            hk = HashCombineValue(hk, mm.z);
+            hk = HashCombineValue(hk, mm.w);
+        }
         this.gpuTopologyKey = cast<u64>(hk);
     }
 
@@ -1230,16 +1257,25 @@ class SoftBodyRuntimeMeshCpuState{
                 this.positions[rv] = f32x3u(VectorSingle(sb.particles[cast<usize>(this.m_renderVertToParticle[rv])].position));
         }
 
-        if(!FinalizeMeshSolidTriangleWordsWithCache(
-            Span<f32x3u>(this.positions),
-            Span<u32>(this.triangleIndices),
-            this.m_solidTopologyCache,
-            this.m_solidTopologyScratch,
-            this.solidTriangleWords
-        ))
-            return false;
-        if(this.solidTriangleWords.size() != ExpectedMeshletSolidTriangleWordCount(cast<u32>(this.meshletPrimitiveIndices.size())))
-            return false;
+        for(usize rv = 0u; rv < renderVertCount; ++rv){
+            const f32x3u rp = this.positions[rv];
+            if(!IsFinite(VectorSingle(rp.x, rp.y, rp.z, 0.0f).xyz))
+                this.positions[rv] = f32x3u(0.0f, 0.0f, 0.0f);
+        }
+
+        const usize expectedSolidWords = ExpectedMeshletSolidTriangleWordCount(cast<u32>(this.meshletPrimitiveIndices.size()));
+        if(this.solidTriangleWords.size() != expectedSolidWords){
+            if(!FinalizeMeshSolidTriangleWordsWithCache(
+                Span<f32x3u>(this.positions),
+                Span<u32>(this.triangleIndices),
+                this.m_solidTopologyCache,
+                this.m_solidTopologyScratch,
+                this.solidTriangleWords
+            ))
+                return false;
+            if(this.solidTriangleWords.size() != expectedSolidWords)
+                return false;
+        }
 
         this.m_accumNormals.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
         this.m_accumTangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));

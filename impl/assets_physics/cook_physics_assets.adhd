@@ -16,6 +16,9 @@ const StringView s_ConvexHullDiagnosticPrefix = "ConvexHull meta";
 const StringView s_CompoundHullDiagnosticPrefix = "CompoundHull meta";
 const StringView s_CollisionMeshDiagnosticPrefix = "CollisionMesh meta";
 const StringView s_HeightfieldDiagnosticPrefix = "Heightfield meta";
+const StringView s_SdfDiagnosticPrefix = "Sdf meta";
+const StringView s_ChainShapeDiagnosticPrefix = "ChainShape meta";
+const StringView s_CompoundShapeDiagnosticPrefix = "CompoundShape meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,6 +52,21 @@ class CollisionMeshCookEntry{
 class HeightfieldCookEntry{
     public Name virtualPath = s_NameNone;
     public HeightfieldShape heightfield;
+}
+
+class SdfCookEntry{
+    public Name virtualPath = s_NameNone;
+    public SdfShape sdf;
+}
+
+class ChainShapeCookEntry{
+    public Name virtualPath = s_NameNone;
+    public ChainShape chain;
+}
+
+class CompoundShapeCookEntry{
+    public Name virtualPath = s_NameNone;
+    public CompoundShapeAssetData compound;
 }
 
 
@@ -89,6 +107,24 @@ b8 SerializeHeightfieldAsset(in HeightfieldAsset asset, mut Vector<u8> outBinary
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeHeightfieldUnchecked(asset.heightfieldShape(), outBinary);
+}
+
+b8 SerializeSdfAsset(in SdfAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeSdfUnchecked(asset.sdfShape(), outBinary);
+}
+
+b8 SerializeChainShapeAsset(in ChainShapeAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeChainShapeUnchecked(asset.chainShape(), outBinary);
+}
+
+b8 SerializeCompoundShapeAsset(in CompoundShapeAsset asset, mut Vector<u8> outBinary){
+    if(!asset.validatePayload())
+        return false;
+    return PhysicsAssetBinaryCodec().serializeCompoundShapeUnchecked(asset.compoundShape(), outBinary);
 }
 
 
@@ -237,6 +273,143 @@ b8 HasCaseInsensitiveExtensionSuffix(in StringView text, in StringView lowerExt)
     return true;
 }
 
+b8 LoadCookPhysicsMaterialFromNwb(
+    in Path ownerNwbFile,
+    in StringView sourceMaterialRef,
+    in StringView prefix,
+    mut SurfaceMaterial outMaterial
+){
+    Path resolvedPath;
+    ResolvePhysicsSourcePath(ownerNwbFile, sourceMaterialRef, resolvedPath);
+    b8 foundVar = false;
+    b8 parseOk = false;
+    if(!VisitMetadataDocumentFile(resolvedPath, prefix, lambda[in resolvedPath, in prefix, mut foundVar, mut parseOk, mut outMaterial](in MetascriptDocument doc) -> b8{
+        doc.forEachDeclaration(lambda[in resolvedPath, in prefix, in doc, mut foundVar, mut parseOk, mut outMaterial](in StringView declType, in StringView declVar) -> b8{
+            if(declType == "physics_material"){
+                foundVar = true;
+                const Optional<in MetascriptValue> valOpt = doc.borrowVariable(declVar);
+                if(!valOpt.has_value() || !valOpt.value().isMap()){
+                    error("{} '{}': source .nwb physics_material variable '{}' must be a map", prefix, PathToString(resolvedPath), declVar);
+                    parseOk = false;
+                    return false;
+                }
+                parseOk = ParseSurfaceMaterialMap(resolvedPath, valOpt.value(), prefix, outMaterial);
+                return false;
+            }
+            return true;
+        });
+        if(!foundVar){
+            const Optional<in MetascriptValue> assetOpt = doc.borrowVariable("asset");
+            if(assetOpt.has_value() && assetOpt.value().isMap()){
+                foundVar = true;
+                parseOk = ParseSurfaceMaterialMap(resolvedPath, assetOpt.value(), prefix, outMaterial);
+            }
+        }
+        if(!foundVar){
+            error("{} '{}': source .nwb contains no physics_material declaration", prefix, PathToString(resolvedPath));
+            return false;
+        }
+        return parseOk;
+    }))
+        return false;
+    return parseOk;
+}
+
+b8 ParseSurfaceMaterialWithSourceMap(
+    in Path file,
+    in MetascriptValue item,
+    in StringView prefix,
+    in StringView fieldLabel,
+    mut SurfaceMaterial outMaterial
+){
+    if(!item.isMap()){
+        error("{} '{}': '{}' must be a map", prefix, PathToString(file), fieldLabel);
+        return false;
+    }
+    const Optional<in MetascriptValue> srcOpt = item.borrowField("source_material");
+    if(srcOpt.has_value()){
+        usize fieldCount = 0u;
+        item.forEachMapEntry(lambda[mut fieldCount](in StringView key, in MetascriptValue v) -> b8{
+            ++fieldCount;
+            return true;
+        });
+        if(fieldCount != 1u){
+            error("{} '{}': '{}.source_material' cannot be combined with inline material fields", prefix, PathToString(file), fieldLabel);
+            return false;
+        }
+        const Expected<StringView> srcRes = ReadPhysicsStringValue(file, srcOpt.value(), prefix, "source_material");
+        if(!srcRes.has_value())
+            return false;
+        return LoadCookPhysicsMaterialFromNwb(file, srcRes.value(), prefix, outMaterial);
+    }
+    return ParseSurfaceMaterialMap(file, item, prefix, outMaterial);
+}
+
+b8 ParsePhysicsMaterialListWithSources(
+    in Path file,
+    in MetascriptValue listVal,
+    in StringView prefix,
+    in StringView fieldName,
+    mut Vector<SurfaceMaterial> outMaterials
+){
+    if(!listVal.isList()){
+        error("{} '{}': field '{}' must be a list of material maps", prefix, PathToString(file), fieldName);
+        return false;
+    }
+    const Span<MetascriptValue> items = listVal.listView();
+    outMaterials.clear();
+    outMaterials.resize(items.size());
+    for(usize i = 0u; i < items.size(); ++i){
+        if(!ParseSurfaceMaterialWithSourceMap(file, items[i], prefix, fieldName, outMaterials[i]))
+            return false;
+    }
+    return true;
+}
+
+b8 ApplyNwbSourceMeshTransform(
+    in Path file,
+    in StringView prefix,
+    in VectorSingle sourceScale,
+    in VectorSingle sourceRotation,
+    in VectorSingle sourceOffset,
+    mut Vector<f32x4> vertices,
+    mut Vector<u32> indices
+){
+    if(
+        !IsFinite(sourceScale)
+        || !IsFinite(sourceRotation)
+        || !IsFinite(sourceOffset)
+        || Abs(sourceScale.x) <= 1.0e-6f
+        || Abs(sourceScale.y) <= 1.0e-6f
+        || Abs(sourceScale.z) <= 1.0e-6f
+    ){
+        error("{} '{}': invalid source mesh transform", prefix, PathToString(file));
+        return false;
+    }
+    const VectorSingle rotUnit = SafeNormalizeQuat(sourceRotation);
+    const b8 hasScale = !Vector3LessOrEqual(Abs(sourceScale - VectorSingle(1.0f, 1.0f, 1.0f, 0.0f)), VectorSingle(1.0e-6f));
+    const b8 hasRot = !Vector3LessOrEqual(Abs(rotUnit), VectorSingle(1.0e-5f));
+    const b8 hasOffset = !Vector3LessOrEqual(Abs(sourceOffset), VectorSingle(1.0e-6f));
+    if(!hasScale && !hasRot && !hasOffset)
+        return true;
+    for(usize vi = 0u; vi < vertices.size(); ++vi){
+        const VectorSingle p = Vector3Rotate(VectorSingle(vertices[vi]) * sourceScale, rotUnit) + sourceOffset;
+        if(!IsFinite(p)){
+            error("{} '{}': transformed source mesh vertex is non-finite", prefix, PathToString(file));
+            return false;
+        }
+        vertices[vi] = f32x4(p, 0.0f);
+    }
+    if((sourceScale.x * sourceScale.y * sourceScale.z) < 0.0f){
+        for(usize ii = 0u; ii + 2u < indices.size(); ii += 3u){
+            const u32 tmp = indices[ii + 1u];
+            indices[ii + 1u] = indices[ii + 2u];
+            indices[ii + 2u] = tmp;
+        }
+    }
+    return true;
+}
+
 b8 AppendNestedPhysicsU32List(
     in Path file,
     in StringView prefix,
@@ -334,21 +507,28 @@ b8 ExtractNwbMeshPositionsAndIndices(
 b8 LoadPhysicsSourceMesh(
     in Path ownerNwbFile,
     in StringView sourceMeshRef,
+    in VectorSingle sourceScale,
+    in VectorSingle sourceRotation,
+    in VectorSingle sourceOffset,
+    in StringView sourceSubmesh,
+    in b8 normalizeUnits,
     in StringView prefix,
     mut Vector<f32x4> outVertices,
-    mut Vector<u32> outIndices
+    mut Vector<u32> outIndices,
+    mut Vector<u16> outTriMaterialIndices
 ){
     outVertices.clear();
     outIndices.clear();
+    outTriMaterialIndices.clear();
     Path resolvedPath;
     ResolvePhysicsSourcePath(ownerNwbFile, sourceMeshRef, resolvedPath);
 
     if(HasCaseInsensitiveExtensionSuffix(sourceMeshRef, ".nwb")){
         b8 foundVar = false;
         b8 extractOk = false;
-        if(!VisitMetadataDocumentFile(resolvedPath, prefix, lambda[in resolvedPath, in prefix, mut foundVar, mut extractOk, mut outVertices, mut outIndices](in MetascriptDocument doc) -> b8{
-            doc.forEachDeclaration(lambda[in resolvedPath, in prefix, in doc, mut foundVar, mut extractOk, mut outVertices, mut outIndices](in StringView declType, in StringView declVar) -> b8{
-                if(declType == "mesh" || declType == "skinned_mesh"){
+        if(!VisitMetadataDocumentFile(resolvedPath, prefix, lambda[in resolvedPath, in sourceSubmesh, in prefix, mut foundVar, mut extractOk, mut outVertices, mut outIndices](in MetascriptDocument doc) -> b8{
+            doc.forEachDeclaration(lambda[in resolvedPath, in sourceSubmesh, in prefix, in doc, mut foundVar, mut extractOk, mut outVertices, mut outIndices](in StringView declType, in StringView declVar) -> b8{
+                if((declType == "mesh" || declType == "skinned_mesh") && (sourceSubmesh.empty() || declVar == sourceSubmesh)){
                     foundVar = true;
                     const Optional<in MetascriptValue> valOpt = doc.borrowVariable(declVar);
                     if(!valOpt.has_value() || !valOpt.value().isMap()){
@@ -361,7 +541,7 @@ b8 LoadPhysicsSourceMesh(
                 }
                 return true;
             });
-            if(!foundVar){
+            if(!foundVar && (sourceSubmesh.empty() || sourceSubmesh == "asset")){
                 const Optional<in MetascriptValue> assetOpt = doc.borrowVariable("asset");
                 if(assetOpt.has_value() && assetOpt.value().isMap()){
                     foundVar = true;
@@ -369,16 +549,18 @@ b8 LoadPhysicsSourceMesh(
                 }
             }
             if(!foundVar){
-                error("{} '{}': source .nwb contains no mesh declaration", prefix, PathToString(resolvedPath));
+                error("{} '{}': source .nwb contains no matching mesh declaration", prefix, PathToString(resolvedPath));
                 return false;
             }
             return extractOk;
         }))
             return false;
-        return extractOk;
+        if(!extractOk)
+            return false;
+        return ApplyNwbSourceMeshTransform(ownerNwbFile, prefix, sourceScale, sourceRotation, sourceOffset, outVertices, outIndices);
     }
 
-    if(!LoadExternalMeshFile(resolvedPath, outVertices, outIndices)){
+    if(!LoadExternalMeshFile(resolvedPath, sourceScale, sourceRotation, sourceOffset, sourceSubmesh, normalizeUnits, outVertices, outIndices, outTriMaterialIndices)){
         error("{} '{}': failed to load external mesh file '{}'", prefix, PathToString(ownerNwbFile), sourceMeshRef);
         return false;
     }
@@ -407,11 +589,20 @@ b8 BuildCookHullFromMapValue(
     Vector<f32x4> points;
     b8 hasSourceMesh = false;
     StringView sourceMesh = "";
+    b8 hasSourceTransformOrFilter = false;
+    VectorSingle sourceScale(1.0f, 1.0f, 1.0f, 0.0f);
+    VectorSingle sourceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    u32 srcRotFieldCount = 0u;
+    VectorSingle sourceOffset(0.0f);
+    StringView sourceSubmesh = "";
+    b8 sourceNormalizeUnits = false;
 
     if(!mapVal.forEachMapEntry(lambda[
         in file, in prefix, in allowSourceMesh, mut isBox, mut hasIsBox, mut hasHalfExtents,
         mut halfExtents, mut boxRotation, mut rotFieldCount, mut skinRadius, mut points,
-        mut hasSourceMesh, mut sourceMesh
+        mut hasSourceMesh, mut sourceMesh, mut hasSourceTransformOrFilter,
+        mut sourceScale, mut sourceRotation, mut srcRotFieldCount, mut sourceOffset,
+        mut sourceSubmesh, mut sourceNormalizeUnits
     ](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "is_box"){
             hasIsBox = true;
@@ -427,6 +618,26 @@ b8 BuildCookHullFromMapValue(
             hasSourceMesh = true;
             return true;
         }
+        if(allowSourceMesh && key == "source_scale"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, sourceScale);
+        }
+        if(allowSourceMesh && key == "source_offset"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, sourceOffset);
+        }
+        if(allowSourceMesh && key == "source_submesh"){
+            hasSourceTransformOrFilter = true;
+            const Expected<StringView> subRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!subRes.has_value())
+                return false;
+            sourceSubmesh = subRes.value();
+            return true;
+        }
+        if(allowSourceMesh && key == "source_normalize_units"){
+            hasSourceTransformOrFilter = true;
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
+        }
         if(key == "half_extents"){
             VectorSingle v(0.0f);
             if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
@@ -438,6 +649,11 @@ b8 BuildCookHullFromMapValue(
         b8 rotOk = false;
         if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "box_rotation", "box_rotation_euler", "box_rotation_euler_degrees", rotFieldCount, boxRotation, rotOk))
             return rotOk;
+        b8 srcRotOk = false;
+        if(allowSourceMesh && TryReadPhysicsRotationField(file, key, fieldVal, prefix, "source_rotation", "source_rotation_euler", "source_rotation_euler_degrees", srcRotFieldCount, sourceRotation, srcRotOk)){
+            hasSourceTransformOrFilter = true;
+            return srcRotOk;
+        }
         error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
         return false;
     }))
@@ -445,6 +661,14 @@ b8 BuildCookHullFromMapValue(
 
     if(!IsFinite(VectorSingle(skinRadius)) || skinRadius < 0.0f){
         error("{} '{}': invalid 'skin_radius'", prefix, PathToString(file));
+        return false;
+    }
+    if(hasSourceTransformOrFilter && !hasSourceMesh){
+        error("{} '{}': 'source_scale'/'source_rotation'/'source_offset'/'source_submesh'/'source_normalize_units' require 'source_mesh'", prefix, PathToString(file));
+        return false;
+    }
+    if(!isBox && rotFieldCount > 0u){
+        error("{} '{}': 'box_rotation' is only valid when 'is_box' is 1", prefix, PathToString(file));
         return false;
     }
 
@@ -455,7 +679,8 @@ b8 BuildCookHullFromMapValue(
 
     if(hasSourceMesh){
         Vector<u32> dummyIndices;
-        if(!LoadPhysicsSourceMesh(file, sourceMesh, prefix, points, dummyIndices))
+        Vector<u16> dummyTriMats;
+        if(!LoadPhysicsSourceMesh(file, sourceMesh, sourceScale, sourceRotation, sourceOffset, sourceSubmesh, sourceNormalizeUnits, prefix, points, dummyIndices, dummyTriMats))
             return false;
     }
 
@@ -516,13 +741,23 @@ Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPat
     b8 hasHullsList = false;
     b8 hasSourceMesh = false;
     StringView sourceMesh = "";
+    b8 hasSourceTransformOrFilter = false;
+    VectorSingle sourceScale(1.0f, 1.0f, 1.0f, 0.0f);
+    VectorSingle sourceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    u32 srcRotFieldCount = 0u;
+    VectorSingle sourceOffset(0.0f);
+    StringView sourceSubmesh = "";
+    b8 sourceNormalizeUnits = false;
     Vector<f32x4> vertices;
     Vector<u32> indices;
     VhacdParams vhacdParams;
+    b8 hasAnyVhacdField = false;
 
     if(!value.forEachMapEntry(lambda[
         in file, mut entry, mut hasHullsList, mut hasSourceMesh, mut sourceMesh,
-        mut vertices, mut indices, mut vhacdParams
+        mut hasSourceTransformOrFilter, mut sourceScale, mut sourceRotation, mut srcRotFieldCount,
+        mut sourceOffset, mut sourceSubmesh, mut sourceNormalizeUnits,
+        mut vertices, mut indices, mut vhacdParams, mut hasAnyVhacdField
     ](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "hulls"){
             hasHullsList = true;
@@ -534,7 +769,7 @@ Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPat
             entry.hulls.clear();
             entry.hulls.resize(items.size());
             for(usize hi = 0u; hi < items.size(); ++hi){
-                if(!BuildCookHullFromMapValue(file, items[hi], s_CompoundHullDiagnosticPrefix, false, entry.hulls[hi]))
+                if(!BuildCookHullFromMapValue(file, items[hi], s_CompoundHullDiagnosticPrefix, true, entry.hulls[hi]))
                     return false;
             }
             return true;
@@ -547,25 +782,54 @@ Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPat
             hasSourceMesh = true;
             return true;
         }
+        if(key == "source_scale"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, sourceScale);
+        }
+        if(key == "source_offset"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, sourceOffset);
+        }
+        if(key == "source_submesh"){
+            hasSourceTransformOrFilter = true;
+            const Expected<StringView> subRes = ReadPhysicsStringValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key);
+            if(!subRes.has_value())
+                return false;
+            sourceSubmesh = subRes.value();
+            return true;
+        }
+        if(key == "source_normalize_units"){
+            hasSourceTransformOrFilter = true;
+            return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, sourceNormalizeUnits);
+        }
+        b8 srcRotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, s_CompoundHullDiagnosticPrefix, "source_rotation", "source_rotation_euler", "source_rotation_euler_degrees", srcRotFieldCount, sourceRotation, srcRotOk)){
+            hasSourceTransformOrFilter = true;
+            return srcRotOk;
+        }
         if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vertices);
         if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, indices);
-        if(key == "vhacd_max_hulls") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxConvexHulls);
-        if(key == "vhacd_max_recursion_depth") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxRecursionDepth);
-        if(key == "vhacd_concavity_threshold") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.concavityThreshold);
-        if(key == "vhacd_max_vertices_per_hull") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxVerticesPerHull);
-        if(key == "hull_radius") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.hullRadius);
-        if(key == "vhacd_min_volume_ratio") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.minVolumeRatio);
-        if(key == "vhacd_enable_arbitrary_planes") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableArbitraryPlanes);
-        if(key == "vhacd_enable_hull_merging") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableHullMerging);
-        if(key == "vhacd_merge_volume_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.mergeVolumeTolerance);
+        if(key == "vhacd_max_hulls"){ hasAnyVhacdField = true; return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxConvexHulls); }
+        if(key == "vhacd_max_recursion_depth"){ hasAnyVhacdField = true; return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxRecursionDepth); }
+        if(key == "vhacd_concavity_threshold"){ hasAnyVhacdField = true; return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.concavityThreshold); }
+        if(key == "vhacd_max_vertices_per_hull"){ hasAnyVhacdField = true; return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxVerticesPerHull); }
+        if(key == "hull_radius"){ hasAnyVhacdField = true; return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.hullRadius); }
+        if(key == "vhacd_min_volume_ratio"){ hasAnyVhacdField = true; return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.minVolumeRatio); }
+        if(key == "vhacd_enable_arbitrary_planes"){ hasAnyVhacdField = true; return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableArbitraryPlanes); }
+        if(key == "vhacd_enable_hull_merging"){ hasAnyVhacdField = true; return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableHullMerging); }
+        if(key == "vhacd_merge_volume_tolerance"){ hasAnyVhacdField = true; return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.mergeVolumeTolerance); }
         error("{} '{}': unsupported asset field '{}'", s_CompoundHullDiagnosticPrefix, PathToString(file), key);
         return false;
     }))
         return MakeUnexpected(Failure());
 
     const b8 hasInlineMesh = !vertices.empty() || !indices.empty();
-    if(hasHullsList && (hasSourceMesh || hasInlineMesh)){
-        error("{} '{}': 'hulls' cannot be combined with 'source_mesh' or inline 'vertices'/'indices'", s_CompoundHullDiagnosticPrefix, PathToString(file));
+    if(hasHullsList && (hasSourceMesh || hasInlineMesh || hasAnyVhacdField)){
+        error("{} '{}': 'hulls' cannot be combined with 'source_mesh', inline mesh, or VHACD options", s_CompoundHullDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    if(hasSourceTransformOrFilter && !hasSourceMesh){
+        error("{} '{}': 'source_scale'/'source_rotation'/'source_offset'/'source_submesh'/'source_normalize_units' require 'source_mesh'", s_CompoundHullDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
     if(hasSourceMesh && hasInlineMesh){
@@ -590,7 +854,8 @@ Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPat
             return MakeUnexpected(Failure());
         }
         if(hasSourceMesh){
-            if(!LoadPhysicsSourceMesh(file, sourceMesh, s_CompoundHullDiagnosticPrefix, vertices, indices))
+            Vector<u16> dummyTriMats;
+            if(!LoadPhysicsSourceMesh(file, sourceMesh, sourceScale, sourceRotation, sourceOffset, sourceSubmesh, sourceNormalizeUnits, s_CompoundHullDiagnosticPrefix, vertices, indices, dummyTriMats))
                 return MakeUnexpected(Failure());
         }
         if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
@@ -620,81 +885,133 @@ Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPat
     return entry;
 }
 
-Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
-    CollisionMeshCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_CollisionMeshDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_CollisionMeshDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
-
+b8 BuildCookMeshShapeFromMapValue(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView prefix,
+    mut MeshShape outMesh
+){
     b8 hasSourceMesh = false;
     StringView sourceMesh = "";
+    b8 hasSourceTransformOrFilter = false;
+    VectorSingle sourceScale(1.0f, 1.0f, 1.0f, 0.0f);
+    VectorSingle sourceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    u32 srcRotFieldCount = 0u;
+    VectorSingle sourceOffset(0.0f);
+    StringView sourceSubmesh = "";
+    b8 sourceNormalizeUnits = false;
     Vector<f32x4> vertices;
     Vector<u32> indices;
     f32 skinRadius = 0.0f;
     MeshSidedness sidedness = MeshSidedness::DoubleSided;
     Vector<SurfaceMaterial> materials;
     Vector<u16> triMaterialIndices;
+    b8 hasExplicitTriMatIndices = false;
     Vector<u32> triUserData;
 
-    if(!value.forEachMapEntry(lambda[
-        in file, mut hasSourceMesh, mut sourceMesh, mut vertices, mut indices,
-        mut skinRadius, mut sidedness, mut materials, mut triMaterialIndices, mut triUserData
+    if(!mapVal.forEachMapEntry(lambda[
+        in file, in prefix, mut hasSourceMesh, mut sourceMesh, mut hasSourceTransformOrFilter,
+        mut sourceScale, mut sourceRotation, mut srcRotFieldCount, mut sourceOffset,
+        mut sourceSubmesh, mut sourceNormalizeUnits,
+        mut vertices, mut indices, mut skinRadius, mut sidedness,
+        mut materials, mut triMaterialIndices, mut hasExplicitTriMatIndices, mut triUserData
     ](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "source_mesh"){
-            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key);
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
             if(!srcRes.has_value())
                 return false;
             sourceMesh = srcRes.value();
             hasSourceMesh = true;
             return true;
         }
-        if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, vertices);
-        if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, indices);
-        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, skinRadius);
+        if(key == "source_scale"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, sourceScale);
+        }
+        if(key == "source_offset"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, sourceOffset);
+        }
+        if(key == "source_submesh"){
+            hasSourceTransformOrFilter = true;
+            const Expected<StringView> subRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!subRes.has_value())
+                return false;
+            sourceSubmesh = subRes.value();
+            return true;
+        }
+        if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+            hasSourceTransformOrFilter = true;
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
+        }
+        b8 srcRotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "source_rotation", "source_rotation_euler", "source_rotation_euler_degrees", srcRotFieldCount, sourceRotation, srcRotOk)){
+            hasSourceTransformOrFilter = true;
+            return srcRotOk;
+        }
+        if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, vertices);
+        if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, prefix, key, indices);
+        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, skinRadius);
         if(key == "sidedness"){
-            const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key);
+            const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, prefix, key);
             if(!text.has_value())
                 return false;
             if(text.value() == "double_sided") sidedness = MeshSidedness::DoubleSided;
             else if(text.value() == "single_sided") sidedness = MeshSidedness::SingleSided;
             else{
-                error("{} '{}': field 'sidedness' must be 'double_sided' or 'single_sided'", s_CollisionMeshDiagnosticPrefix, PathToString(file));
+                error("{} '{}': field 'sidedness' must be 'double_sided' or 'single_sided'", prefix, PathToString(file));
                 return false;
             }
             return true;
         }
         if(key == "materials")
-            return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_CollisionMeshDiagnosticPrefix, "materials", materials);
-        if(key == "triangle_material_indices")
-            return ReadPhysicsU16ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triMaterialIndices);
+            return ParsePhysicsMaterialListWithSources(file, fieldVal, prefix, "materials", materials);
+        if(key == "triangle_material_indices"){
+            hasExplicitTriMatIndices = true;
+            return ReadPhysicsU16ArrayValue(file, fieldVal, prefix, key, triMaterialIndices);
+        }
         if(key == "triangle_user_data")
-            return ReadPhysicsU32ArrayValue(file, fieldVal, s_CollisionMeshDiagnosticPrefix, key, triUserData);
-        error("{} '{}': unsupported asset field '{}'", s_CollisionMeshDiagnosticPrefix, PathToString(file), key);
+            return ReadPhysicsU32ArrayValue(file, fieldVal, prefix, key, triUserData);
+        error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
         return false;
     }))
-        return MakeUnexpected(Failure());
+        return false;
 
+    if(hasSourceTransformOrFilter && !hasSourceMesh){
+        error("{} '{}': 'source_scale'/'source_rotation'/'source_offset'/'source_submesh'/'source_normalize_units' require 'source_mesh'", prefix, PathToString(file));
+        return false;
+    }
     if(hasSourceMesh && (!vertices.empty() || !indices.empty())){
-        error("{} '{}': 'source_mesh' cannot be combined with inline 'vertices' or 'indices'", s_CollisionMeshDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': 'source_mesh' cannot be combined with inline 'vertices' or 'indices'", prefix, PathToString(file));
+        return false;
     }
     if(hasSourceMesh){
-        if(!LoadPhysicsSourceMesh(file, sourceMesh, s_CollisionMeshDiagnosticPrefix, vertices, indices))
-            return MakeUnexpected(Failure());
-    }
-
-    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
-        error("{} '{}': collision mesh requires non-empty vertices and triangle-multiple indices", s_CollisionMeshDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
-    }
-    for(usize i = 0u; i < indices.size(); ++i){
-        if(cast<usize>(indices[i]) >= vertices.size()){
-            error("{} '{}': index {} out of vertex bounds", s_CollisionMeshDiagnosticPrefix, PathToString(file), indices[i]);
-            return MakeUnexpected(Failure());
+        Vector<u16> sourceTriMatIndices;
+        if(!LoadPhysicsSourceMesh(file, sourceMesh, sourceScale, sourceRotation, sourceOffset, sourceSubmesh, sourceNormalizeUnits, prefix, vertices, indices, sourceTriMatIndices))
+            return false;
+        if(!hasExplicitTriMatIndices && !sourceTriMatIndices.empty() && !materials.empty()){
+            for(usize mi = 0u; mi < sourceTriMatIndices.size(); ++mi){
+                if(cast<usize>(sourceTriMatIndices[mi]) >= materials.size()){
+                    error("{} '{}': source mesh triangle material index {} exceeds materials count {}", prefix, PathToString(file), sourceTriMatIndices[mi], materials.size());
+                    return false;
+                }
+            }
+            triMaterialIndices = sourceTriMatIndices;
         }
     }
 
-    Expected<MeshShape> built = MakeMeshShapeWithMaterials(
+    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
+        error("{} '{}': collision mesh requires non-empty vertices and triangle-multiple indices", prefix, PathToString(file));
+        return false;
+    }
+    for(usize i = 0u; i < indices.size(); ++i){
+        if(cast<usize>(indices[i]) >= vertices.size()){
+            error("{} '{}': index {} out of vertex bounds", prefix, PathToString(file), indices[i]);
+            return false;
+        }
+    }
+
+    const Expected<MeshShape> built = MakeMeshShapeWithMaterials(
         Span<f32x4>(vertices.data(), vertices.size()),
         Span<u32>(indices.data(), indices.size()),
         skinRadius,
@@ -704,22 +1021,33 @@ Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualP
         Span<u32>(triUserData.data(), triUserData.size())
     );
     if(!built.has_value()){
-        error("{} '{}': failed to cook collision mesh BVH", s_CollisionMeshDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': failed to cook collision mesh BVH", prefix, PathToString(file));
+        return false;
     }
-    entry.mesh = built.value();
+    outMesh = built.value();
+    return true;
+}
+
+Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    CollisionMeshCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_CollisionMeshDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CollisionMeshDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(!BuildCookMeshShapeFromMapValue(file, value, s_CollisionMeshDiagnosticPrefix, entry.mesh))
+        return MakeUnexpected(Failure());
 
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateCollisionMesh(entry.mesh, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
 
-Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
-    HeightfieldCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_HeightfieldDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_HeightfieldDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
-
+b8 BuildCookHeightfieldFromMapValue(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView prefix,
+    mut HeightfieldShape outHeightfield
+){
     u32 cols = 0u;
     u32 rows = 0u;
     b8 hasCols = false;
@@ -735,6 +1063,8 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
     b8 rawBigEndian = false;
     b8 hasRawFloat = false;
     b8 rawFloat = false;
+    b8 hasRawSigned = false;
+    b8 rawSigned = false;
     VectorSingle scale(1.0f, 1.0f, 1.0f, 0.0f);
     VectorSingle origin(0.0f);
     f32 thickness = 0.0f;
@@ -745,28 +1075,29 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
     b8 hasHoleMaskImage = false;
     StringView holeMaskImage = "";
     f32 holeMaskThreshold = 0.5f;
+    u32 holeMaskChannel = 5u;
 
-    if(!value.forEachMapEntry(lambda[
-        in file, mut cols, mut rows, mut hasCols, mut hasRows, mut heights, mut hasHeights,
+    if(!mapVal.forEachMapEntry(lambda[
+        in file, in prefix, mut cols, mut rows, mut hasCols, mut hasRows, mut heights, mut hasHeights,
         mut hasSourceHeightmap, mut sourceHeightmap, mut heightmapChannel, mut heightMin, mut heightMax,
-        mut rawBits, mut rawBigEndian, mut hasRawFloat, mut rawFloat,
+        mut rawBits, mut rawBigEndian, mut hasRawFloat, mut rawFloat, mut hasRawSigned, mut rawSigned,
         mut scale, mut origin, mut thickness, mut flipDiagonal,
-        mut materials, mut cellMaterialIndices, mut hasHoleMaskImage, mut holeMaskImage, mut holeMaskThreshold
+        mut materials, mut cellMaterialIndices, mut hasHoleMaskImage, mut holeMaskImage, mut holeMaskThreshold, mut holeMaskChannel
     ](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "cols"){
             hasCols = true;
-            return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, cols);
+            return ReadPhysicsU32Value(file, fieldVal, prefix, key, cols);
         }
         if(key == "rows"){
             hasRows = true;
-            return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rows);
+            return ReadPhysicsU32Value(file, fieldVal, prefix, key, rows);
         }
         if(key == "heights"){
             hasHeights = true;
-            return ReadPhysicsF32ArrayValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, true, heights);
+            return ReadPhysicsF32ArrayValue(file, fieldVal, prefix, key, true, heights);
         }
         if(key == "source_heightmap"){
-            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
             if(!srcRes.has_value())
                 return false;
             sourceHeightmap = srcRes.value();
@@ -774,7 +1105,7 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
             return true;
         }
         if(key == "heightmap_channel"){
-            const Expected<StringView> chRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
+            const Expected<StringView> chRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
             if(!chRes.has_value())
                 return false;
             const StringView ch = chRes.value();
@@ -784,59 +1115,103 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
             else if(ch == "a") heightmapChannel = 3u;
             else if(ch == "luminance") heightmapChannel = 4u;
             else{
-                error("{} '{}': field 'heightmap_channel' must be 'r', 'g', 'b', 'a', or 'luminance'", s_HeightfieldDiagnosticPrefix, PathToString(file));
+                error("{} '{}': field 'heightmap_channel' must be 'r', 'g', 'b', 'a', or 'luminance'", prefix, PathToString(file));
                 return false;
             }
             return true;
         }
-        if(key == "height_min") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heightMin);
-        if(key == "height_max") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heightMax);
-        if(key == "raw_bits") return ReadPhysicsU32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rawBits);
-        if(key == "raw_big_endian") return ReadPhysicsBoolValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rawBigEndian);
+        if(key == "height_min") return ReadPhysicsF32Value(file, fieldVal, prefix, key, heightMin);
+        if(key == "height_max") return ReadPhysicsF32Value(file, fieldVal, prefix, key, heightMax);
+        if(key == "raw_bits") return ReadPhysicsU32Value(file, fieldVal, prefix, key, rawBits);
+        if(key == "raw_big_endian") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, rawBigEndian);
         if(key == "raw_float"){
             hasRawFloat = true;
-            return ReadPhysicsBoolValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, rawFloat);
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, rawFloat);
         }
-        if(key == "scale") return DecodePhysicsFloat3Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, scale);
-        if(key == "origin") return DecodePhysicsFloat3Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, origin);
-        if(key == "thickness") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, thickness);
-        if(key == "flip_diagonal") return ReadPhysicsBoolValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, flipDiagonal);
+        if(key == "raw_signed"){
+            hasRawSigned = true;
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, rawSigned);
+        }
+        if(key == "scale") return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, scale);
+        if(key == "origin") return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, origin);
+        if(key == "thickness") return ReadPhysicsF32Value(file, fieldVal, prefix, key, thickness);
+        if(key == "flip_diagonal") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, flipDiagonal);
         if(key == "cell_holes") return true;
         if(key == "hole_mask_image"){
-            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
             if(!srcRes.has_value())
                 return false;
             holeMaskImage = srcRes.value();
             hasHoleMaskImage = true;
             return true;
         }
-        if(key == "hole_mask_threshold") return ReadPhysicsF32Value(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, holeMaskThreshold);
+        if(key == "hole_mask_threshold") return ReadPhysicsF32Value(file, fieldVal, prefix, key, holeMaskThreshold);
+        if(key == "hole_mask_channel"){
+            const Expected<StringView> chRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!chRes.has_value())
+                return false;
+            const StringView ch = chRes.value();
+            if(ch == "r") holeMaskChannel = 0u;
+            else if(ch == "g") holeMaskChannel = 1u;
+            else if(ch == "b") holeMaskChannel = 2u;
+            else if(ch == "a") holeMaskChannel = 3u;
+            else if(ch == "luminance") holeMaskChannel = 4u;
+            else if(ch == "min_luma_alpha") holeMaskChannel = 5u;
+            else{
+                error("{} '{}': field 'hole_mask_channel' must be 'r', 'g', 'b', 'a', 'luminance', or 'min_luma_alpha'", prefix, PathToString(file));
+                return false;
+            }
+            return true;
+        }
         if(key == "materials")
-            return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_HeightfieldDiagnosticPrefix, "materials", materials);
+            return ParsePhysicsMaterialListWithSources(file, fieldVal, prefix, "materials", materials);
         if(key == "cell_material_indices")
-            return ReadPhysicsU16ArrayValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, cellMaterialIndices);
-        error("{} '{}': unsupported asset field '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), key);
+            return ReadPhysicsU16ArrayValue(file, fieldVal, prefix, key, cellMaterialIndices);
+        error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
         return false;
     }))
-        return MakeUnexpected(Failure());
+        return false;
 
     if(!IsFinite(VectorSingle(thickness, heightMin, heightMax, holeMaskThreshold)) || thickness < 0.0f){
-        error("{} '{}': invalid heightfield scalar fields", s_HeightfieldDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': invalid heightfield scalar fields", prefix, PathToString(file));
+        return false;
     }
     if(hasSourceHeightmap && hasHeights){
-        error("{} '{}': 'source_heightmap' cannot be combined with inline 'heights'", s_HeightfieldDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': 'source_heightmap' cannot be combined with inline 'heights'", prefix, PathToString(file));
+        return false;
     }
     if(hasSourceHeightmap){
         Path resolvedSource;
         ResolvePhysicsSourcePath(file, sourceHeightmap, resolvedSource);
-        const b8 isRaw16 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r16") || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".raw");
-        const b8 isRaw32 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r32") || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".f32");
-        if(isRaw16 || isRaw32){
+        const b8 isRawU8 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r8");
+        const b8 isRawU16 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r16")
+            || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".u16")
+            || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".raw")
+            || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".bin");
+        const b8 isRawI16 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".i16");
+        const b8 isRawI32 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".i32");
+        const b8 isRawF16 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".f16");
+        const b8 isRawF32 = HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".r32") || HasCaseInsensitiveExtensionSuffix(sourceHeightmap, ".f32");
+        if(isRawU8 || isRawU16 || isRawI16 || isRawI32 || isRawF16 || isRawF32){
             u32 bits = 16u;
             b8 useFloat = false;
-            if(isRaw32){
+            b8 useSigned = false;
+            if(isRawU8){
+                bits = 8u;
+            }
+            else if(isRawI16){
+                bits = 16u;
+                useSigned = true;
+            }
+            else if(isRawI32){
+                bits = 32u;
+                useSigned = true;
+            }
+            else if(isRawF16){
+                bits = 16u;
+                useFloat = true;
+            }
+            else if(isRawF32){
                 bits = 32u;
                 useFloat = true;
             }
@@ -844,25 +1219,27 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
                 bits = rawBits;
             if(hasRawFloat)
                 useFloat = rawFloat;
+            if(hasRawSigned)
+                useSigned = rawSigned;
             if(cols < 2u || rows < 2u){
-                error("{} '{}': raw heightmap requires explicit 'cols' >= 2 and 'rows' >= 2", s_HeightfieldDiagnosticPrefix, PathToString(file));
-                return MakeUnexpected(Failure());
+                error("{} '{}': raw heightmap requires explicit 'cols' >= 2 and 'rows' >= 2", prefix, PathToString(file));
+                return false;
             }
-            if(!LoadHeightmapRawBinary(resolvedSource, cols, rows, bits, rawBigEndian, useFloat, heightMin, heightMax, heights)){
-                error("{} '{}': failed to load raw heightmap '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), sourceHeightmap);
-                return MakeUnexpected(Failure());
+            if(!LoadHeightmapRawBinary(resolvedSource, cols, rows, bits, rawBigEndian, useFloat, useSigned, heightMin, heightMax, heights)){
+                error("{} '{}': failed to load raw heightmap '{}'", prefix, PathToString(file), sourceHeightmap);
+                return false;
             }
         }
         else{
             u32 imgCols = 0u;
             u32 imgRows = 0u;
             if(!LoadHeightmapImage(resolvedSource, heightmapChannel, heightMin, heightMax, imgCols, imgRows, heights)){
-                error("{} '{}': failed to load heightmap image '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), sourceHeightmap);
-                return MakeUnexpected(Failure());
+                error("{} '{}': failed to load heightmap image '{}'", prefix, PathToString(file), sourceHeightmap);
+                return false;
             }
             if((hasCols && cols != imgCols) || (hasRows && rows != imgRows)){
-                error("{} '{}': heightmap image dimensions ({}x{}) do not match specified cols/rows ({}x{})", s_HeightfieldDiagnosticPrefix, PathToString(file), imgCols, imgRows, cols, rows);
-                return MakeUnexpected(Failure());
+                error("{} '{}': heightmap image dimensions ({}x{}) do not match specified cols/rows ({}x{})", prefix, PathToString(file), imgCols, imgRows, cols, rows);
+                return false;
             }
             cols = imgCols;
             rows = imgRows;
@@ -881,41 +1258,844 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
         || !IsValidPositionVec3(origin)
         || !ValidateAndComputeHeightfieldRange(Span<f32>(heights.data(), heights.size()), origin.y, scale.y, minY, maxY)
     ){
-        error("{} '{}': failed to construct heightfield", s_HeightfieldDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': failed to construct heightfield", prefix, PathToString(file));
+        return false;
     }
 
-    const Optional<in MetascriptValue> holesOpt = value.borrowField("cell_holes");
+    const Optional<in MetascriptValue> holesOpt = mapVal.borrowField("cell_holes");
     if(holesOpt.has_value() && hasHoleMaskImage){
-        error("{} '{}': 'cell_holes' cannot be combined with 'hole_mask_image'", s_HeightfieldDiagnosticPrefix, PathToString(file));
-        return MakeUnexpected(Failure());
+        error("{} '{}': 'cell_holes' cannot be combined with 'hole_mask_image'", prefix, PathToString(file));
+        return false;
     }
     if(holesOpt.has_value()){
-        if(!ParseHeightfieldCellHolesValue(file, holesOpt.value(), s_HeightfieldDiagnosticPrefix, "cell_holes", cols, rows, cellHoles))
-            return MakeUnexpected(Failure());
+        if(!ParseHeightfieldCellHolesValue(file, holesOpt.value(), prefix, "cell_holes", cols, rows, cellHoles))
+            return false;
     }
     else if(hasHoleMaskImage){
         Path resolvedMask;
         ResolvePhysicsSourcePath(file, holeMaskImage, resolvedMask);
-        if(!LoadHeightmapHoleMask(resolvedMask, cols, rows, holeMaskThreshold, cellHoles)){
-            error("{} '{}': failed to load hole mask image '{}'", s_HeightfieldDiagnosticPrefix, PathToString(file), holeMaskImage);
-            return MakeUnexpected(Failure());
+        if(!LoadHeightmapHoleMask(resolvedMask, cols, rows, holeMaskThreshold, holeMaskChannel, cellHoles)){
+            error("{} '{}': failed to load hole mask image '{}'", prefix, PathToString(file), holeMaskImage);
+            return false;
         }
     }
 
-    entry.heightfield.cols = cols;
-    entry.heightfield.rows = rows;
-    entry.heightfield.scaleMinMaxY = f32x4(scale.x, scale.y, scale.z, minY);
-    entry.heightfield.originMaxY = f32x4(origin.x, origin.y, origin.z, maxY);
-    entry.heightfield.thickness = thickness;
-    entry.heightfield.flipDiagonal = flipDiagonal;
-    TransferVector<f32>(entry.heightfield.heights, heights);
-    TransferVector<SurfaceMaterial>(entry.heightfield.materials, materials);
-    TransferVector<u16>(entry.heightfield.cellMaterialIndices, cellMaterialIndices);
-    TransferVector<u8>(entry.heightfield.cellHoles, cellHoles);
-    entry.heightfield.hierarchy.clear();
+    outHeightfield = HeightfieldShape();
+    outHeightfield.cols = cols;
+    outHeightfield.rows = rows;
+    outHeightfield.scaleMinMaxY = f32x4(scale.x, scale.y, scale.z, minY);
+    outHeightfield.originMaxY = f32x4(origin.x, origin.y, origin.z, maxY);
+    outHeightfield.thickness = thickness;
+    outHeightfield.flipDiagonal = flipDiagonal;
+    TransferVector<f32>(outHeightfield.heights, heights);
+    TransferVector<SurfaceMaterial>(outHeightfield.materials, materials);
+    TransferVector<u16>(outHeightfield.cellMaterialIndices, cellMaterialIndices);
+    TransferVector<u8>(outHeightfield.cellHoles, cellHoles);
+    outHeightfield.hierarchy.clear();
+    return true;
+}
+
+Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    HeightfieldCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_HeightfieldDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_HeightfieldDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(!BuildCookHeightfieldFromMapValue(file, value, s_HeightfieldDiagnosticPrefix, entry.heightfield))
+        return MakeUnexpected(Failure());
 
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateHeightfield(entry.heightfield, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 BuildCookSdfShapeFromMapValue(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView prefix,
+    mut SdfShape outSdf
+){
+    u32 dimX = 16u;
+    u32 dimY = 16u;
+    u32 dimZ = 16u;
+    b8 hasDims = false;
+    VectorSingle boundsMin(-0.5f, -0.5f, -0.5f, 0.0f);
+    VectorSingle boundsMax(0.5f, 0.5f, 0.5f, 0.0f);
+    b8 hasBoundsMin = false;
+    b8 hasBoundsMax = false;
+    Vector<f32> distances;
+    b8 hasDistances = false;
+    f32 padding = 0.05f;
+    b8 hasPadding = false;
+    f32 margin = 0.0f;
+    b8 isClosed = true;
+    b8 hasIsClosed = false;
+    MeshSidedness sidedness = MeshSidedness::DoubleSided;
+
+    b8 hasSourceMesh = false;
+    StringView sourceMesh = "";
+    b8 hasSourceTransformOrFilter = false;
+    VectorSingle sourceScale(1.0f, 1.0f, 1.0f, 0.0f);
+    VectorSingle sourceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    u32 srcRotFieldCount = 0u;
+    VectorSingle sourceOffset(0.0f);
+    StringView sourceSubmesh = "";
+    b8 sourceNormalizeUnits = false;
+    Vector<f32x4> vertices;
+    Vector<u32> indices;
+
+    if(!mapVal.forEachMapEntry(lambda[
+        in file, in prefix, mut dimX, mut dimY, mut dimZ, mut hasDims,
+        mut boundsMin, mut boundsMax, mut hasBoundsMin, mut hasBoundsMax,
+        mut distances, mut hasDistances, mut padding, mut hasPadding,
+        mut margin, mut isClosed, mut hasIsClosed, mut sidedness,
+        mut hasSourceMesh, mut sourceMesh, mut hasSourceTransformOrFilter,
+        mut sourceScale, mut sourceRotation, mut srcRotFieldCount, mut sourceOffset,
+        mut sourceSubmesh, mut sourceNormalizeUnits, mut vertices, mut indices
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "dim_x"){ hasDims = true; return ReadPhysicsU32Value(file, fieldVal, prefix, key, dimX); }
+        if(key == "dim_y"){ hasDims = true; return ReadPhysicsU32Value(file, fieldVal, prefix, key, dimY); }
+        if(key == "dim_z"){ hasDims = true; return ReadPhysicsU32Value(file, fieldVal, prefix, key, dimZ); }
+        if(key == "bounds_min"){ hasBoundsMin = true; return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, boundsMin); }
+        if(key == "bounds_max"){ hasBoundsMax = true; return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, boundsMax); }
+        if(key == "distances"){ hasDistances = true; return ReadPhysicsF32ArrayValue(file, fieldVal, prefix, key, false, distances); }
+        if(key == "padding"){ hasPadding = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, padding); }
+        if(key == "margin") return ReadPhysicsF32Value(file, fieldVal, prefix, key, margin);
+        if(key == "is_closed"){ hasIsClosed = true; return ReadPhysicsBoolValue(file, fieldVal, prefix, key, isClosed); }
+        if(key == "sidedness"){
+            const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!text.has_value())
+                return false;
+            if(text.value() == "double_sided") sidedness = MeshSidedness::DoubleSided;
+            else if(text.value() == "single_sided") sidedness = MeshSidedness::SingleSided;
+            else{
+                error("{} '{}': field 'sidedness' must be 'double_sided' or 'single_sided'", prefix, PathToString(file));
+                return false;
+            }
+            return true;
+        }
+        if(key == "source_mesh"){
+            const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!srcRes.has_value())
+                return false;
+            sourceMesh = srcRes.value();
+            hasSourceMesh = true;
+            return true;
+        }
+        if(key == "source_scale"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, sourceScale);
+        }
+        if(key == "source_offset"){
+            hasSourceTransformOrFilter = true;
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, sourceOffset);
+        }
+        if(key == "source_submesh"){
+            hasSourceTransformOrFilter = true;
+            const Expected<StringView> subRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+            if(!subRes.has_value())
+                return false;
+            sourceSubmesh = subRes.value();
+            return true;
+        }
+        if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+            hasSourceTransformOrFilter = true;
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
+        }
+        b8 srcRotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "source_rotation", "source_rotation_euler", "source_rotation_euler_degrees", srcRotFieldCount, sourceRotation, srcRotOk)){
+            hasSourceTransformOrFilter = true;
+            return srcRotOk;
+        }
+        if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, vertices);
+        if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, prefix, key, indices);
+        error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
+        return false;
+    }))
+        return false;
+
+    if(!IsFinite(VectorSingle(padding, margin, 0.0f, 0.0f)) || padding < 0.0f || margin < 0.0f){
+        error("{} '{}': invalid 'padding' or 'margin' for SDF", prefix, PathToString(file));
+        return false;
+    }
+    if(dimX < 2u || dimY < 2u || dimZ < 2u || (cast<u64>(dimX) * cast<u64>(dimY) * cast<u64>(dimZ)) > 1048576u){
+        error("{} '{}': SDF grid dimensions must satisfy >= 2 and total cells <= 1048576", prefix, PathToString(file));
+        return false;
+    }
+    const b8 hasInlineMesh = !vertices.empty() || !indices.empty();
+    if(hasSourceTransformOrFilter && !hasSourceMesh){
+        error("{} '{}': 'source_*' fields require 'source_mesh'", prefix, PathToString(file));
+        return false;
+    }
+    if(hasSourceMesh && hasInlineMesh){
+        error("{} '{}': 'source_mesh' cannot be combined with inline 'vertices'/'indices'", prefix, PathToString(file));
+        return false;
+    }
+    if(hasDistances && (hasSourceMesh || hasInlineMesh || hasPadding)){
+        error("{} '{}': inline 'distances' cannot be combined with mesh baking fields", prefix, PathToString(file));
+        return false;
+    }
+
+    if(hasDistances){
+        if(!hasDims || !hasBoundsMin || !hasBoundsMax){
+            error("{} '{}': inline 'distances' requires 'dim_x', 'dim_y', 'dim_z', 'bounds_min', and 'bounds_max'", prefix, PathToString(file));
+            return false;
+        }
+        const VectorSingle ext = boundsMax - boundsMin;
+        if(ext.x <= 0.0f || ext.y <= 0.0f || ext.z <= 0.0f){
+            error("{} '{}': SDF 'bounds_max' must exceed 'bounds_min' on all axes", prefix, PathToString(file));
+            return false;
+        }
+        SdfShape sdf;
+        sdf.dimX = dimX;
+        sdf.dimY = dimY;
+        sdf.dimZ = dimZ;
+        sdf.boundsMin = f32x4(boundsMin, 0.0f);
+        sdf.boundsMax = f32x4(boundsMax, 0.0f);
+        sdf.cellSize = f32x4(
+            ext.x / cast<f32>(dimX - 1u),
+            ext.y / cast<f32>(dimY - 1u),
+            ext.z / cast<f32>(dimZ - 1u),
+            0.0f
+        );
+        sdf.invCellSize = f32x4(
+            1.0f / Max(sdf.cellSize.x, 1.0e-6f),
+            1.0f / Max(sdf.cellSize.y, 1.0e-6f),
+            1.0f / Max(sdf.cellSize.z, 1.0e-6f),
+            0.0f
+        );
+        sdf.margin = margin;
+        sdf.isClosed = isClosed;
+        TransferVector<f32>(sdf.distances, distances);
+        if(!PhysicsAssetBinaryCodec().validSdfShapeData(sdf)){
+            error("{} '{}': invalid inline SDF grid", prefix, PathToString(file));
+            return false;
+        }
+        outSdf = sdf;
+        return true;
+    }
+
+    if(!hasSourceMesh && !hasInlineMesh){
+        error("{} '{}': SDF requires 'distances', 'source_mesh', or 'vertices'/'indices'", prefix, PathToString(file));
+        return false;
+    }
+    if(hasSourceMesh){
+        Vector<u16> dummyTriMats;
+        if(!LoadPhysicsSourceMesh(file, sourceMesh, sourceScale, sourceRotation, sourceOffset, sourceSubmesh, sourceNormalizeUnits, prefix, vertices, indices, dummyTriMats))
+            return false;
+    }
+    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
+        error("{} '{}': SDF mesh requires non-empty vertices and triangle-multiple indices", prefix, PathToString(file));
+        return false;
+    }
+    for(usize ii = 0u; ii < indices.size(); ++ii){
+        if(cast<usize>(indices[ii]) >= vertices.size()){
+            error("{} '{}': mesh index {} out of vertex bounds", prefix, PathToString(file), indices[ii]);
+            return false;
+        }
+    }
+    Vector<SurfaceMaterial> emptyMats;
+    Vector<u16> emptyMatIdx;
+    Vector<u32> emptyUserData;
+    const Expected<MeshShape> meshRes = MakeMeshShapeWithMaterials(
+        Span<f32x4>(vertices.data(), vertices.size()),
+        Span<u32>(indices.data(), indices.size()),
+        0.0f,
+        sidedness,
+        Span<SurfaceMaterial>(emptyMats.data(), emptyMats.size()),
+        Span<u16>(emptyMatIdx.data(), emptyMatIdx.size()),
+        Span<u32>(emptyUserData.data(), emptyUserData.size())
+    );
+    if(!meshRes.has_value()){
+        error("{} '{}': failed to build source mesh for SDF baking", prefix, PathToString(file));
+        return false;
+    }
+    const Expected<SdfShape> sdfRes = MakeSdfShapeFromMesh(meshRes.value(), dimX, dimY, dimZ, padding, margin);
+    if(!sdfRes.has_value()){
+        error("{} '{}': failed to bake SDF from mesh", prefix, PathToString(file));
+        return false;
+    }
+    outSdf = sdfRes.value();
+    if(hasIsClosed)
+        outSdf.isClosed = isClosed;
+    return true;
+}
+
+Expected<SdfCookEntry> ParseSdfCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    SdfCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_SdfDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_SdfDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(!BuildCookSdfShapeFromMapValue(file, value, s_SdfDiagnosticPrefix, entry.sdf))
+        return MakeUnexpected(Failure());
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateSdf(entry.sdf, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 BuildCookChainShapeFromMapValue(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView prefix,
+    mut ChainShape outChain
+){
+    Vector<f32x4> points;
+    f32 radius = 0.0f;
+    b8 isLoop = false;
+    b8 hasLoopFlag = false;
+    SurfaceMaterial defaultMat;
+    Vector<SurfaceMaterial> materials;
+    Vector<u16> segMatIndices;
+    VectorSingle ghostStart(0.0f);
+    b8 hasGhostStart = false;
+    VectorSingle ghostEnd(0.0f);
+    b8 hasGhostEnd = false;
+
+    if(!mapVal.forEachMapEntry(lambda[
+        in file, in prefix, mut points, mut radius, mut isLoop, mut hasLoopFlag,
+        mut defaultMat, mut materials, mut segMatIndices,
+        mut ghostStart, mut hasGhostStart, mut ghostEnd, mut hasGhostEnd
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, points);
+        if(key == "radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, radius);
+        if(key == "is_loop" || key == "closed"){
+            if(hasLoopFlag){
+                error("{} '{}': only one of 'is_loop' or 'closed' may be set", prefix, PathToString(file));
+                return false;
+            }
+            hasLoopFlag = true;
+            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, isLoop);
+        }
+        if(key == "material")
+            return ParseSurfaceMaterialWithSourceMap(file, fieldVal, prefix, "material", defaultMat);
+        if(key == "materials")
+            return ParsePhysicsMaterialListWithSources(file, fieldVal, prefix, "materials", materials);
+        if(key == "segment_material_indices")
+            return ReadPhysicsU16ArrayValue(file, fieldVal, prefix, key, segMatIndices);
+        if(key == "ghost_start"){
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, ghostStart))
+                return false;
+            ghostStart = VectorSetW(ghostStart, 1.0f);
+            hasGhostStart = true;
+            return true;
+        }
+        if(key == "ghost_end"){
+            if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, ghostEnd))
+                return false;
+            ghostEnd = VectorSetW(ghostEnd, 1.0f);
+            hasGhostEnd = true;
+            return true;
+        }
+        error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
+        return false;
+    }))
+        return false;
+
+    if(!IsFinite(VectorSingle(radius)) || radius < 0.0f){
+        error("{} '{}': chain 'radius' must be finite and >= 0", prefix, PathToString(file));
+        return false;
+    }
+    usize minPoints = 2u;
+    if(isLoop)
+        minPoints = 3u;
+    if(points.size() < minPoints){
+        error("{} '{}': chain requires at least {} points", prefix, PathToString(file), minPoints);
+        return false;
+    }
+    usize segCount = points.size() - 1u;
+    if(isLoop)
+        segCount = points.size();
+    if(!segMatIndices.empty()){
+        if(materials.empty() || segMatIndices.size() != segCount){
+            error("{} '{}': 'segment_material_indices' length must match segment count {} with non-empty 'materials'", prefix, PathToString(file), segCount);
+            return false;
+        }
+        for(usize i = 0u; i < segMatIndices.size(); ++i){
+            if(cast<usize>(segMatIndices[i]) >= materials.size()){
+                error("{} '{}': 'segment_material_indices[{}]' out of bounds for materials count {}", prefix, PathToString(file), i, materials.size());
+                return false;
+            }
+        }
+    }
+    if(hasGhostStart && !IsValidPositionVec3(ghostStart)){
+        error("{} '{}': invalid 'ghost_start'", prefix, PathToString(file));
+        return false;
+    }
+    if(hasGhostEnd && !IsValidPositionVec3(ghostEnd)){
+        error("{} '{}': invalid 'ghost_end'", prefix, PathToString(file));
+        return false;
+    }
+
+    const Expected<ChainShape> built = MakeChainShape(
+        Span<f32x4>(points.data(), points.size()),
+        radius,
+        isLoop,
+        defaultMat,
+        Span<SurfaceMaterial>(materials.data(), materials.size()),
+        Span<u16>(segMatIndices.data(), segMatIndices.size()),
+        ghostStart,
+        ghostEnd
+    );
+    if(!built.has_value()){
+        error("{} '{}': failed to build chain shape (segments too short or invalid)", prefix, PathToString(file));
+        return false;
+    }
+    outChain = built.value();
+    return true;
+}
+
+Expected<ChainShapeCookEntry> ParseChainShapeCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    ChainShapeCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_ChainShapeDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_ChainShapeDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    if(!BuildCookChainShapeFromMapValue(file, value, s_ChainShapeDiagnosticPrefix, entry.chain))
+        return MakeUnexpected(Failure());
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateChainShape(entry.chain, entry.virtualPath))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 ParseCompoundShapeChildTypeName(
+    in Path file,
+    in StringView text,
+    in StringView prefix,
+    mut ShapeType outType,
+    mut b8 outTreatAsBox
+){
+    outTreatAsBox = false;
+    if(text == "sphere"){ outType = ShapeType::Sphere; return true; }
+    if(text == "capsule"){ outType = ShapeType::Capsule; return true; }
+    if(text == "cylinder"){ outType = ShapeType::Cylinder; return true; }
+    if(text == "cone"){ outType = ShapeType::Cone; return true; }
+    if(text == "tapered_capsule"){ outType = ShapeType::TaperedCapsule; return true; }
+    if(text == "plane"){ outType = ShapeType::Plane; return true; }
+    if(text == "segment"){ outType = ShapeType::Segment; return true; }
+    if(text == "box"){ outType = ShapeType::Hull; outTreatAsBox = true; return true; }
+    if(text == "hull"){ outType = ShapeType::Hull; return true; }
+    if(text == "mesh"){ outType = ShapeType::Mesh; return true; }
+    if(text == "heightfield"){ outType = ShapeType::Heightfield; return true; }
+    if(text == "chain"){ outType = ShapeType::Chain; return true; }
+    if(text == "sdf"){ outType = ShapeType::Sdf; return true; }
+    if(text == "scaled"){ outType = ShapeType::Scaled; return true; }
+    error("{} '{}': unsupported compound child shape type '{}'", prefix, PathToString(file), text);
+    return false;
+}
+
+b8 PopulateCompoundChildLeafFromMap(
+    in Path file,
+    in MetascriptValue geomMap,
+    in ShapeType leafType,
+    in b8 isBoxType,
+    in StringView prefix,
+    mut CompoundShapeAssetData outData,
+    mut CompoundAssetChild outChild
+){
+    if(!geomMap.isMap()){
+        error("{} '{}': compound child geometry descriptor must be a map", prefix, PathToString(file));
+        return false;
+    }
+
+    if(leafType == ShapeType::Hull){
+        HullShape hull;
+        if(isBoxType){
+            VectorSingle halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+            VectorSingle boxRot(0.0f, 0.0f, 0.0f, 1.0f);
+            u32 boxRotCount = 0u;
+            f32 skinRadius = 0.0f;
+            if(!geomMap.forEachMapEntry(lambda[
+                in file, in prefix, mut halfExtents, mut boxRot, mut boxRotCount, mut skinRadius
+            ](in StringView key, in MetascriptValue fieldVal) -> b8{
+                if(key == "half_extents") return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, halfExtents);
+                if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, skinRadius);
+                b8 rotOk = false;
+                if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "box_rotation", "box_rotation_euler", "box_rotation_euler_degrees", boxRotCount, boxRot, rotOk))
+                    return rotOk;
+                error("{} '{}': unsupported box child field '{}'", prefix, PathToString(file), key);
+                return false;
+            }))
+                return false;
+            const Expected<HullShape> boxRes = MakeBoxHull(halfExtents.x, halfExtents.y, halfExtents.z, skinRadius);
+            if(!boxRes.has_value()){
+                error("{} '{}': invalid box child dimensions", prefix, PathToString(file));
+                return false;
+            }
+            hull = boxRes.value();
+            const b8 hasRot = !Vector3LessOrEqual(Abs(boxRot), VectorSingle(1.0e-5f));
+            if(hasRot){
+                hull.boxRotation = f32x4(boxRot);
+                for(usize vi = 0u; vi < hull.vertices.size(); ++vi)
+                    hull.vertices[vi] = f32x3u(Vector3Rotate(VectorSingle(hull.vertices[vi], 0.0f), boxRot));
+                for(usize fi = 0u; fi < hull.facePlanes.size(); ++fi){
+                    const VectorSingle rotN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(hull.facePlanes[fi].normalOffset), boxRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    hull.facePlanes[fi] = Plane3D(rotN, hull.facePlanes[fi].normalOffset.w);
+                }
+            }
+        }
+        else{
+            if(!BuildCookHullFromMapValue(file, geomMap, prefix, true, hull))
+                return false;
+        }
+        outChild.geometryPoolIndex = cast<u32>(outData.hulls.size());
+        outData.hulls.push_back(hull);
+        return true;
+    }
+
+    if(leafType == ShapeType::Mesh){
+        MeshShape mesh;
+        if(!BuildCookMeshShapeFromMapValue(file, geomMap, prefix, mesh))
+            return false;
+        outChild.geometryPoolIndex = cast<u32>(outData.meshes.size());
+        outData.meshes.push_back(mesh);
+        return true;
+    }
+
+    if(leafType == ShapeType::Heightfield){
+        HeightfieldShape hf;
+        if(!BuildCookHeightfieldFromMapValue(file, geomMap, prefix, hf))
+            return false;
+        hf.buildHierarchy();
+        outChild.geometryPoolIndex = cast<u32>(outData.heightfields.size());
+        outData.heightfields.push_back(hf);
+        return true;
+    }
+
+    if(leafType == ShapeType::Chain){
+        ChainShape ch;
+        if(!BuildCookChainShapeFromMapValue(file, geomMap, prefix, ch))
+            return false;
+        outChild.geometryPoolIndex = cast<u32>(outData.chains.size());
+        outData.chains.push_back(ch);
+        return true;
+    }
+
+    if(leafType == ShapeType::Sdf){
+        SdfShape sdf;
+        if(!BuildCookSdfShapeFromMapValue(file, geomMap, prefix, sdf))
+            return false;
+        outChild.geometryPoolIndex = cast<u32>(outData.sdfs.size());
+        outData.sdfs.push_back(sdf);
+        return true;
+    }
+
+    VectorSingle center(0.0f);
+    VectorSingle center1(0.0f, -0.5f, 0.0f, 0.0f);
+    VectorSingle center2(0.0f, 0.5f, 0.0f, 0.0f);
+    VectorSingle point1(0.0f);
+    VectorSingle point2(1.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle normal(0.0f, 1.0f, 0.0f, 0.0f);
+    VectorSingle planeHalfExtent(0.0f);
+    f32 radius = 0.5f;
+    f32 radius1 = 0.25f;
+    f32 radius2 = 0.15f;
+    f32 halfHeight = 0.5f;
+    f32 convexRadius = 0.0f;
+    f32 offset = 0.0f;
+    if(leafType == ShapeType::Segment)
+        radius = 0.0f;
+    else if(leafType == ShapeType::Capsule)
+        radius = 0.25f;
+    b8 hasCenter = false;
+    b8 hasCenter1 = false;
+    b8 hasCenter2 = false;
+    b8 hasHalfHeight = false;
+
+    if(!geomMap.forEachMapEntry(lambda[
+        in file, in prefix,
+        mut center, mut center1, mut center2, mut point1, mut point2, mut normal, mut planeHalfExtent,
+        mut radius, mut radius1, mut radius2, mut halfHeight, mut convexRadius, mut offset,
+        mut hasCenter, mut hasCenter1, mut hasCenter2, mut hasHalfHeight
+    ](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "center"){ hasCenter = true; return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, center); }
+        if(key == "center1"){ hasCenter1 = true; return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, center1); }
+        if(key == "center2"){ hasCenter2 = true; return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, center2); }
+        if(key == "point1") return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, point1);
+        if(key == "point2") return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, point2);
+        if(key == "normal") return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, normal);
+        if(key == "half_extent"){
+            if(!fieldVal.isList())
+                return false;
+            const Span<MetascriptValue> items = fieldVal.listView();
+            if(items.size() == 2u){
+                const Expected<f32> hx = ReadMetadataFiniteF32Value(file, items[0u], prefix, key);
+                const Expected<f32> hz = ReadMetadataFiniteF32Value(file, items[1u], prefix, key);
+                if(!hx.has_value() || !hz.has_value())
+                    return false;
+                planeHalfExtent = VectorSingle(hx.value(), 0.0f, hz.value(), 0.0f);
+                return true;
+            }
+            return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, planeHalfExtent);
+        }
+        if(key == "radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, radius);
+        if(key == "radius1") return ReadPhysicsF32Value(file, fieldVal, prefix, key, radius1);
+        if(key == "radius2") return ReadPhysicsF32Value(file, fieldVal, prefix, key, radius2);
+        if(key == "half_height"){ hasHalfHeight = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, halfHeight); }
+        if(key == "convex_radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, convexRadius);
+        if(key == "offset") return ReadPhysicsF32Value(file, fieldVal, prefix, key, offset);
+        error("{} '{}': unsupported primitive child field '{}'", prefix, PathToString(file), key);
+        return false;
+    }))
+        return false;
+
+    if(leafType == ShapeType::Sphere){
+        const Expected<SphereShape> sRes = MakeSphereShape(center, radius);
+        if(!sRes.has_value())
+            return false;
+        outChild.geom0 = sRes.value().centerRadius;
+        outChild.geom1 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        return true;
+    }
+    if(leafType == ShapeType::Capsule){
+        if(!hasCenter1 && !hasCenter2 && (hasCenter || hasHalfHeight)){
+            center1 = center - VectorSingle(0.0f, halfHeight, 0.0f, 0.0f);
+            center2 = center + VectorSingle(0.0f, halfHeight, 0.0f, 0.0f);
+        }
+        const Expected<CapsuleShape> cRes = MakeCapsuleShape(center1, center2, radius);
+        if(!cRes.has_value())
+            return false;
+        outChild.geom0 = cRes.value().center1Radius;
+        outChild.geom1 = cRes.value().center2;
+        return true;
+    }
+    if(leafType == ShapeType::Cylinder){
+        const Expected<CylinderShape> cyRes = MakeCylinderShape(center, halfHeight, radius, convexRadius);
+        if(!cyRes.has_value())
+            return false;
+        outChild.geom0 = cyRes.value().centerRadius;
+        outChild.geom1 = cyRes.value().halfHeightRadiusConvex;
+        return true;
+    }
+    if(leafType == ShapeType::Cone){
+        const Expected<ConeShape> cnRes = MakeConeShape(center, halfHeight, radius, convexRadius);
+        if(!cnRes.has_value())
+            return false;
+        outChild.geom0 = cnRes.value().centerRadius;
+        outChild.geom1 = cnRes.value().halfHeightRadiusConvex;
+        return true;
+    }
+    if(leafType == ShapeType::TaperedCapsule){
+        const Expected<TaperedCapsuleShape> tcRes = MakeTaperedCapsuleShape(center1, center2, radius1, radius2);
+        if(!tcRes.has_value())
+            return false;
+        outChild.geom0 = tcRes.value().center1Radius1;
+        outChild.geom1 = tcRes.value().center2Radius2;
+        return true;
+    }
+    if(leafType == ShapeType::Plane){
+        const Expected<PlaneShape> plRes = MakePlaneShape(normal, offset, planeHalfExtent);
+        if(!plRes.has_value())
+            return false;
+        outChild.geom0 = plRes.value().normalOffset;
+        outChild.geom1 = plRes.value().halfExtent;
+        return true;
+    }
+    if(leafType == ShapeType::Segment){
+        const Expected<SegmentShape> segRes = MakeSegmentShape(point1, point2, radius);
+        if(!segRes.has_value())
+            return false;
+        outChild.geom0 = segRes.value().point1Radius;
+        outChild.geom1 = segRes.value().point2Meta;
+        return true;
+    }
+    return false;
+}
+
+Expected<CompoundShapeCookEntry> ParseCompoundShapeCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    CompoundShapeCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_CompoundShapeDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_CompoundShapeDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+
+    const Optional<in MetascriptValue> childrenOpt = value.borrowField("children");
+    if(!childrenOpt.has_value() || !childrenOpt.value().isList() || childrenOpt.value().listView().empty()){
+        error("{} '{}': compound shape requires non-empty 'children' list", s_CompoundShapeDiagnosticPrefix, PathToString(file));
+        return MakeUnexpected(Failure());
+    }
+    b8 hasOnlyChildren = true;
+    value.forEachMapEntry(lambda[in file, mut hasOnlyChildren](in StringView key, in MetascriptValue v) -> b8{
+        if(key != "children"){
+            error("{} '{}': unsupported asset field '{}'", s_CompoundShapeDiagnosticPrefix, PathToString(file), key);
+            hasOnlyChildren = false;
+            return false;
+        }
+        return true;
+    });
+    if(!hasOnlyChildren)
+        return MakeUnexpected(Failure());
+
+    const Span<MetascriptValue> items = childrenOpt.value().listView();
+    entry.compound.children.reserve(items.size());
+    for(usize ci = 0u; ci < items.size(); ++ci){
+        in MetascriptValue childMap = items[ci];
+        if(!childMap.isMap()){
+            error("{} '{}': 'children[{}]' must be a map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+            return MakeUnexpected(Failure());
+        }
+
+        const Optional<in MetascriptValue> typeOpt = childMap.borrowField("type");
+        if(!typeOpt.has_value()){
+            error("{} '{}': 'children[{}]' missing required 'type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+            return MakeUnexpected(Failure());
+        }
+        const Expected<StringView> typeStr = ReadPhysicsStringValue(file, typeOpt.value(), s_CompoundShapeDiagnosticPrefix, "type");
+        if(!typeStr.has_value())
+            return MakeUnexpected(Failure());
+        ShapeType outerType = ShapeType::Sphere;
+        b8 isBox = false;
+        if(!ParseCompoundShapeChildTypeName(file, typeStr.value(), s_CompoundShapeDiagnosticPrefix, outerType, isBox))
+            return MakeUnexpected(Failure());
+        if(outerType == ShapeType::Compound){
+            error("{} '{}': nested compound child is not supported inside CompoundShapeAsset", s_CompoundShapeDiagnosticPrefix, PathToString(file));
+            return MakeUnexpected(Failure());
+        }
+
+        CompoundAssetChild child;
+        child.type = outerType;
+        VectorSingle localPos(0.0f);
+        VectorSingle localRot(0.0f, 0.0f, 0.0f, 1.0f);
+        u32 rotFieldCount = 0u;
+
+        const Optional<in MetascriptValue> posOpt = childMap.borrowField("local_position");
+        if(posOpt.has_value()){
+            if(!DecodePhysicsFloat3Value(file, posOpt.value(), s_CompoundShapeDiagnosticPrefix, "local_position", localPos))
+                return MakeUnexpected(Failure());
+        }
+        b8 rotOk = true;
+        childMap.forEachMapEntry(lambda[in file, in ci, mut rotFieldCount, mut localRot, mut rotOk](in StringView key, in MetascriptValue fv) -> b8{
+            b8 handledRot = false;
+            if(TryReadPhysicsRotationField(file, key, fv, s_CompoundShapeDiagnosticPrefix, "local_rotation", "local_rotation_euler", "local_rotation_euler_degrees", rotFieldCount, localRot, handledRot)){
+                if(!handledRot)
+                    rotOk = false;
+                return handledRot;
+            }
+            if(
+                key != "type"
+                && key != "local_position"
+                && key != "density"
+                && key != "material"
+                && key != "shape"
+                && key != "scale"
+                && key != "child"
+                && key != "child_type"
+            ){
+                error("{} '{}': unsupported compound child '{}' field '{}'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci, key);
+                rotOk = false;
+                return false;
+            }
+            return true;
+        });
+        if(!rotOk || rotFieldCount > 1u)
+            return MakeUnexpected(Failure());
+        child.localTransform = Transform3D(localPos, SafeNormalizeQuat(localRot));
+
+        const Optional<in MetascriptValue> densOpt = childMap.borrowField("density");
+        if(densOpt.has_value()){
+            if(!ReadPhysicsF32Value(file, densOpt.value(), s_CompoundShapeDiagnosticPrefix, "density", child.density))
+                return MakeUnexpected(Failure());
+        }
+        const Optional<in MetascriptValue> matOpt = childMap.borrowField("material");
+        if(matOpt.has_value()){
+            if(!ParseSurfaceMaterialWithSourceMap(file, matOpt.value(), s_CompoundShapeDiagnosticPrefix, "material", child.material))
+                return MakeUnexpected(Failure());
+            child.overrideMaterial = true;
+        }
+
+        const Optional<in MetascriptValue> shapeOpt = childMap.borrowField("shape");
+        if(outerType == ShapeType::Scaled){
+            const Optional<in MetascriptValue> scaleOpt = childMap.borrowField("scale");
+            if(!scaleOpt.has_value()){
+                error("{} '{}': scaled child '{}' missing 'scale'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                return MakeUnexpected(Failure());
+            }
+            VectorSingle s(1.0f, 1.0f, 1.0f, 0.0f);
+            if(!DecodePhysicsFloat3Value(file, scaleOpt.value(), s_CompoundShapeDiagnosticPrefix, "scale", s))
+                return MakeUnexpected(Failure());
+            const f32 det = s.x * s.y * s.z;
+            child.scale = f32x4(s.x, s.y, s.z, det);
+
+            const Optional<in MetascriptValue> innerChildOpt = childMap.borrowField("child");
+            const Optional<in MetascriptValue> inlineChildTypeOpt = childMap.borrowField("child_type");
+            if(innerChildOpt.has_value() && inlineChildTypeOpt.has_value()){
+                error("{} '{}': scaled child '{}' cannot specify both 'child' and 'child_type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                return MakeUnexpected(Failure());
+            }
+            StringView innerTypeName = "";
+            Optional<in MetascriptValue> geomSourceOpt;
+            if(innerChildOpt.has_value()){
+                if(!innerChildOpt.value().isMap()){
+                    error("{} '{}': scaled child '{}' 'child' must be a map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                    return MakeUnexpected(Failure());
+                }
+                in MetascriptValue innerMap = innerChildOpt.value();
+                b8 innerKeysOk = true;
+                innerMap.forEachMapEntry(lambda[in file, in ci, mut innerKeysOk](in StringView key, in MetascriptValue fv) -> b8{
+                    if(key != "type" && key != "shape"){
+                        error("{} '{}': unsupported scaled child[{}] 'child' field '{}'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci, key);
+                        innerKeysOk = false;
+                        return false;
+                    }
+                    return true;
+                });
+                if(!innerKeysOk)
+                    return MakeUnexpected(Failure());
+                const Optional<in MetascriptValue> innerTypeOpt = innerMap.borrowField("type");
+                if(!innerTypeOpt.has_value()){
+                    error("{} '{}': scaled child '{}' missing 'child.type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                    return MakeUnexpected(Failure());
+                }
+                const Expected<StringView> innerTypeRes = ReadPhysicsStringValue(file, innerTypeOpt.value(), s_CompoundShapeDiagnosticPrefix, "child.type");
+                if(!innerTypeRes.has_value())
+                    return MakeUnexpected(Failure());
+                innerTypeName = innerTypeRes.value();
+                geomSourceOpt = innerMap.borrowField("shape");
+                if(!geomSourceOpt.has_value() || !geomSourceOpt.value().isMap()){
+                    error("{} '{}': scaled child '{}' 'child' requires a 'shape' map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                    return MakeUnexpected(Failure());
+                }
+            }
+            else if(inlineChildTypeOpt.has_value()){
+                const Expected<StringView> innerTypeRes = ReadPhysicsStringValue(file, inlineChildTypeOpt.value(), s_CompoundShapeDiagnosticPrefix, "child_type");
+                if(!innerTypeRes.has_value())
+                    return MakeUnexpected(Failure());
+                innerTypeName = innerTypeRes.value();
+                if(!shapeOpt.has_value() || !shapeOpt.value().isMap()){
+                    error("{} '{}': scaled child '{}' with 'child_type' requires a 'shape' map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                    return MakeUnexpected(Failure());
+                }
+                geomSourceOpt = shapeOpt;
+            }
+            else{
+                error("{} '{}': scaled child '{}' requires 'child' or 'child_type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                return MakeUnexpected(Failure());
+            }
+            ShapeType leafType = ShapeType::Sphere;
+            b8 innerIsBox = false;
+            if(!ParseCompoundShapeChildTypeName(file, innerTypeName, s_CompoundShapeDiagnosticPrefix, leafType, innerIsBox))
+                return MakeUnexpected(Failure());
+            if(leafType == ShapeType::Compound || leafType == ShapeType::Scaled){
+                error("{} '{}': scaled child cannot wrap Compound or Scaled", s_CompoundShapeDiagnosticPrefix, PathToString(file));
+                return MakeUnexpected(Failure());
+            }
+            child.scaledChildType = leafType;
+            if(!PopulateCompoundChildLeafFromMap(file, geomSourceOpt.value(), leafType, innerIsBox, s_CompoundShapeDiagnosticPrefix, entry.compound, child))
+                return MakeUnexpected(Failure());
+        }
+        else{
+            if(!shapeOpt.has_value() || !shapeOpt.value().isMap()){
+                error("{} '{}': 'children[{}]' requires a 'shape' map holding geometry fields", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                return MakeUnexpected(Failure());
+            }
+            if(!PopulateCompoundChildLeafFromMap(file, shapeOpt.value(), outerType, isBox, s_CompoundShapeDiagnosticPrefix, entry.compound, child))
+                return MakeUnexpected(Failure());
+        }
+        entry.compound.children.push_back(child);
+    }
+
+    if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateCompoundShape(entry.compound, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
 }
@@ -974,6 +2154,30 @@ Expected<HeightfieldAsset> BuildHeightfieldAsset(in HeightfieldCookEntry entry){
     else{
         asset.setHeightfield(entry.heightfield);
     }
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<SdfAsset> BuildSdfAsset(in SdfCookEntry entry){
+    SdfAsset asset(entry.virtualPath);
+    asset.setSdf(entry.sdf);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<ChainShapeAsset> BuildChainShapeAsset(in ChainShapeCookEntry entry){
+    ChainShapeAsset asset(entry.virtualPath);
+    asset.setChain(entry.chain);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<CompoundShapeAsset> BuildCompoundShapeAsset(in CompoundShapeCookEntry entry){
+    CompoundShapeAsset asset(entry.virtualPath);
+    asset.setCompound(entry.compound);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;

@@ -36,7 +36,8 @@ namespace __hidden_cook_metadata_cache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 BuildCanonicalAbsolutePathText(const Path& filePath, ScratchArena& scratchArena, ScratchString& outPathText){
+template<typename PathArenaT>
+[[nodiscard]] static b8 BuildCanonicalAbsolutePathText(const ::Path<PathArenaT>& filePath, ScratchArena& scratchArena, ScratchString& outPathText){
     const auto absolutePath = AbsolutePath(filePath);
     if(!absolutePath){
         outPathText.clear();
@@ -80,12 +81,92 @@ namespace __hidden_cook_metadata_cache{
     return true;
 }
 
+[[nodiscard]] static b8 AppendExternalSourceChecksums(
+    const DiscoveredNwbFile& discoveredNwbFile,
+    const AStringView metaText,
+    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    ScratchArena& scratchArena,
+    Vector<u8, ScratchArena>& shaInput
+){
+    if(externalSourceCollectors.empty())
+        return true;
+
+    Vector<::Path<ScratchArena>, ScratchArena> rawPaths(scratchArena);
+    for(const NotNull<CookExternalSourceCollectorFunction> collector : externalSourceCollectors){
+        b8 collectorCanUseCache = true;
+        if(!(*collector)(discoveredNwbFile, metaText, scratchArena, rawPaths, collectorCanUseCache) || !collectorCanUseCache)
+            return false;
+    }
+    if(rawPaths.empty())
+        return true;
+
+    struct ExternalSourceEntry final{
+        ScratchString canonicalText;
+        ::Path<ScratchArena> path;
+        explicit ExternalSourceEntry(ScratchArena& arena)noexcept
+            : canonicalText(arena)
+            , path(arena)
+        {}
+    };
+
+    Vector<ExternalSourceEntry, ScratchArena> entries(scratchArena);
+    entries.reserve(rawPaths.size());
+    for(const ::Path<ScratchArena>& rawPath : rawPaths){
+        ExternalSourceEntry entry(scratchArena);
+        if(!BuildCanonicalAbsolutePathText(rawPath, scratchArena, entry.canonicalText))
+            return false;
+        entry.path = rawPath;
+        entries.push_back(Move(entry));
+    }
+
+    Sort(entries.begin(), entries.end(), [](const ExternalSourceEntry& lhs, const ExternalSourceEntry& rhs)noexcept{
+        return AStringView(lhs.canonicalText) < AStringView(rhs.canonicalText);
+    });
+    usize uniqueCount = 0u;
+    for(usize i = 0u; i < entries.size(); ++i){
+        if(uniqueCount == 0u || AStringView(entries[i].canonicalText) != AStringView(entries[uniqueCount - 1u].canonicalText)){
+            if(uniqueCount != i)
+                entries[uniqueCount] = Move(entries[i]);
+            ++uniqueCount;
+        }
+    }
+    while(entries.size() > uniqueCount)
+        entries.pop_back();
+
+    if(!AppendString(shaInput, AStringView("EXTSRC1")))
+        return false;
+    const u64 sourceCount = static_cast<u64>(entries.size());
+    AppendPOD(shaInput, sourceCount);
+    for(const ExternalSourceEntry& entry : entries){
+        if(!AppendString(shaInput, AStringView(entry.canonicalText)))
+            return false;
+        const auto exists = FileExists(entry.path);
+        if(!exists)
+            return false;
+        const u8 present = *exists ? 1u : 0u;
+        AppendPOD(shaInput, present);
+        if(!*exists)
+            continue;
+        Sha256Digest digest{};
+        {
+            Alloc::ScratchArena::Scope extScope(scratchArena);
+            Vector<u8, ScratchArena> extBytes(scratchArena);
+            if(!ReadBinaryFile(entry.path, extBytes))
+                return false;
+            digest = ComputeSha256(BinaryByteView{ extBytes.data(), extBytes.size() });
+        }
+        AppendPOD(shaInput, digest);
+    }
+    return true;
+}
+
 [[nodiscard]] static Sha256Digest ComputeNwbParamChecksum(
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView sourcePathText,
     const AStringView metaText,
     const Sha256Digest& producerDigest,
     const Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
     ScratchArena& scratchArena,
     b8& outCanUseCache
 ){
@@ -117,6 +198,8 @@ namespace __hidden_cook_metadata_cache{
     AppendPOD(shaInput, metaSha256);
     if(!AppendPairedSidecarChecksums(discoveredNwbFile.filePath, pairedSidecarRules, scratchArena, shaInput))
         outCanUseCache = false;
+    if(!AppendExternalSourceChecksums(discoveredNwbFile, metaText, externalSourceCollectors, scratchArena, shaInput))
+        outCanUseCache = false;
 
     return ComputeSha256(BinaryByteView{ shaInput.data(), shaInput.size() });
 }
@@ -142,6 +225,7 @@ b8 ComputeNwbFileAssetCacheData(
     const AStringView metaText,
     const Sha256Digest& producerDigest,
     const Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
     ScratchArena& scratchArena,
     ScratchString& outSourcePathText,
     ScratchString& outCacheFileName,
@@ -161,6 +245,7 @@ b8 ComputeNwbFileAssetCacheData(
         metaText,
         producerDigest,
         pairedSidecarRules,
+        externalSourceCollectors,
         scratchArena,
         canUseCache
     );
@@ -189,6 +274,7 @@ void PrepareNwbFileAssetCacheRecord(
     const AStringView metaText,
     const Sha256Digest& producerDigest,
     const Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
     ScratchArena& scratchArena,
     ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,
@@ -200,6 +286,7 @@ void PrepareNwbFileAssetCacheRecord(
         metaText,
         producerDigest,
         pairedSidecarRules,
+        externalSourceCollectors,
         scratchArena,
         inOutSourcePathText,
         inOutCacheFileName,
@@ -220,12 +307,15 @@ void PrepareNwbFileAssetCacheRecord(
 ){
     Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
     CopyPairedSidecarRules(pairedSidecarRules);
+    Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena> externalSourceCollectors(scratchArena);
+    CopyCookExternalSourceCollectors(externalSourceCollectors);
     PrepareNwbFileAssetCacheRecord(
         assetCacheDirectory,
         discoveredNwbFile,
         metaText,
         producerDigest,
         Span<const AssetPairedSidecarRule>(pairedSidecarRules.data(), pairedSidecarRules.size()),
+        Span<const NotNull<CookExternalSourceCollectorFunction>>(externalSourceCollectors.data(), externalSourceCollectors.size()),
         scratchArena,
         inOutSourcePathText,
         inOutCacheFileName,

@@ -31,14 +31,16 @@ class BroadPhase{
     public void createProxyWithFlags(
         in BodyType bodyType,
         in Aabb3D aabb,
-        in u32 categoryBits,
+        in u64 categoryBits,
+        in u8 broadPhaseLayer,
         in u8 nodeFlags,
         in u32 shapeId,
         in b8 forceMove,
         mut u32 outProxyKey
     ){
         const u32 treeIdx = ResolveBroadPhaseTreeType(bodyType);
-        const u32 proxyId = this.trees[treeIdx].createProxyWithFlags(aabb, categoryBits, nodeFlags, shapeId);
+        const u32 layerBits = ComputeBroadPhaseLayerBit(broadPhaseLayer);
+        const u32 proxyId = this.trees[treeIdx].createProxyWithFlags(aabb, categoryBits, layerBits, nodeFlags, shapeId);
         outProxyKey = EncodeBroadPhaseProxyKey(proxyId, treeIdx);
         if(treeIdx != s_TreeStatic || forceMove)
             this.bufferMove(outProxyKey);
@@ -139,6 +141,10 @@ class BroadPhase{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+u32 ComputeBroadPhaseLayerBit(in u8 layer){
+    return 1u << (cast<u32>(layer) & 31u);
+}
 
 u32 ResolveBroadPhaseTreeType(in BodyType bodyType){
     if(bodyType == BodyType::Static)

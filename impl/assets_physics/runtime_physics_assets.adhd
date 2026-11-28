@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_physics/physics_asset_binary_codec.adhd>
+#include <impl/assets_physics/physics_rig_binary_codec.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,6 +102,110 @@ b8 CompoundHullAsset::loadBinary(in Span<u8> binary){
     if(!decoded.has_value())
         return false;
     this.m_hulls = decoded.value();
+    return true;
+}
+
+b8 SdfAsset::validatePayload()const{
+    return PhysicsAssetBinaryCodec().validateSdf(this.m_sdf, this.virtualPath());
+}
+
+b8 SdfAsset::loadBinary(in Span<u8> binary){
+    const Expected<SdfShape> decoded = PhysicsAssetBinaryCodec().deserializeSdf(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_sdf = decoded.value();
+    return true;
+}
+
+b8 ChainShapeAsset::validatePayload()const{
+    return PhysicsAssetBinaryCodec().validateChainShape(this.m_chain, this.virtualPath());
+}
+
+b8 ChainShapeAsset::loadBinary(in Span<u8> binary){
+    const Expected<ChainShape> decoded = PhysicsAssetBinaryCodec().deserializeChainShape(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_chain = decoded.value();
+    return true;
+}
+
+b8 CompoundShapeAsset::validatePayload()const{
+    return PhysicsAssetBinaryCodec().validateCompoundShape(this.m_compound, this.virtualPath());
+}
+
+b8 CompoundShapeAsset::loadBinary(in Span<u8> binary){
+    const Expected<CompoundShapeAssetData> decoded = PhysicsAssetBinaryCodec().deserializeCompoundShape(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_compound = decoded.value();
+    return true;
+}
+
+b8 FractureAsset::validatePayload()const{
+    return PhysicsRigBinaryCodec().validateFractureCollection(this.m_collection, this.virtualPath());
+}
+
+b8 FractureAsset::loadBinary(in Span<u8> binary){
+    const Expected<FractureCollection> decoded = PhysicsRigBinaryCodec().deserializeFractureCollection(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_collection = decoded.value();
+    return true;
+}
+
+b8 SoftBodyAsset::validatePayload()const{
+    return PhysicsRigBinaryCodec().validateSoftBody(this.m_softBody, this.virtualPath());
+}
+
+b8 SoftBodyAsset::loadBinary(in Span<u8> binary){
+    const Expected<SoftBody> decoded = PhysicsRigBinaryCodec().deserializeSoftBody(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_softBody = decoded.value();
+    return true;
+}
+
+b8 RagdollAsset::validatePayload()const{
+    return PhysicsRigBinaryCodec().validateRagdoll(this.m_ragdoll, this.virtualPath());
+}
+
+b8 RagdollAsset::loadBinary(in Span<u8> binary){
+    const Expected<RagdollAssetData> decoded = PhysicsRigBinaryCodec().deserializeRagdoll(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_ragdoll = decoded.value();
+    return true;
+}
+
+b8 ArticulationAsset::validatePayload()const{
+    return PhysicsRigBinaryCodec().validateArticulation(this.m_articulation, this.virtualPath());
+}
+
+b8 ArticulationAsset::loadBinary(in Span<u8> binary){
+    const Expected<ArticulationAssetData> decoded = PhysicsRigBinaryCodec().deserializeArticulation(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_articulation = decoded.value();
+    return true;
+}
+
+b8 VehicleAsset::validatePayload()const{
+    return PhysicsRigBinaryCodec().validateVehicle(this.m_vehicle, this.virtualPath());
+}
+
+b8 VehicleAsset::loadBinary(in Span<u8> binary){
+    const Expected<VehicleAssetData> decoded = PhysicsRigBinaryCodec().deserializeVehicle(binary);
+    if(!decoded.has_value())
+        return false;
+
+    this.m_vehicle = decoded.value();
     return true;
 }
 

@@ -44,11 +44,13 @@ namespace NwbCacheLoadResult{
 };
 
 void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRules);
+void CopyCookExternalSourceCollectors(Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena>& outCollectors);
 [[nodiscard]] b8 ComputeNwbFileAssetCacheData(
     const DiscoveredNwbFile& discoveredNwbFile,
     AStringView metaText,
     const Sha256Digest& producerDigest,
     Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
     ScratchArena& scratchArena,
     ScratchString& outSourcePathText,
     ScratchString& outCacheFileName,
@@ -68,6 +70,7 @@ void PrepareNwbFileAssetCacheRecord(
     AStringView metaText,
     const Sha256Digest& producerDigest,
     Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
     ScratchArena& scratchArena,
     ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,

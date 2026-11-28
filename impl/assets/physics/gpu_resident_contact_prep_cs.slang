@@ -397,13 +397,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint flagsB = asuint(g_NwbPhysicsBodyStateBuffers[bodyStateSlot][slotB].deltaPositionFlags.w);
         const bool dynA = (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u;
         const bool dynB = (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u;
-        if(!dynA || !dynB)
+        if(!dynA && !dynB)
             return;
-        const bool awakeA = ((flagsA & NWB_PHYSICS_BODY_FLAG_SLEEPING) == 0u) || (g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA] != 0u);
-        const bool awakeB = ((flagsB & NWB_PHYSICS_BODY_FLAG_SLEEPING) == 0u) || (g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB] != 0u);
-        if(awakeA && !awakeB)
+        const bool awakeA = ((flagsA & NWB_PHYSICS_BODY_FLAG_SLEEPING) == 0u) || (dynA && g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA] != 0u);
+        const bool awakeB = ((flagsB & NWB_PHYSICS_BODY_FLAG_SLEEPING) == 0u) || (dynB && g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB] != 0u);
+        if(awakeA && dynB && !awakeB)
             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB] = 1u;
-        else if(awakeB && !awakeA)
+        else if(awakeB && dynA && !awakeA)
             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA] = 1u;
         return;
     }

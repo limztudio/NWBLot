@@ -19,22 +19,31 @@ const u16 s_RigidBodyFlagDriveKinematic = 0x0040u;
 const u16 s_RigidBodyFlagUseCustomMass = 0x0080u;
 const u16 s_RigidBodyFlagHasCustomMaxAngVel = 0x0100u;
 
-const u16 s_ColliderFlagIsBox = 0x0001u;
-const u16 s_ColliderFlagIsSensor = 0x0002u;
-const u16 s_ColliderFlagContactEvents = 0x0004u;
-const u16 s_ColliderFlagHitEvents = 0x0008u;
-const u16 s_ColliderFlagSensorEvents = 0x0010u;
-const u16 s_ColliderFlagPreSolveEvents = 0x0020u;
-const u16 s_ColliderFlagInvokeCreation = 0x0040u;
-const u16 s_ColliderFlagCullBackfaces = 0x0080u;
-const u16 s_ColliderFlagAutoConvexDecompose = 0x0100u;
-const u16 s_ColliderFlagIsChain = 0x0200u;
-const u16 s_ColliderFlagChainClosed = 0x0400u;
-const u16 s_ColliderFlagHeightfieldFlipDiagonal = 0x0800u;
-const u16 s_ColliderFlagVhacdEnableArbitraryPlanes = 0x1000u;
-const u16 s_ColliderFlagVhacdEnableHullMerging = 0x2000u;
-const u16 s_ColliderFlagSyncCsgCuts = 0x4000u;
-const u16 s_ColliderFlagUseMeshComponentFallback = 0x8000u;
+const u8 s_CompoundSubFlagIsBox = 0x01u;
+const u8 s_CompoundSubFlagOverrideMaterial = 0x02u;
+const u8 s_CompoundSubFlagCullBackfaces = 0x04u;
+
+const u32 s_ColliderFlagIsBox = 0x00000001u;
+const u32 s_ColliderFlagIsSensor = 0x00000002u;
+const u32 s_ColliderFlagContactEvents = 0x00000004u;
+const u32 s_ColliderFlagHitEvents = 0x00000008u;
+const u32 s_ColliderFlagSensorEvents = 0x00000010u;
+const u32 s_ColliderFlagPreSolveEvents = 0x00000020u;
+const u32 s_ColliderFlagPostSolveEvents = 0x00000040u;
+const u32 s_ColliderFlagInvokeCreation = 0x00000080u;
+const u32 s_ColliderFlagCullBackfaces = 0x00000100u;
+const u32 s_ColliderFlagAutoConvexDecompose = 0x00000200u;
+const u32 s_ColliderFlagChainClosed = 0x00000400u;
+const u32 s_ColliderFlagChainHasGhostStart = 0x00000800u;
+const u32 s_ColliderFlagChainHasGhostEnd = 0x00001000u;
+const u32 s_ColliderFlagHeightfieldFlipDiagonal = 0x00002000u;
+const u32 s_ColliderFlagVhacdEnableArbitraryPlanes = 0x00004000u;
+const u32 s_ColliderFlagVhacdEnableHullMerging = 0x00008000u;
+const u32 s_ColliderFlagSyncCsgCuts = 0x00010000u;
+const u32 s_ColliderFlagUseMeshComponentFallback = 0x00020000u;
+const u32 s_ColliderFlagSdfIsClosed = 0x00040000u;
+const u32 s_ColliderFlagSdfBuildFromMesh = 0x00080000u;
+const u32 s_ColliderFlagSyncSkinnedMesh = 0x00100000u;
 
 const u16 s_JointFlagUseRefRotation = 0x0001u;
 const u16 s_JointFlagEnableLimit = 0x0002u;
@@ -53,18 +62,24 @@ const u8 s_SixDofAxisFlagEnableSpring = 0x02u;
 const u8 s_PhysicsParentFlagInheritScale = 0x01u;
 const u8 s_PhysicsParentFlagAttachColliderToParent = 0x02u;
 
-const u16 s_WorldCfgFlagEnableSleep = 0x0001u;
-const u16 s_WorldCfgFlagEnableContinuous = 0x0002u;
-const u16 s_WorldCfgFlagContactSoftening = 0x0004u;
-const u16 s_WorldCfgFlagWarmStarting = 0x0008u;
-const u16 s_WorldCfgFlagPaused = 0x0010u;
-const u16 s_WorldCfgFlagEnableGpuCollision = 0x0020u;
-const u16 s_WorldCfgFlagForceGpuCollision = 0x0040u;
-const u16 s_WorldCfgFlagGpuResidentMode = 0x0080u;
-const u16 s_WorldCfgFlagUseGpuLbvhBroadphase = 0x0100u;
-const u16 s_WorldCfgFlagInterpolateTransforms = 0x0200u;
-const u16 s_WorldCfgFlagPublishEventsToMessageBus = 0x0400u;
-const u16 s_WorldCfgFlagPublishContinuousEventsToMessageBus = 0x0800u;
+const u32 s_WorldCfgFlagEnableSleep = 0x00000001u;
+const u32 s_WorldCfgFlagEnableContinuous = 0x00000002u;
+const u32 s_WorldCfgFlagContactSoftening = 0x00000004u;
+const u32 s_WorldCfgFlagWarmStarting = 0x00000008u;
+const u32 s_WorldCfgFlagPaused = 0x00000010u;
+const u32 s_WorldCfgFlagEnableGpuCollision = 0x00000020u;
+const u32 s_WorldCfgFlagForceGpuCollision = 0x00000040u;
+const u32 s_WorldCfgFlagGpuResidentMode = 0x00000080u;
+const u32 s_WorldCfgFlagUseGpuLbvhBroadphase = 0x00000100u;
+const u32 s_WorldCfgFlagInterpolateTransforms = 0x00000200u;
+const u32 s_WorldCfgFlagPublishEventsToMessageBus = 0x00000400u;
+const u32 s_WorldCfgFlagPublishContinuousEventsToMessageBus = 0x00000800u;
+const u32 s_WorldCfgFlagEnableBlockSolver = 0x00001000u;
+const u32 s_WorldCfgFlagEnableShockPropagation = 0x00002000u;
+const u32 s_WorldCfgFlagDeterministicMode = 0x00004000u;
+const u32 s_WorldCfgFlagEnableGlobalCcd = 0x00008000u;
+const u32 s_WorldCfgFlagEnablePerPointFriction = 0x00010000u;
+const u32 s_WorldCfgFlagEnableDoublePrecisionPositions = 0x00020000u;
 
 
 b8 ValidateSixDofAxes(in Array<SixDofAxisConfig, 6u> axes){
@@ -160,18 +175,230 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
+    private b8 validCompoundSubShapeHeaderFields(
+        in CompoundSubShapeEntry sub,
+        in usize hullPointCount,
+        in usize meshVertexCount,
+        in usize meshIndexCount
+    )const{
+        if(
+            cast<u8>(sub.shapeType) >= cast<u8>(ShapeType::kCount)
+            || sub.shapeType == ShapeType::Heightfield
+            || sub.shapeType == ShapeType::Compound
+            || sub.shapeType == ShapeType::Scaled
+        )
+            return false;
+        const VectorSingle localPos(sub.localPosition);
+        const VectorSingle localRot(sub.localRotation);
+        const VectorSingle center(sub.center);
+        const VectorSingle center2(sub.center2);
+        const VectorSingle halfExtents(sub.halfExtents);
+        const VectorSingle planeNormalOffset(sub.planeNormalOffset);
+        if(!IsValidPositionVec3(localPos) || !IsFinite(localRot) || LengthSq(localRot) <= s_NormalizeEpsilonSq)
+            return false;
+        if(!IsValidPositionVec3(center) || !IsFinite(center2) || !IsFinite(halfExtents) || !IsFinite(planeNormalOffset))
+            return false;
+        if(LengthSq(VectorSingle(planeNormalOffset.x, planeNormalOffset.y, planeNormalOffset.z, 0.0f)) <= s_NormalizeEpsilonSq || Abs(planeNormalOffset).w > s_HugeCoordinate)
+            return false;
+        if(!IsFinite(VectorSingle(sub.radius, sub.topRadius, sub.cylinderHalfHeight, sub.skinRadius)) || !IsFinite(VectorSingle(sub.density)))
+            return false;
+        if(sub.radius < 0.0f || sub.topRadius < 0.0f || sub.cylinderHalfHeight <= 0.0f || sub.skinRadius < 0.0f || sub.density < 0.0f)
+            return false;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        if(!assetCodec.validSurfaceMaterial(sub.material))
+            return false;
+        if((sub.shapeType == ShapeType::Sphere || sub.shapeType == ShapeType::Capsule || sub.shapeType == ShapeType::Cylinder || sub.shapeType == ShapeType::Cone || sub.shapeType == ShapeType::TaperedCapsule) && sub.radius <= 0.0f)
+            return false;
+        if(sub.shapeType == ShapeType::TaperedCapsule && sub.topRadius <= 0.0f)
+            return false;
+        if(sub.shapeType == ShapeType::Capsule || sub.shapeType == ShapeType::TaperedCapsule || sub.shapeType == ShapeType::Segment){
+            if(!IsValidPositionVec3(center2))
+                return false;
+            const VectorSingle lenSq = Vector3LengthSq(center2 - center);
+            if(!IsFinite(lenSq) || lenSq.x < s_MinCapsuleLength * s_MinCapsuleLength)
+                return false;
+        }
+        if(sub.shapeType == ShapeType::Plane){
+            if(halfExtents.x < 0.0f || halfExtents.z < 0.0f || (halfExtents.x > 0.0f) != (halfExtents.z > 0.0f))
+                return false;
+        }
+        if(sub.shapeType == ShapeType::Hull && !sub.convexHullAsset.valid()){
+            if(sub.isBox && (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f))
+                return false;
+            if(!sub.isBox && !sub.meshAsset.valid() && hullPointCount < 4u)
+                return false;
+        }
+        else if(sub.shapeType == ShapeType::Mesh){
+            if(!sub.meshAsset.valid() && !sub.collisionMeshAsset.valid() && (meshVertexCount == 0u || meshIndexCount == 0u))
+                return false;
+            if((meshIndexCount % 3u) != 0u)
+                return false;
+        }
+        else if(sub.shapeType == ShapeType::Chain){
+            if(!sub.chainAsset.valid())
+                return false;
+        }
+        else if(sub.shapeType == ShapeType::Sdf){
+            if(!sub.sdfAsset.valid())
+                return false;
+        }
+        return true;
+    }
+
+    private b8 validCompoundSubShapeArrayFields(in CompoundSubShapeEntry sub)const{
+        if(sub.shapeType == ShapeType::Hull && !sub.isBox && !sub.convexHullAsset.valid()){
+            for(usize i = 0u; i < sub.hullPoints.size(); ++i){
+                if(!IsValidPositionVec3(VectorSingle(sub.hullPoints[i])))
+                    return false;
+            }
+        }
+        else if(sub.shapeType == ShapeType::Mesh){
+            for(usize i = 0u; i < sub.meshVertices.size(); ++i){
+                if(!IsValidPositionVec3(VectorSingle(sub.meshVertices[i])))
+                    return false;
+            }
+            if(!sub.meshVertices.empty()){
+                const usize vCount = sub.meshVertices.size();
+                for(usize i = 0u; i < sub.meshIndices.size(); ++i){
+                    if(cast<usize>(sub.meshIndices[i]) >= vCount)
+                        return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private b8 validCompoundSubShapeData(in CompoundSubShapeEntry sub)const{
+        if(!this.validCompoundSubShapeHeaderFields(sub, sub.hullPoints.size(), sub.meshVertices.size(), sub.meshIndices.size()))
+            return false;
+        return this.validCompoundSubShapeArrayFields(sub);
+    }
+
+    private usize compoundSubShapeSerializedBytes(in CompoundSubShapeEntry sub)const{
+        return size_of<CompoundSubShapeEntryBinary>()
+            + sub.hullPoints.size() * size_of<PhysicsVec4Binary>()
+            + sub.meshVertices.size() * size_of<PhysicsVec4Binary>()
+            + sub.meshIndices.size() * size_of<PhysicsU32Binary>();
+    }
+
+    private b8 appendCompoundSubShapeUnchecked(in CompoundSubShapeEntry sub, mut Vector<u8> outPayload)const{
+        if(
+            sub.hullPoints.size() > cast<usize>(u32.max)
+            || sub.meshVertices.size() > cast<usize>(u32.max)
+            || sub.meshIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+        static_assert(size_of<CompoundSubShapeEntryBinary>() == 608u && offset_of<CompoundSubShapeEntryBinary>(reserved2) == 600u);
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        CompoundSubShapeEntryBinary bin;
+        bin.localPosition = sub.localPosition;
+        bin.localRotation = sub.localRotation;
+        bin.center = sub.center;
+        bin.center2 = sub.center2;
+        bin.halfExtents = sub.halfExtents;
+        bin.planeNormalOffset = sub.planeNormalOffset;
+        bin.material = assetCodec.packSurfaceMaterialFields(sub.material);
+        bin.materialAssetHash = sub.materialAsset.name().hash();
+        bin.convexHullAssetHash = sub.convexHullAsset.name().hash();
+        bin.meshAssetHash = sub.meshAsset.name().hash();
+        bin.collisionMeshAssetHash = sub.collisionMeshAsset.name().hash();
+        bin.chainAssetHash = sub.chainAsset.name().hash();
+        bin.sdfAssetHash = sub.sdfAsset.name().hash();
+        bin.radius = sub.radius;
+        bin.topRadius = sub.topRadius;
+        bin.cylinderHalfHeight = sub.cylinderHalfHeight;
+        bin.skinRadius = sub.skinRadius;
+        bin.density = sub.density;
+        bin.hullPointCount = cast<u32>(sub.hullPoints.size());
+        bin.meshVertexCount = cast<u32>(sub.meshVertices.size());
+        bin.meshIndexCount = cast<u32>(sub.meshIndices.size());
+        bin.shapeType = cast<u8>(sub.shapeType);
+        u8 flags = 0u;
+        if(sub.isBox) flags |= s_CompoundSubFlagIsBox;
+        if(sub.overrideMaterial) flags |= s_CompoundSubFlagOverrideMaterial;
+        if(sub.cullBackfaces) flags |= s_CompoundSubFlagCullBackfaces;
+        bin.flags = flags;
+        AppendPOD(outPayload, bin);
+
+        return AppendBinaryVectorPayload(outPayload, sub.hullPoints).has_value()
+            && AppendBinaryVectorPayload(outPayload, sub.meshVertices).has_value()
+            && AppendBinaryVectorPayload(outPayload, sub.meshIndices).has_value();
+    }
+
+    private b8 deserializeCompoundSubShape(in Span<u8> payload, mut usize inOutCursor, mut CompoundSubShapeEntry outSub)const{
+        outSub = CompoundSubShapeEntry();
+        const Expected<CompoundSubShapeEntryBinary> res = ReadPOD<CompoundSubShapeEntryBinary>(payload, inOutCursor);
+        if(!res.has_value())
+            return false;
+        in CompoundSubShapeEntryBinary bin = res.value();
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xf8u) != 0u)
+            return false;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        const Expected<SurfaceMaterial> matRes = assetCodec.unpackSurfaceMaterialFields(bin.material);
+        if(!matRes.has_value())
+            return false;
+        const u64 remaining = cast<u64>(payload.size() - inOutCursor);
+        const u64 vecBytes = (cast<u64>(bin.hullPointCount) + cast<u64>(bin.meshVertexCount)) * cast<u64>(size_of<PhysicsVec4Binary>())
+            + cast<u64>(bin.meshIndexCount) * cast<u64>(size_of<PhysicsU32Binary>());
+        if(vecBytes > remaining)
+            return false;
+
+        outSub.shapeType = cast<ShapeType>(bin.shapeType);
+        outSub.localPosition = bin.localPosition;
+        outSub.localRotation = bin.localRotation;
+        outSub.center = bin.center;
+        outSub.center2 = bin.center2;
+        outSub.halfExtents = bin.halfExtents;
+        outSub.planeNormalOffset = bin.planeNormalOffset;
+        outSub.material = matRes.value();
+        outSub.materialAsset.virtualPath = DecodeOptionalPhysicsName(bin.materialAssetHash);
+        outSub.convexHullAsset.virtualPath = DecodeOptionalPhysicsName(bin.convexHullAssetHash);
+        outSub.meshAsset.virtualPath = DecodeOptionalPhysicsName(bin.meshAssetHash);
+        outSub.collisionMeshAsset.virtualPath = DecodeOptionalPhysicsName(bin.collisionMeshAssetHash);
+        outSub.chainAsset.virtualPath = DecodeOptionalPhysicsName(bin.chainAssetHash);
+        outSub.sdfAsset.virtualPath = DecodeOptionalPhysicsName(bin.sdfAssetHash);
+        outSub.radius = bin.radius;
+        outSub.topRadius = bin.topRadius;
+        outSub.cylinderHalfHeight = bin.cylinderHalfHeight;
+        outSub.skinRadius = bin.skinRadius;
+        outSub.density = bin.density;
+        outSub.isBox = (bin.flags & s_CompoundSubFlagIsBox) != 0u;
+        outSub.overrideMaterial = (bin.flags & s_CompoundSubFlagOverrideMaterial) != 0u;
+        outSub.cullBackfaces = (bin.flags & s_CompoundSubFlagCullBackfaces) != 0u;
+
+        if(!this.validCompoundSubShapeHeaderFields(outSub, cast<usize>(bin.hullPointCount), cast<usize>(bin.meshVertexCount), cast<usize>(bin.meshIndexCount)))
+            return false;
+        if(
+            !ReadBinaryVectorPayload(payload, bin.hullPointCount, inOutCursor, outSub.hullPoints).has_value()
+            || !ReadBinaryVectorPayload(payload, bin.meshVertexCount, inOutCursor, outSub.meshVertices).has_value()
+            || !ReadBinaryVectorPayload(payload, bin.meshIndexCount, inOutCursor, outSub.meshIndices).has_value()
+        )
+            return false;
+        return this.validCompoundSubShapeArrayFields(outSub);
+    }
+
     private b8 validColliderEntryHeaderFields(
         in ColliderShapeEntry e,
         in usize chainPointCount,
+        in usize chainMaterialCount,
+        in usize chainMaterialAssetCount,
+        in usize chainSegmentMaterialIndexCount,
         in usize hullPointCount,
         in usize meshVertexCount,
         in usize meshIndexCount,
         in usize heightfieldCount,
         in usize heightfieldMaterialCount,
+        in usize heightfieldMaterialAssetCount,
         in usize heightfieldCellMaterialCount,
-        in usize heightfieldCellHoleByteCount
+        in usize heightfieldCellHoleByteCount,
+        in usize compoundSubShapeCount,
+        in usize sdfDistanceCount
     )const{
         if(cast<u8>(e.shapeType) >= cast<u8>(ShapeType::kCount))
+            return false;
+        if(cast<u8>(e.scaledChildType) >= cast<u8>(ShapeType::kCount) || e.scaledChildType == ShapeType::Scaled)
+            return false;
+        if(e.broadPhaseLayer >= 32u)
             return false;
         const VectorSingle center(e.center);
         const VectorSingle center2(e.center2);
@@ -182,6 +409,11 @@ class PhysicsComponentBinaryCodec{
         const VectorSingle frictionDirection(e.frictionDirection);
         const VectorSingle planeNormalOffset(e.planeNormalOffset);
         const VectorSingle heightfieldScale(e.heightfieldScale);
+        const VectorSingle chainGhostStart(e.chainGhostStart);
+        const VectorSingle chainGhostEnd(e.chainGhostEnd);
+        const VectorSingle scaledFactor(e.scaledFactor);
+        const VectorSingle sdfBoundsMin(e.sdfBoundsMin);
+        const VectorSingle sdfBoundsMax(e.sdfBoundsMax);
         if(!IsValidPositionVec3(center) || !IsFinite(center2) || !IsFinite(halfExtents) || !IsFinite(localRotation))
             return false;
         if(LengthSq(localRotation) <= s_NormalizeEpsilonSq)
@@ -192,7 +424,15 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(anisotropicFriction) || !IsFinite(surfaceVelocity) || !IsFinite(frictionDirection) || !IsFinite(planeNormalOffset) || !IsFinite(heightfieldScale))
             return false;
+        if(!IsFinite(chainGhostStart) || !IsFinite(chainGhostEnd) || !IsFinite(scaledFactor) || !IsFinite(sdfBoundsMin) || !IsFinite(sdfBoundsMax))
+            return false;
+        if(e.chainHasGhostStart && !IsValidPositionVec3(chainGhostStart))
+            return false;
+        if(e.chainHasGhostEnd && !IsValidPositionVec3(chainGhostEnd))
+            return false;
         if(!IsFinite(VectorSingle(e.cylinderHalfHeight, e.topRadius, e.heightfieldThickness, e.chainRadius)))
+            return false;
+        if(!IsFinite(VectorSingle(e.sdfMargin, e.sdfPadding, 0.0f, 0.0f)) || e.sdfMargin < 0.0f || e.sdfPadding < 0.0f)
             return false;
         if(!IsFinite(VectorSingle(e.vhacdConcavityThreshold, e.vhacdMinVolumeRatio, e.vhacdMergeVolumeTolerance, 0.0f)))
             return false;
@@ -208,50 +448,90 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(LengthSq(VectorSingle(planeNormalOffset.x, planeNormalOffset.y, planeNormalOffset.z, 0.0f)) <= s_NormalizeEpsilonSq || Abs(planeNormalOffset).w > s_HugeCoordinate)
             return false;
-        if(e.shapeType == ShapeType::Plane){
-            if(halfExtents.x < 0.0f || halfExtents.z < 0.0f || (halfExtents.x > 0.0f) != (halfExtents.z > 0.0f))
-                return false;
-        }
         if(heightfieldScale.x <= 0.0f || heightfieldScale.z <= 0.0f)
             return false;
         if(e.radius < 0.0f || e.skinRadius < 0.0f || e.density < 0.0f || e.friction < 0.0f || e.restitution < 0.0f || e.rollingResistance < 0.0f)
             return false;
-        if((e.shapeType == ShapeType::Sphere || e.shapeType == ShapeType::Capsule || e.shapeType == ShapeType::Cylinder || e.shapeType == ShapeType::Cone || e.shapeType == ShapeType::TaperedCapsule) && e.radius <= 0.0f)
+        if(e.shapeType == ShapeType::Scaled){
+            const VectorSingle absFactor = Abs(scaledFactor);
+            if(absFactor.x <= 1.0e-5f || absFactor.y <= 1.0e-5f || absFactor.z <= 1.0e-5f)
+                return false;
+        }
+
+        ShapeType effType = e.shapeType;
+        if(e.shapeType == ShapeType::Scaled)
+            effType = e.scaledChildType;
+
+        if(effType == ShapeType::Plane){
+            if(halfExtents.x < 0.0f || halfExtents.z < 0.0f || (halfExtents.x > 0.0f) != (halfExtents.z > 0.0f))
+                return false;
+        }
+        if((effType == ShapeType::Sphere || effType == ShapeType::Capsule || effType == ShapeType::Cylinder || effType == ShapeType::Cone || effType == ShapeType::TaperedCapsule) && e.radius <= 0.0f)
             return false;
-        if(e.shapeType == ShapeType::Capsule || e.shapeType == ShapeType::TaperedCapsule || (e.shapeType == ShapeType::Segment && !e.isChain)){
+        if(effType == ShapeType::Capsule || effType == ShapeType::TaperedCapsule || effType == ShapeType::Segment){
             if(!IsValidPositionVec3(center2))
                 return false;
             const VectorSingle lenSq = Vector3LengthSq(center2 - center);
             if(!IsFinite(lenSq) || lenSq.x < s_MinCapsuleLength * s_MinCapsuleLength)
                 return false;
         }
-        if(e.isChain){
-            if(e.shapeType != ShapeType::Segment || chainPointCount < 2u)
+        if(effType == ShapeType::TaperedCapsule && e.topRadius <= 0.0f)
+            return false;
+        if(effType == ShapeType::Chain && !e.chainAsset.valid()){
+            usize minChainPts = 2u;
+            if(e.chainClosed)
+                minChainPts = 3u;
+            if(chainPointCount < minChainPts)
                 return false;
         }
-        if(e.shapeType == ShapeType::TaperedCapsule && e.topRadius <= 0.0f)
-            return false;
-        if(e.shapeType == ShapeType::Hull && !e.convexHullAsset.valid() && !e.compoundHullAsset.valid()){
+        if(effType == ShapeType::Hull && !e.convexHullAsset.valid() && !e.compoundHullAsset.valid()){
             if(e.isBox && (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f))
                 return false;
             if(!e.isBox && !e.useMeshComponentFallback && !e.meshAsset.valid() && hullPointCount < 4u)
                 return false;
         }
-        else if(e.shapeType == ShapeType::Mesh){
+        else if(effType == ShapeType::Mesh){
             if(!e.useMeshComponentFallback && !e.meshAsset.valid() && !e.collisionMeshAsset.valid() && !e.compoundHullAsset.valid() && (meshVertexCount == 0u || meshIndexCount == 0u))
                 return false;
             if((meshIndexCount % 3u) != 0u)
                 return false;
         }
+        else if(effType == ShapeType::Compound){
+            if(!e.compoundShapeAsset.valid() && compoundSubShapeCount == 0u && !e.compoundHullAsset.valid() && !e.autoConvexDecompose)
+                return false;
+        }
+
+        const b8 hasInlineSdf = (sdfDistanceCount > 0u || e.sdfDimX != 0u || e.sdfDimY != 0u || e.sdfDimZ != 0u);
+        if(hasInlineSdf){
+            if(e.sdfDimX < 2u || e.sdfDimY < 2u || e.sdfDimZ < 2u)
+                return false;
+            const u64 xy = cast<u64>(e.sdfDimX) * cast<u64>(e.sdfDimY);
+            if(cast<u64>(e.sdfDimZ) > (u64.max / xy))
+                return false;
+            if(xy * cast<u64>(e.sdfDimZ) != cast<u64>(sdfDistanceCount))
+                return false;
+            if(e.sdfBoundsMax.x <= e.sdfBoundsMin.x || e.sdfBoundsMax.y <= e.sdfBoundsMin.y || e.sdfBoundsMax.z <= e.sdfBoundsMin.z)
+                return false;
+        }
+        if(effType == ShapeType::Sdf && !e.sdfAsset.valid() && (e.sdfBuildFromMesh || sdfDistanceCount == 0u)){
+            if(!e.useMeshComponentFallback && !e.meshAsset.valid() && !e.collisionMeshAsset.valid() && (meshVertexCount == 0u || meshIndexCount == 0u))
+                return false;
+            if((meshIndexCount % 3u) != 0u)
+                return false;
+        }
+
         const b8 hasInlineHeightfield = (heightfieldCount > 0u || e.heightfieldRows != 0u || e.heightfieldCols != 0u);
-        if(hasInlineHeightfield || (e.shapeType == ShapeType::Heightfield && !e.heightfieldAsset.valid())){
+        if(hasInlineHeightfield || (effType == ShapeType::Heightfield && !e.heightfieldAsset.valid())){
             if(e.heightfieldRows < 2u || e.heightfieldCols < 2u)
                 return false;
             if(cast<u64>(e.heightfieldRows) * cast<u64>(e.heightfieldCols) != cast<u64>(heightfieldCount))
                 return false;
         }
+        usize effHfMatCount = heightfieldMaterialCount;
+        if(heightfieldMaterialAssetCount > 0u)
+            effHfMatCount = heightfieldMaterialAssetCount;
         if(heightfieldCellMaterialCount > 0u){
-            if(heightfieldMaterialCount == 0u || e.heightfieldRows < 2u || e.heightfieldCols < 2u)
+            if(effHfMatCount == 0u || e.heightfieldRows < 2u || e.heightfieldCols < 2u)
                 return false;
             const u64 expectedCells = cast<u64>(e.heightfieldRows - 1u) * cast<u64>(e.heightfieldCols - 1u);
             if(cast<u64>(heightfieldCellMaterialCount) != expectedCells)
@@ -265,17 +545,36 @@ class PhysicsComponentBinaryCodec{
             if(cast<u64>(heightfieldCellHoleByteCount) != expectedHoleBytes)
                 return false;
         }
+        if(chainSegmentMaterialIndexCount > 0u){
+            usize effChainMatCount = chainMaterialCount;
+            if(chainMaterialAssetCount > 0u)
+                effChainMatCount = chainMaterialAssetCount;
+            if(!e.chainAsset.valid()){
+                if(effChainMatCount == 0u)
+                    return false;
+                if(chainPointCount >= 2u){
+                    usize expectedSegs = chainPointCount - 1u;
+                    if(e.chainClosed)
+                        expectedSegs = chainPointCount;
+                    if(chainSegmentMaterialIndexCount != expectedSegs)
+                        return false;
+                }
+            }
+        }
         return true;
     }
 
-    private b8 validColliderEntryNonMaterialArrayFields(in ColliderShapeEntry e)const{
-        if(e.shapeType == ShapeType::Hull && !e.isBox && !e.convexHullAsset.valid() && !e.compoundHullAsset.valid()){
+    private b8 validColliderEntryNonMaterialArrayFields(in ColliderShapeEntry e, in b8 validateSubShapes)const{
+        ShapeType effType = e.shapeType;
+        if(e.shapeType == ShapeType::Scaled)
+            effType = e.scaledChildType;
+        if(effType == ShapeType::Hull && !e.isBox && !e.convexHullAsset.valid() && !e.compoundHullAsset.valid()){
             for(usize i = 0u; i < e.hullPoints.size(); ++i){
                 if(!IsValidPositionVec3(VectorSingle(e.hullPoints[i])))
                     return false;
             }
         }
-        else if(e.shapeType == ShapeType::Mesh){
+        else if(effType == ShapeType::Mesh || effType == ShapeType::Sdf || effType == ShapeType::Compound){
             for(usize i = 0u; i < e.meshVertices.size(); ++i){
                 if(!IsValidPositionVec3(VectorSingle(e.meshVertices[i])))
                     return false;
@@ -293,14 +592,35 @@ class PhysicsComponentBinaryCodec{
             if(!IsFinite(VectorSingle(h)) && h == h)
                 return false;
         }
-        const usize matCount = e.heightfieldMaterials.size();
+        usize effHfMatCount = e.heightfieldMaterials.size();
+        if(!e.heightfieldMaterialAssets.empty())
+            effHfMatCount = e.heightfieldMaterialAssets.size();
         for(usize i = 0u; i < e.heightfieldCellMaterialIndices.size(); ++i){
-            if(cast<usize>(e.heightfieldCellMaterialIndices[i]) >= matCount)
+            if(cast<usize>(e.heightfieldCellMaterialIndices[i]) >= effHfMatCount)
                 return false;
         }
         for(usize i = 0u; i < e.chainPoints.size(); ++i){
             if(!IsValidPositionVec3(VectorSingle(e.chainPoints[i])))
                 return false;
+        }
+        usize effChainMatCount = e.chainMaterials.size();
+        if(!e.chainMaterialAssets.empty())
+            effChainMatCount = e.chainMaterialAssets.size();
+        if(effChainMatCount > 0u){
+            for(usize i = 0u; i < e.chainSegmentMaterialIndices.size(); ++i){
+                if(cast<usize>(e.chainSegmentMaterialIndices[i]) >= effChainMatCount)
+                    return false;
+            }
+        }
+        for(usize i = 0u; i < e.sdfDistances.size(); ++i){
+            if(!IsFinite(VectorSingle(e.sdfDistances[i])))
+                return false;
+        }
+        if(validateSubShapes){
+            for(usize i = 0u; i < e.compoundSubShapes.size(); ++i){
+                if(!this.validCompoundSubShapeData(e.compoundSubShapes[i]))
+                    return false;
+            }
         }
         return true;
     }
@@ -309,35 +629,53 @@ class PhysicsComponentBinaryCodec{
         if(!this.validColliderEntryHeaderFields(
             e,
             e.chainPoints.size(),
+            e.chainMaterials.size(),
+            e.chainMaterialAssets.size(),
+            e.chainSegmentMaterialIndices.size(),
             e.hullPoints.size(),
             e.meshVertices.size(),
             e.meshIndices.size(),
             e.heightfieldHeights.size(),
             e.heightfieldMaterials.size(),
+            e.heightfieldMaterialAssets.size(),
             e.heightfieldCellMaterialIndices.size(),
-            e.heightfieldCellHoles.size()
+            e.heightfieldCellHoles.size(),
+            e.compoundSubShapes.size(),
+            e.sdfDistances.size()
         ))
             return false;
-        if(!this.validColliderEntryNonMaterialArrayFields(e))
+        if(!this.validColliderEntryNonMaterialArrayFields(e, true))
             return false;
-        PhysicsAssetBinaryCodec assetCodec;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
         for(usize i = 0u; i < e.heightfieldMaterials.size(); ++i){
             if(!assetCodec.validSurfaceMaterial(e.heightfieldMaterials[i]))
+                return false;
+        }
+        for(usize i = 0u; i < e.chainMaterials.size(); ++i){
+            if(!assetCodec.validSurfaceMaterial(e.chainMaterials[i]))
                 return false;
         }
         return true;
     }
 
     private usize colliderEntrySerializedBytes(in ColliderShapeEntry e)const{
-        return size_of<ColliderShapeEntryHeaderBinary>()
+        usize bytes = size_of<ColliderShapeEntryHeaderBinary>()
             + e.hullPoints.size() * size_of<PhysicsVec4Binary>()
             + e.meshVertices.size() * size_of<PhysicsVec4Binary>()
             + e.meshIndices.size() * size_of<PhysicsU32Binary>()
             + e.heightfieldHeights.size() * size_of<f32>()
             + e.heightfieldMaterials.size() * size_of<PhysicsSurfaceMaterialBinary>()
+            + e.heightfieldMaterialAssets.size() * size_of<NameHash>()
             + e.heightfieldCellMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
             + e.chainPoints.size() * size_of<PhysicsVec4Binary>()
-            + e.heightfieldCellHoles.size();
+            + e.chainMaterials.size() * size_of<PhysicsSurfaceMaterialBinary>()
+            + e.chainMaterialAssets.size() * size_of<NameHash>()
+            + e.chainSegmentMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
+            + e.heightfieldCellHoles.size()
+            + e.sdfDistances.size() * size_of<f32>();
+        for(usize si = 0u; si < e.compoundSubShapes.size(); ++si)
+            bytes += this.compoundSubShapeSerializedBytes(e.compoundSubShapes[si]);
+        return bytes;
     }
 
     private b8 validJointEntry(in JointEntry j)const{
@@ -473,6 +811,8 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(w.maxLinearVelocity, w.fixedDeltaTime, w.gpuWorkloadFraction, w.timeToSleep)))
             return false;
+        if(!IsFinite(VectorSingle(w.splashImpulseThreshold)) || w.splashImpulseThreshold < 0.0f)
+            return false;
         return w.restitutionThreshold >= 0.0f && w.hitEventThreshold >= 0.0f && w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.timeToSleep > 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
     }
 
@@ -583,14 +923,20 @@ class PhysicsComponentBinaryCodec{
             || e.meshIndices.size() > cast<usize>(u32.max)
             || e.heightfieldHeights.size() > cast<usize>(u32.max)
             || e.heightfieldMaterials.size() > cast<usize>(u32.max)
+            || e.heightfieldMaterialAssets.size() > cast<usize>(u32.max)
             || e.heightfieldCellMaterialIndices.size() > cast<usize>(u32.max)
             || e.chainPoints.size() > cast<usize>(u32.max)
+            || e.chainMaterials.size() > cast<usize>(u32.max)
+            || e.chainMaterialAssets.size() > cast<usize>(u32.max)
+            || e.chainSegmentMaterialIndices.size() > cast<usize>(u32.max)
             || e.heightfieldCellHoles.size() > cast<usize>(u32.max)
+            || e.sdfDistances.size() > cast<usize>(u32.max)
+            || e.compoundSubShapes.size() > cast<usize>(u32.max)
         )
             return false;
         static_assert(
-            size_of<ColliderShapeEntryHeaderBinary>() == 752u
-            && offset_of<ColliderShapeEntryHeaderBinary>(reserved5) == 744u
+            size_of<ColliderShapeEntryHeaderBinary>() == 1072u
+            && offset_of<ColliderShapeEntryHeaderBinary>(reserved5) == 1064u
             && size_of<ColliderComponentPayloadHeaderBinary>() == 72u
             && offset_of<ColliderComponentPayloadHeaderBinary>(reserved0) == 68u
         );
@@ -609,17 +955,25 @@ class PhysicsComponentBinaryCodec{
         hdr.frictionDirection = e.frictionDirection;
         hdr.planeNormalOffset = e.planeNormalOffset;
         hdr.heightfieldScale = f32x4(VectorSingle(e.heightfieldScale), 0.0f);
+        hdr.chainGhostStart = e.chainGhostStart;
+        hdr.chainGhostEnd = e.chainGhostEnd;
+        hdr.scaledFactor = e.scaledFactor;
+        hdr.sdfBoundsMin = e.sdfBoundsMin;
+        hdr.sdfBoundsMax = e.sdfBoundsMax;
         hdr.meshAssetHash = e.meshAsset.name().hash();
         hdr.materialAssetHash = e.materialAsset.name().hash();
         hdr.convexHullAssetHash = e.convexHullAsset.name().hash();
         hdr.compoundHullAssetHash = e.compoundHullAsset.name().hash();
         hdr.collisionMeshAssetHash = e.collisionMeshAsset.name().hash();
         hdr.heightfieldAssetHash = e.heightfieldAsset.name().hash();
+        hdr.sdfAssetHash = e.sdfAsset.name().hash();
+        hdr.chainAssetHash = e.chainAsset.name().hash();
+        hdr.compoundShapeAssetHash = e.compoundShapeAsset.name().hash();
         hdr.collisionLayerHash = e.collisionLayer.hash();
         hdr.userData = e.userData;
-        hdr.groupIndex = e.groupIndex;
         hdr.categoryBits = e.categoryBits;
         hdr.maskBits = e.maskBits;
+        hdr.groupIndex = e.groupIndex;
         hdr.radius = e.radius;
         hdr.skinRadius = e.skinRadius;
         hdr.density = e.density;
@@ -640,33 +994,51 @@ class PhysicsComponentBinaryCodec{
         hdr.meshIndexCount = cast<u32>(e.meshIndices.size());
         hdr.heightfieldCount = cast<u32>(e.heightfieldHeights.size());
         hdr.heightfieldMaterialCount = cast<u32>(e.heightfieldMaterials.size());
+        hdr.heightfieldMaterialAssetCount = cast<u32>(e.heightfieldMaterialAssets.size());
         hdr.heightfieldCellMaterialCount = cast<u32>(e.heightfieldCellMaterialIndices.size());
         hdr.chainPointCount = cast<u32>(e.chainPoints.size());
+        hdr.chainMaterialCount = cast<u32>(e.chainMaterials.size());
+        hdr.chainMaterialAssetCount = cast<u32>(e.chainMaterialAssets.size());
+        hdr.chainSegmentMaterialIndexCount = cast<u32>(e.chainSegmentMaterialIndices.size());
+        hdr.compoundSubShapeCount = cast<u32>(e.compoundSubShapes.size());
+        hdr.sdfDimX = e.sdfDimX;
+        hdr.sdfDimY = e.sdfDimY;
+        hdr.sdfDimZ = e.sdfDimZ;
+        hdr.sdfDistanceCount = cast<u32>(e.sdfDistances.size());
+        hdr.sdfMargin = e.sdfMargin;
+        hdr.sdfPadding = e.sdfPadding;
         hdr.vhacdMaxRecursionDepth = e.vhacdMaxRecursionDepth;
         hdr.vhacdConcavityThreshold = e.vhacdConcavityThreshold;
         hdr.vhacdMaxVerticesPerHull = e.vhacdMaxVerticesPerHull;
         hdr.vhacdMinVolumeRatio = e.vhacdMinVolumeRatio;
         hdr.vhacdMergeVolumeTolerance = e.vhacdMergeVolumeTolerance;
         hdr.heightfieldCellHoleByteCount = cast<u32>(e.heightfieldCellHoles.size());
-        u16 flags = 0u;
+        u32 flags = 0u;
         if(e.isBox) flags |= s_ColliderFlagIsBox;
         if(e.isSensor) flags |= s_ColliderFlagIsSensor;
         if(e.enableContactEvents) flags |= s_ColliderFlagContactEvents;
         if(e.enableHitEvents) flags |= s_ColliderFlagHitEvents;
         if(e.enableSensorEvents) flags |= s_ColliderFlagSensorEvents;
         if(e.enablePreSolveEvents) flags |= s_ColliderFlagPreSolveEvents;
+        if(e.enablePostSolveEvents) flags |= s_ColliderFlagPostSolveEvents;
         if(e.invokeContactCreation) flags |= s_ColliderFlagInvokeCreation;
         if(e.cullBackfaces) flags |= s_ColliderFlagCullBackfaces;
         if(e.autoConvexDecompose) flags |= s_ColliderFlagAutoConvexDecompose;
-        if(e.isChain) flags |= s_ColliderFlagIsChain;
         if(e.chainClosed) flags |= s_ColliderFlagChainClosed;
+        if(e.chainHasGhostStart) flags |= s_ColliderFlagChainHasGhostStart;
+        if(e.chainHasGhostEnd) flags |= s_ColliderFlagChainHasGhostEnd;
         if(e.heightfieldFlipDiagonal) flags |= s_ColliderFlagHeightfieldFlipDiagonal;
         if(e.vhacdEnableArbitraryPlanes) flags |= s_ColliderFlagVhacdEnableArbitraryPlanes;
         if(e.vhacdEnableHullMerging) flags |= s_ColliderFlagVhacdEnableHullMerging;
         if(e.syncCsgCuts) flags |= s_ColliderFlagSyncCsgCuts;
         if(e.useMeshComponentFallback) flags |= s_ColliderFlagUseMeshComponentFallback;
+        if(e.sdfIsClosed) flags |= s_ColliderFlagSdfIsClosed;
+        if(e.sdfBuildFromMesh) flags |= s_ColliderFlagSdfBuildFromMesh;
+        if(e.syncSkinnedMesh) flags |= s_ColliderFlagSyncSkinnedMesh;
         hdr.flags = flags;
         hdr.shapeType = cast<u8>(e.shapeType);
+        hdr.scaledChildType = cast<u8>(e.scaledChildType);
+        hdr.broadPhaseLayer = e.broadPhaseLayer;
         hdr.frictionCombineMode = cast<u8>(e.frictionCombineMode);
         hdr.restitutionCombineMode = cast<u8>(e.restitutionCombineMode);
         AppendPOD(outPayload, hdr);
@@ -679,14 +1051,30 @@ class PhysicsComponentBinaryCodec{
         )
             return false;
 
-        PhysicsAssetBinaryCodec assetCodec;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
         for(usize mi = 0u; mi < e.heightfieldMaterials.size(); ++mi)
             AppendPOD(outPayload, assetCodec.packSurfaceMaterialFields(e.heightfieldMaterials[mi]));
+        for(usize mi = 0u; mi < e.heightfieldMaterialAssets.size(); ++mi)
+            AppendPOD(outPayload, e.heightfieldMaterialAssets[mi].name().hash());
         if(!AppendBinaryVectorPayload(outPayload, e.heightfieldCellMaterialIndices).has_value())
             return false;
         if(!AppendBinaryVectorPayload(outPayload, e.chainPoints).has_value())
             return false;
-        return AppendBinaryVectorPayload(outPayload, e.heightfieldCellHoles).has_value();
+        for(usize mi = 0u; mi < e.chainMaterials.size(); ++mi)
+            AppendPOD(outPayload, assetCodec.packSurfaceMaterialFields(e.chainMaterials[mi]));
+        for(usize mi = 0u; mi < e.chainMaterialAssets.size(); ++mi)
+            AppendPOD(outPayload, e.chainMaterialAssets[mi].name().hash());
+        if(
+            !AppendBinaryVectorPayload(outPayload, e.chainSegmentMaterialIndices).has_value()
+            || !AppendBinaryVectorPayload(outPayload, e.heightfieldCellHoles).has_value()
+            || !AppendBinaryVectorPayload(outPayload, e.sdfDistances).has_value()
+        )
+            return false;
+        for(usize si = 0u; si < e.compoundSubShapes.size(); ++si){
+            if(!this.appendCompoundSubShapeUnchecked(e.compoundSubShapes[si], outPayload))
+                return false;
+        }
+        return true;
     }
 
     private b8 deserializeColliderEntry(in Span<u8> payload, mut usize inOutCursor, mut ColliderShapeEntry outEntry)const{
@@ -699,9 +1087,10 @@ class PhysicsComponentBinaryCodec{
             hdr.reserved0 != 0u
             || hdr.reserved1 != 0u
             || hdr.reserved2 != 0u
-            || hdr.reserved3 != 0u
-            || hdr.reserved4 != 0u
             || hdr.reserved5 != 0u
+            || (hdr.flags & 0xffe00000u) != 0u
+            || hdr.broadPhaseLayer >= 32u
+            || hdr.scaledChildType >= cast<u8>(ShapeType::kCount)
             || hdr.frictionCombineMode >= cast<u8>(MaterialCombineMode::kCount)
             || hdr.restitutionCombineMode >= cast<u8>(MaterialCombineMode::kCount)
         )
@@ -709,30 +1098,39 @@ class PhysicsComponentBinaryCodec{
 
         const u64 remaining = cast<u64>(payload.size() - inOutCursor);
         const u64 vecBytes = (cast<u64>(hdr.hullPointCount) + cast<u64>(hdr.meshVertexCount) + cast<u64>(hdr.chainPointCount)) * cast<u64>(size_of<PhysicsVec4Binary>())
-            + (cast<u64>(hdr.meshIndexCount) + cast<u64>(hdr.heightfieldCount)) * cast<u64>(size_of<PhysicsU32Binary>())
-            + cast<u64>(hdr.heightfieldMaterialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
-            + cast<u64>(hdr.heightfieldCellMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>())
-            + cast<u64>(hdr.heightfieldCellHoleByteCount);
+            + (cast<u64>(hdr.meshIndexCount) + cast<u64>(hdr.heightfieldCount) + cast<u64>(hdr.sdfDistanceCount)) * cast<u64>(size_of<PhysicsU32Binary>())
+            + (cast<u64>(hdr.heightfieldMaterialCount) + cast<u64>(hdr.chainMaterialCount)) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
+            + (cast<u64>(hdr.heightfieldMaterialAssetCount) + cast<u64>(hdr.chainMaterialAssetCount)) * cast<u64>(size_of<NameHash>())
+            + (cast<u64>(hdr.heightfieldCellMaterialCount) + cast<u64>(hdr.chainSegmentMaterialIndexCount)) * cast<u64>(size_of<CollisionMeshU16Binary>())
+            + cast<u64>(hdr.heightfieldCellHoleByteCount)
+            + cast<u64>(hdr.compoundSubShapeCount) * cast<u64>(size_of<CompoundSubShapeEntryBinary>());
         if(vecBytes > remaining)
             return false;
 
         outEntry.shapeType = cast<ShapeType>(hdr.shapeType);
+        outEntry.scaledChildType = cast<ShapeType>(hdr.scaledChildType);
+        outEntry.broadPhaseLayer = hdr.broadPhaseLayer;
         outEntry.isBox = (hdr.flags & s_ColliderFlagIsBox) != 0u;
         outEntry.isSensor = (hdr.flags & s_ColliderFlagIsSensor) != 0u;
         outEntry.enableContactEvents = (hdr.flags & s_ColliderFlagContactEvents) != 0u;
         outEntry.enableHitEvents = (hdr.flags & s_ColliderFlagHitEvents) != 0u;
         outEntry.enableSensorEvents = (hdr.flags & s_ColliderFlagSensorEvents) != 0u;
         outEntry.enablePreSolveEvents = (hdr.flags & s_ColliderFlagPreSolveEvents) != 0u;
+        outEntry.enablePostSolveEvents = (hdr.flags & s_ColliderFlagPostSolveEvents) != 0u;
         outEntry.invokeContactCreation = (hdr.flags & s_ColliderFlagInvokeCreation) != 0u;
         outEntry.cullBackfaces = (hdr.flags & s_ColliderFlagCullBackfaces) != 0u;
         outEntry.autoConvexDecompose = (hdr.flags & s_ColliderFlagAutoConvexDecompose) != 0u;
-        outEntry.isChain = (hdr.flags & s_ColliderFlagIsChain) != 0u;
         outEntry.chainClosed = (hdr.flags & s_ColliderFlagChainClosed) != 0u;
+        outEntry.chainHasGhostStart = (hdr.flags & s_ColliderFlagChainHasGhostStart) != 0u;
+        outEntry.chainHasGhostEnd = (hdr.flags & s_ColliderFlagChainHasGhostEnd) != 0u;
         outEntry.heightfieldFlipDiagonal = (hdr.flags & s_ColliderFlagHeightfieldFlipDiagonal) != 0u;
         outEntry.vhacdEnableArbitraryPlanes = (hdr.flags & s_ColliderFlagVhacdEnableArbitraryPlanes) != 0u;
         outEntry.vhacdEnableHullMerging = (hdr.flags & s_ColliderFlagVhacdEnableHullMerging) != 0u;
         outEntry.syncCsgCuts = (hdr.flags & s_ColliderFlagSyncCsgCuts) != 0u;
         outEntry.useMeshComponentFallback = (hdr.flags & s_ColliderFlagUseMeshComponentFallback) != 0u;
+        outEntry.sdfIsClosed = (hdr.flags & s_ColliderFlagSdfIsClosed) != 0u;
+        outEntry.sdfBuildFromMesh = (hdr.flags & s_ColliderFlagSdfBuildFromMesh) != 0u;
+        outEntry.syncSkinnedMesh = (hdr.flags & s_ColliderFlagSyncSkinnedMesh) != 0u;
         outEntry.groupIndex = hdr.groupIndex;
         outEntry.categoryBits = hdr.categoryBits;
         outEntry.maskBits = hdr.maskBits;
@@ -745,6 +1143,11 @@ class PhysicsComponentBinaryCodec{
         outEntry.frictionDirection = hdr.frictionDirection;
         outEntry.planeNormalOffset = hdr.planeNormalOffset;
         outEntry.heightfieldScale = f32x4(VectorSingle(hdr.heightfieldScale), 0.0f);
+        outEntry.chainGhostStart = hdr.chainGhostStart;
+        outEntry.chainGhostEnd = hdr.chainGhostEnd;
+        outEntry.scaledFactor = hdr.scaledFactor;
+        outEntry.sdfBoundsMin = hdr.sdfBoundsMin;
+        outEntry.sdfBoundsMax = hdr.sdfBoundsMax;
         outEntry.radius = hdr.radius;
         outEntry.skinRadius = hdr.skinRadius;
         outEntry.density = hdr.density;
@@ -765,6 +1168,11 @@ class PhysicsComponentBinaryCodec{
         outEntry.heightfieldCols = hdr.heightfieldCols;
         outEntry.heightfieldThickness = hdr.heightfieldThickness;
         outEntry.chainRadius = hdr.chainRadius;
+        outEntry.sdfDimX = hdr.sdfDimX;
+        outEntry.sdfDimY = hdr.sdfDimY;
+        outEntry.sdfDimZ = hdr.sdfDimZ;
+        outEntry.sdfMargin = hdr.sdfMargin;
+        outEntry.sdfPadding = hdr.sdfPadding;
         outEntry.frictionCombineMode = cast<MaterialCombineMode>(hdr.frictionCombineMode);
         outEntry.restitutionCombineMode = cast<MaterialCombineMode>(hdr.restitutionCombineMode);
         outEntry.userData = hdr.userData;
@@ -774,18 +1182,27 @@ class PhysicsComponentBinaryCodec{
         outEntry.compoundHullAsset.virtualPath = DecodeOptionalPhysicsName(hdr.compoundHullAssetHash);
         outEntry.collisionMeshAsset.virtualPath = DecodeOptionalPhysicsName(hdr.collisionMeshAssetHash);
         outEntry.heightfieldAsset.virtualPath = DecodeOptionalPhysicsName(hdr.heightfieldAssetHash);
+        outEntry.sdfAsset.virtualPath = DecodeOptionalPhysicsName(hdr.sdfAssetHash);
+        outEntry.chainAsset.virtualPath = DecodeOptionalPhysicsName(hdr.chainAssetHash);
+        outEntry.compoundShapeAsset.virtualPath = DecodeOptionalPhysicsName(hdr.compoundShapeAssetHash);
         outEntry.collisionLayer = DecodeOptionalPhysicsName(hdr.collisionLayerHash);
 
         if(!this.validColliderEntryHeaderFields(
             outEntry,
             cast<usize>(hdr.chainPointCount),
+            cast<usize>(hdr.chainMaterialCount),
+            cast<usize>(hdr.chainMaterialAssetCount),
+            cast<usize>(hdr.chainSegmentMaterialIndexCount),
             cast<usize>(hdr.hullPointCount),
             cast<usize>(hdr.meshVertexCount),
             cast<usize>(hdr.meshIndexCount),
             cast<usize>(hdr.heightfieldCount),
             cast<usize>(hdr.heightfieldMaterialCount),
+            cast<usize>(hdr.heightfieldMaterialAssetCount),
             cast<usize>(hdr.heightfieldCellMaterialCount),
-            cast<usize>(hdr.heightfieldCellHoleByteCount)
+            cast<usize>(hdr.heightfieldCellHoleByteCount),
+            cast<usize>(hdr.compoundSubShapeCount),
+            cast<usize>(hdr.sdfDistanceCount)
         ))
             return false;
 
@@ -803,7 +1220,7 @@ class PhysicsComponentBinaryCodec{
         )
             return false;
 
-        PhysicsAssetBinaryCodec assetCodec;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
         outEntry.heightfieldMaterials.resize(hdr.heightfieldMaterialCount);
         for(u32 mi = 0u; mi < hdr.heightfieldMaterialCount; ++mi){
             const Expected<PhysicsSurfaceMaterialBinary> matBinRes = ReadPOD<PhysicsSurfaceMaterialBinary>(payload, inOutCursor);
@@ -814,15 +1231,52 @@ class PhysicsComponentBinaryCodec{
                 return false;
             outEntry.heightfieldMaterials[mi] = unpackedMat.value();
         }
+        outEntry.heightfieldMaterialAssets.resize(hdr.heightfieldMaterialAssetCount);
+        for(u32 mi = 0u; mi < hdr.heightfieldMaterialAssetCount; ++mi){
+            const Expected<NameHash> hashRes = ReadPOD<NameHash>(payload, inOutCursor);
+            if(!hashRes.has_value())
+                return false;
+            outEntry.heightfieldMaterialAssets[mi].virtualPath = DecodeOptionalPhysicsName(hashRes.value());
+        }
 
         if(
             !ReadBinaryVectorPayload(payload, hdr.heightfieldCellMaterialCount, inOutCursor, outEntry.heightfieldCellMaterialIndices).has_value()
             || !ReadBinaryVectorPayload(payload, hdr.chainPointCount, inOutCursor, outEntry.chainPoints).has_value()
-            || !ReadBinaryVectorPayload(payload, hdr.heightfieldCellHoleByteCount, inOutCursor, outEntry.heightfieldCellHoles).has_value()
         )
             return false;
 
-        return this.validColliderEntryNonMaterialArrayFields(outEntry);
+        outEntry.chainMaterials.resize(hdr.chainMaterialCount);
+        for(u32 mi = 0u; mi < hdr.chainMaterialCount; ++mi){
+            const Expected<PhysicsSurfaceMaterialBinary> matBinRes = ReadPOD<PhysicsSurfaceMaterialBinary>(payload, inOutCursor);
+            if(!matBinRes.has_value())
+                return false;
+            const Expected<SurfaceMaterial> unpackedMat = assetCodec.unpackSurfaceMaterialFields(matBinRes.value());
+            if(!unpackedMat.has_value())
+                return false;
+            outEntry.chainMaterials[mi] = unpackedMat.value();
+        }
+        outEntry.chainMaterialAssets.resize(hdr.chainMaterialAssetCount);
+        for(u32 mi = 0u; mi < hdr.chainMaterialAssetCount; ++mi){
+            const Expected<NameHash> hashRes = ReadPOD<NameHash>(payload, inOutCursor);
+            if(!hashRes.has_value())
+                return false;
+            outEntry.chainMaterialAssets[mi].virtualPath = DecodeOptionalPhysicsName(hashRes.value());
+        }
+
+        if(
+            !ReadBinaryVectorPayload(payload, hdr.chainSegmentMaterialIndexCount, inOutCursor, outEntry.chainSegmentMaterialIndices).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.heightfieldCellHoleByteCount, inOutCursor, outEntry.heightfieldCellHoles).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.sdfDistanceCount, inOutCursor, outEntry.sdfDistances).has_value()
+        )
+            return false;
+
+        outEntry.compoundSubShapes.resize(hdr.compoundSubShapeCount);
+        for(u32 si = 0u; si < hdr.compoundSubShapeCount; ++si){
+            if(!this.deserializeCompoundSubShape(payload, inOutCursor, outEntry.compoundSubShapes[si]))
+                return false;
+        }
+
+        return this.validColliderEntryNonMaterialArrayFields(outEntry, false);
     }
 
     public b8 validateCollider(in ColliderComponent c, in Name virtualPath)const{
@@ -928,7 +1382,7 @@ class PhysicsComponentBinaryCodec{
     }
 
     private b8 appendJointEntryValidated(in JointEntry j, in u32 extraJointCount, mut Vector<u8> outBinary)const{
-        static_assert(size_of<JointComponentPayloadBinary>() == 640u && offset_of<JointComponentPayloadBinary>(reserved1) == 632u);
+        static_assert(size_of<JointComponentPayloadBinary>() == 768u && offset_of<JointComponentPayloadBinary>(reserved1) == 760u);
         in JointSettings s = j.settings;
         if(j.pathPoints.size() > cast<usize>(u32.max) || s.sixDofAxes.size() != 6u)
             return false;
@@ -959,6 +1413,8 @@ class PhysicsComponentBinaryCodec{
         bin.groundAnchorB = s.groundAnchorB;
         bin.bodyEntityNameAHash = j.bodyEntityNameA.hash();
         bin.bodyEntityNameBHash = j.bodyEntityNameB.hash();
+        bin.referenceJointEntityNameAHash = j.referenceJointEntityNameA.hash();
+        bin.referenceJointEntityNameBHash = j.referenceJointEntityNameB.hash();
         bin.userData = j.userData;
         bin.length = s.length;
         bin.minLength = s.minLength;
@@ -1095,6 +1551,8 @@ class PhysicsComponentBinaryCodec{
         s.sixDofSwingLimitZ = bin.sixDofSwingLimitZ;
         outEntry.bodyEntityNameA = DecodeOptionalPhysicsName(bin.bodyEntityNameAHash);
         outEntry.bodyEntityNameB = DecodeOptionalPhysicsName(bin.bodyEntityNameBHash);
+        outEntry.referenceJointEntityNameA = DecodeOptionalPhysicsName(bin.referenceJointEntityNameAHash);
+        outEntry.referenceJointEntityNameB = DecodeOptionalPhysicsName(bin.referenceJointEntityNameBHash);
         outEntry.userData = bin.userData;
         outExtraJointCount = bin.extraJointCount;
 
@@ -1183,7 +1641,7 @@ class PhysicsComponentBinaryCodec{
     }
 
     public b8 appendWorldConfigValidated(in PhysicsWorldConfigComponent w, mut Vector<u8> outBinary)const{
-        static_assert(size_of<PhysicsWorldConfigComponentPayloadBinary>() == 128u && offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved0) == 127u);
+        static_assert(size_of<PhysicsWorldConfigComponentPayloadBinary>() == 272u && offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved2) == 264u);
         const usize reqBytes = size_of<PhysicsWorldConfigComponentPayloadBinary>();
         if(!CanAppendBytes(outBinary, reqBytes))
             return false;
@@ -1201,7 +1659,9 @@ class PhysicsComponentBinaryCodec{
         bin.fixedDeltaTime = w.fixedDeltaTime;
         bin.gpuWorkloadFraction = w.gpuWorkloadFraction;
         bin.timeToSleep = w.timeToSleep;
-        u16 flags = 0u;
+        bin.splashImpulseThreshold = w.splashImpulseThreshold;
+        bin.broadPhaseLayerMasks = w.broadPhaseLayerMasks;
+        u32 flags = 0u;
         if(w.enableSleep) flags |= s_WorldCfgFlagEnableSleep;
         if(w.enableContinuous) flags |= s_WorldCfgFlagEnableContinuous;
         if(w.enableContactSoftening) flags |= s_WorldCfgFlagContactSoftening;
@@ -1214,6 +1674,12 @@ class PhysicsComponentBinaryCodec{
         if(w.interpolateTransforms) flags |= s_WorldCfgFlagInterpolateTransforms;
         if(w.publishEventsToMessageBus) flags |= s_WorldCfgFlagPublishEventsToMessageBus;
         if(w.publishContinuousEventsToMessageBus) flags |= s_WorldCfgFlagPublishContinuousEventsToMessageBus;
+        if(w.enableBlockSolver) flags |= s_WorldCfgFlagEnableBlockSolver;
+        if(w.enableShockPropagation) flags |= s_WorldCfgFlagEnableShockPropagation;
+        if(w.deterministicMode) flags |= s_WorldCfgFlagDeterministicMode;
+        if(w.enableGlobalCcd) flags |= s_WorldCfgFlagEnableGlobalCcd;
+        if(w.enablePerPointFriction) flags |= s_WorldCfgFlagEnablePerPointFriction;
+        if(w.enableDoublePrecisionPositions) flags |= s_WorldCfgFlagEnableDoublePrecisionPositions;
         bin.flags = flags;
         bin.backendMode = cast<u8>(w.backendMode);
         outBinary.reserve(outBinary.size() + reqBytes);
@@ -1236,7 +1702,7 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in PhysicsWorldConfigComponentPayloadBinary bin = res.value();
-        if(bin.reserved0 != 0u || (bin.flags & 0xf000u) != 0u){
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xfffc0000u) != 0u){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
@@ -1254,6 +1720,8 @@ class PhysicsComponentBinaryCodec{
         w.fixedDeltaTime = bin.fixedDeltaTime;
         w.gpuWorkloadFraction = bin.gpuWorkloadFraction;
         w.timeToSleep = bin.timeToSleep;
+        w.splashImpulseThreshold = bin.splashImpulseThreshold;
+        w.broadPhaseLayerMasks = bin.broadPhaseLayerMasks;
         w.backendMode = cast<PhysicsBackendMode>(bin.backendMode);
         w.enableSleep = (bin.flags & s_WorldCfgFlagEnableSleep) != 0u;
         w.enableContinuous = (bin.flags & s_WorldCfgFlagEnableContinuous) != 0u;
@@ -1267,6 +1735,12 @@ class PhysicsComponentBinaryCodec{
         w.interpolateTransforms = (bin.flags & s_WorldCfgFlagInterpolateTransforms) != 0u;
         w.publishEventsToMessageBus = (bin.flags & s_WorldCfgFlagPublishEventsToMessageBus) != 0u;
         w.publishContinuousEventsToMessageBus = (bin.flags & s_WorldCfgFlagPublishContinuousEventsToMessageBus) != 0u;
+        w.enableBlockSolver = (bin.flags & s_WorldCfgFlagEnableBlockSolver) != 0u;
+        w.enableShockPropagation = (bin.flags & s_WorldCfgFlagEnableShockPropagation) != 0u;
+        w.deterministicMode = (bin.flags & s_WorldCfgFlagDeterministicMode) != 0u;
+        w.enableGlobalCcd = (bin.flags & s_WorldCfgFlagEnableGlobalCcd) != 0u;
+        w.enablePerPointFriction = (bin.flags & s_WorldCfgFlagEnablePerPointFriction) != 0u;
+        w.enableDoublePrecisionPositions = (bin.flags & s_WorldCfgFlagEnableDoublePrecisionPositions) != 0u;
         w.dirty = true;
         if(!this.validWorldConfigData(w)){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: invalid world config values");

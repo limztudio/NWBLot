@@ -94,6 +94,20 @@ b8 ReadPhysicsU64Value(
     return true;
 }
 
+b8 ReadPhysicsU64BitMaskValue(
+    in Path file,
+    in MetascriptValue fieldVal,
+    in StringView prefix,
+    in StringView field,
+    mut u64 outVal
+){
+    if(fieldVal.isInteger()){
+        outVal = bit_cast<u64>(fieldVal.asInteger());
+        return true;
+    }
+    return ReadPhysicsU64Value(file, fieldVal, prefix, field, outVal);
+}
+
 b8 ReadPhysicsI32Value(
     in Path file,
     in MetascriptValue fieldVal,
@@ -541,6 +555,87 @@ b8 ReadPhysicsAssetRefValue<T>(
     return true;
 }
 
+b8 ReadPhysicsBroadPhaseLayerValue(
+    in Path file,
+    in MetascriptValue fieldVal,
+    in StringView prefix,
+    in StringView field,
+    mut u8 outLayer
+){
+    u32 val = 0u;
+    if(!ReadPhysicsU32Value(file, fieldVal, prefix, field, val))
+        return false;
+    if(val >= 32u){
+        error("{} '{}': field '{}' must be < 32", prefix, PathToString(file), field);
+        return false;
+    }
+    outLayer = cast<u8>(val);
+    return true;
+}
+
+b8 ReadPhysicsAssetRefListValue<T>(
+    in Path file,
+    in MetascriptValue listVal,
+    in StringView prefix,
+    in StringView field,
+    mut Vector<AssetRef<T>> outRefs
+){
+    if(!listVal.isList()){
+        error("{} '{}': field '{}' must be a list of asset paths", prefix, PathToString(file), field);
+        return false;
+    }
+    const Span<MetascriptValue> items = listVal.listView();
+    outRefs.clear();
+    outRefs.reserve(items.size());
+    for(usize i = 0u; i < items.size(); ++i){
+        if(!items[i].isString()){
+            error("{} '{}': '{}[{}]' must be a string", prefix, PathToString(file), field, i);
+            return false;
+        }
+        const StringView text = items[i].asString();
+        if(text.empty()){
+            outRefs.push_back(AssetRef<T>());
+            continue;
+        }
+        const Expected<AssetRef<T>> parsed = ParseReservedAssetRefText<T>(file, prefix, field, text);
+        if(!parsed.has_value())
+            return false;
+        outRefs.push_back(parsed.value());
+    }
+    return true;
+}
+
+b8 ParsePhysicsShapeTypeName(
+    in Path file,
+    in MetascriptValue fieldVal,
+    in StringView prefix,
+    in StringView field,
+    mut ShapeType outType
+){
+    const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, prefix, field);
+    if(!text.has_value())
+        return false;
+    if(text.value() == "sphere") outType = ShapeType::Sphere;
+    else if(text.value() == "capsule") outType = ShapeType::Capsule;
+    else if(text.value() == "hull") outType = ShapeType::Hull;
+    else if(text.value() == "mesh") outType = ShapeType::Mesh;
+    else if(text.value() == "cylinder") outType = ShapeType::Cylinder;
+    else if(text.value() == "cone") outType = ShapeType::Cone;
+    else if(text.value() == "tapered_capsule") outType = ShapeType::TaperedCapsule;
+    else if(text.value() == "heightfield") outType = ShapeType::Heightfield;
+    else if(text.value() == "plane") outType = ShapeType::Plane;
+    else if(text.value() == "segment") outType = ShapeType::Segment;
+    else if(text.value() == "compound") outType = ShapeType::Compound;
+    else if(text.value() == "scaled") outType = ShapeType::Scaled;
+    else if(text.value() == "chain") outType = ShapeType::Chain;
+    else if(text.value() == "sdf") outType = ShapeType::Sdf;
+    else{
+        error("{} '{}': unsupported '{}' value '{}'", prefix, PathToString(file), field, text.value());
+        return false;
+    }
+    return true;
+}
+
 b8 ParsePhysicsBodyTypeValue(
     in Path file,
     in MetascriptValue fieldVal,
@@ -598,7 +693,7 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
                 return ReadPhysicsBoolValue(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.hasCustomMaxAngularVelocity);
             }
             if(key == "motion_locks") return ReadPhysicsU32Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.motionLocks);
-            if(key == "user_data") return ReadPhysicsU64Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.userData);
+            if(key == "user_data") return ReadPhysicsU64BitMaskValue(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.userData);
             if(key == "entity_tag") return ReadPhysicsNameValue(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.entityTag);
             if(key == "use_custom_mass") return ReadPhysicsBoolValue(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.useCustomMass);
             if(key == "custom_mass") return ReadPhysicsF32Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.customMass);
@@ -672,6 +767,98 @@ Expected<f32x4> DecodePhysicsFloat4Value(
     return f32x4(x, y, z, w);
 }
 
+b8 ParseCompoundSubShapeEntryMap(in Path file, in MetascriptValue mapVal, mut CompoundSubShapeEntry outSub){
+    outSub = CompoundSubShapeEntry();
+    u32 rotFieldCount = 0u;
+    b8 explicitOverrideMat = false;
+    return mapVal.forEachMapEntry(lambda[in file, mut outSub, mut rotFieldCount, mut explicitOverrideMat](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(key == "shape_type"){
+            if(!ParsePhysicsShapeTypeName(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.shapeType))
+                return false;
+            if(outSub.shapeType == ShapeType::Heightfield || outSub.shapeType == ShapeType::Compound || outSub.shapeType == ShapeType::Scaled){
+                error("{} '{}': unsupported compound sub-shape 'shape_type'", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            return true;
+        }
+        if(key == "local_position"){
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+                return false;
+            outSub.localPosition = f32x4(v, 0.0f);
+            return true;
+        }
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        b8 rotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, s_ColliderComponentDiagnosticPrefix, "local_rotation", "local_rotation_euler", "local_rotation_euler_degrees", rotFieldCount, q, rotOk)){
+            if(rotOk)
+                outSub.localRotation = f32x4(q);
+            return rotOk;
+        }
+        if(key == "center"){
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+                return false;
+            outSub.center = f32x4(v, 0.0f);
+            return true;
+        }
+        if(key == "center2"){
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+                return false;
+            outSub.center2 = f32x4(v, 0.0f);
+            return true;
+        }
+        if(key == "half_extents"){
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+                return false;
+            outSub.halfExtents = f32x4(v, 0.0f);
+            return true;
+        }
+        if(key == "plane_normal_offset"){
+            const Expected<f32x4> v = DecodePhysicsFloat4Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
+            if(!v.has_value())
+                return false;
+            outSub.planeNormalOffset = v.value();
+            return true;
+        }
+        if(key == "radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.radius);
+        if(key == "top_radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.topRadius);
+        if(key == "cylinder_half_height") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.cylinderHalfHeight);
+        if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.skinRadius);
+        if(key == "is_box") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.isBox);
+        if(key == "density") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.density);
+        if(key == "override_material"){
+            explicitOverrideMat = true;
+            return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.overrideMaterial);
+        }
+        if(key == "material"){
+            if(!fieldVal.isMap()){
+                error("{} '{}': field 'material' must be a map", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            if(!ParseSurfaceMaterialMap(file, fieldVal, s_ColliderComponentDiagnosticPrefix, outSub.material))
+                return false;
+            if(!explicitOverrideMat)
+                outSub.overrideMaterial = true;
+            return true;
+        }
+        if(key == "material_asset") return ReadPhysicsAssetRefValue<PhysicsMaterialAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.materialAsset);
+        if(key == "hull_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.hullPoints);
+        if(key == "convex_hull_asset") return ReadPhysicsAssetRefValue<ConvexHullAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.convexHullAsset);
+        if(key == "mesh_vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.meshVertices);
+        if(key == "mesh_indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.meshIndices);
+        if(key == "mesh_asset") return ReadPhysicsAssetRefValue<Mesh>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.meshAsset);
+        if(key == "collision_mesh_asset") return ReadPhysicsAssetRefValue<CollisionMeshAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.collisionMeshAsset);
+        if(key == "chain_asset") return ReadPhysicsAssetRefValue<ChainShapeAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.chainAsset);
+        if(key == "sdf_asset") return ReadPhysicsAssetRefValue<SdfAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.sdfAsset);
+        if(key == "cull_backfaces") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outSub.cullBackfaces);
+        error("{} '{}': unsupported compound sub-shape field '{}'", s_ColliderComponentDiagnosticPrefix, PathToString(file), key);
+        return false;
+    });
+}
+
 b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
     if(
         e.vhacdMaxHulls < 1u
@@ -685,12 +872,28 @@ b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
         error("{} '{}': invalid VHACD parameters", s_ColliderComponentDiagnosticPrefix, PathToString(file));
         return false;
     }
+    if(e.shapeType == ShapeType::Scaled){
+        if(e.scaledChildType == ShapeType::Scaled || cast<u8>(e.scaledChildType) >= cast<u8>(ShapeType::kCount)){
+            error("{} '{}': invalid scaled child shape type", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return false;
+        }
+        const VectorSingle absFactor = Abs(VectorSingle(e.scaledFactor));
+        if(!IsFinite(absFactor) || absFactor.x <= 1.0e-5f || absFactor.y <= 1.0e-5f || absFactor.z <= 1.0e-5f){
+            error("{} '{}': invalid scaled_factor values", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return false;
+        }
+    }
+
+    ShapeType effType = e.shapeType;
+    if(e.shapeType == ShapeType::Scaled)
+        effType = e.scaledChildType;
+
     const VectorSingle center(e.center);
     const VectorSingle center2(e.center2);
     const VectorSingle halfExtents(e.halfExtents);
     const VectorSingle planeNormalOffset(e.planeNormalOffset);
     const VectorSingle heightfieldScale(e.heightfieldScale);
-    if(e.shapeType == ShapeType::Hull){
+    if(effType == ShapeType::Hull){
         if(e.convexHullAsset.valid() || e.compoundHullAsset.valid())
             return true;
         if(e.isBox){
@@ -708,7 +911,7 @@ b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Mesh){
+    if(effType == ShapeType::Mesh){
         if(e.meshAsset.valid() || e.collisionMeshAsset.valid() || e.compoundHullAsset.valid())
             return true;
         if(e.useMeshComponentFallback && e.meshVertices.empty() && e.meshIndices.empty())
@@ -719,55 +922,140 @@ b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Cylinder){
+    if(effType == ShapeType::Cylinder){
         if(!MakeCylinderShape(center, e.cylinderHalfHeight, e.radius, e.skinRadius).has_value()){
             error("{} '{}': invalid cylinder geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Cone){
+    if(effType == ShapeType::Cone){
         if(!MakeConeShape(center, e.cylinderHalfHeight, e.radius, e.skinRadius).has_value()){
             error("{} '{}': invalid cone geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::TaperedCapsule){
+    if(effType == ShapeType::TaperedCapsule){
         if(!MakeTaperedCapsuleShape(center, center2, e.radius, e.topRadius).has_value()){
             error("{} '{}': invalid tapered capsule geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Plane){
+    if(effType == ShapeType::Plane){
         if(!MakePlaneShape(planeNormalOffset, planeNormalOffset.w, halfExtents).has_value()){
             error("{} '{}': invalid plane geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Segment){
-        if(e.isChain){
-            if(e.chainPoints.size() < 2u || !IsFinite(VectorSingle(e.chainRadius)) || e.chainRadius < 0.0f){
-                error("{} '{}': invalid chain collider geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+    if(effType == ShapeType::Chain){
+        if(e.chainAsset.valid())
+            return true;
+        usize minChainPts = 2u;
+        if(e.chainClosed)
+            minChainPts = 3u;
+        if(e.chainPoints.size() < minChainPts || !IsFinite(VectorSingle(e.chainRadius)) || e.chainRadius < 0.0f){
+            error("{} '{}': invalid chain collider geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return false;
+        }
+        for(usize ci = 0u; ci < e.chainPoints.size(); ++ci){
+            if(!IsValidPositionVec3(VectorSingle(e.chainPoints[ci]))){
+                error("{} '{}': invalid chain point", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
-            for(usize ci = 0u; ci < e.chainPoints.size(); ++ci){
-                if(!IsValidPositionVec3(VectorSingle(e.chainPoints[ci]))){
-                    error("{} '{}': invalid chain point", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+        }
+        usize effChainMatCount = e.chainMaterials.size();
+        if(!e.chainMaterialAssets.empty())
+            effChainMatCount = e.chainMaterialAssets.size();
+        if(!e.chainSegmentMaterialIndices.empty()){
+            if(effChainMatCount == 0u){
+                error("{} '{}': chain segment material indices require chain materials or chain material assets", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            usize expectedSegs = e.chainPoints.size() - 1u;
+            if(e.chainClosed)
+                expectedSegs = e.chainPoints.size();
+            if(e.chainSegmentMaterialIndices.size() != expectedSegs){
+                error("{} '{}': chain segment material index count mismatch", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            for(usize ci = 0u; ci < e.chainSegmentMaterialIndices.size(); ++ci){
+                if(cast<usize>(e.chainSegmentMaterialIndices[ci]) >= effChainMatCount){
+                    error("{} '{}': chain segment material index out of range", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                     return false;
                 }
             }
-            return true;
         }
+        return true;
+    }
+    if(effType == ShapeType::Segment){
         if(!MakeSegmentShape(center, center2, e.radius).has_value()){
             error("{} '{}': invalid segment geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(e.shapeType == ShapeType::Heightfield){
+    if(effType == ShapeType::Compound){
+        if(!e.compoundShapeAsset.valid() && !e.compoundHullAsset.valid() && !e.autoConvexDecompose && e.compoundSubShapes.empty()){
+            error("{} '{}': compound collider requires compound_shape_asset, compound_hull_asset, auto_convex_decompose, or compound_sub_shapes", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return false;
+        }
+        for(usize si = 0u; si < e.compoundSubShapes.size(); ++si){
+            in CompoundSubShapeEntry sub = e.compoundSubShapes[si];
+            if(sub.shapeType == ShapeType::Hull && !sub.convexHullAsset.valid() && !sub.meshAsset.valid()){
+                if(sub.isBox){
+                    if(!MakeBoxHull(sub.halfExtents.x, sub.halfExtents.y, sub.halfExtents.z, sub.skinRadius).has_value()){
+                        error("{} '{}': compound_sub_shapes[{}] invalid box hull dimensions", s_ColliderComponentDiagnosticPrefix, PathToString(file), si);
+                        return false;
+                    }
+                }
+                else if(!BuildConvexHull(Span<f32x4>(sub.hullPoints.data(), sub.hullPoints.size()), sub.skinRadius).has_value()){
+                    error("{} '{}': compound_sub_shapes[{}] failed to cook inline convex hull", s_ColliderComponentDiagnosticPrefix, PathToString(file), si);
+                    return false;
+                }
+            }
+            else if(sub.shapeType == ShapeType::Mesh && !sub.meshAsset.valid() && !sub.collisionMeshAsset.valid()){
+                if(!MakeMeshShape(Span<f32x4>(sub.meshVertices.data(), sub.meshVertices.size()), Span<u32>(sub.meshIndices.data(), sub.meshIndices.size()), sub.skinRadius).has_value()){
+                    error("{} '{}': compound_sub_shapes[{}] failed to cook inline mesh", s_ColliderComponentDiagnosticPrefix, PathToString(file), si);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    if(effType == ShapeType::Sdf){
+        if(!IsFinite(VectorSingle(e.sdfMargin, e.sdfPadding, 0.0f, 0.0f)) || e.sdfMargin < 0.0f || e.sdfPadding < 0.0f){
+            error("{} '{}': invalid sdf margin or padding", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return false;
+        }
+        if(!e.sdfDistances.empty()){
+            if(e.sdfDimX < 2u || e.sdfDimY < 2u || e.sdfDimZ < 2u){
+                error("{} '{}': inline sdf grid requires dimensions >= 2", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            const u64 xy = cast<u64>(e.sdfDimX) * cast<u64>(e.sdfDimY);
+            if(cast<u64>(e.sdfDimZ) > (u64.max / xy) || xy * cast<u64>(e.sdfDimZ) != cast<u64>(e.sdfDistances.size())){
+                error("{} '{}': inline sdf_distances count mismatch", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+            if(e.sdfBoundsMax.x <= e.sdfBoundsMin.x || e.sdfBoundsMax.y <= e.sdfBoundsMin.y || e.sdfBoundsMax.z <= e.sdfBoundsMin.z){
+                error("{} '{}': invalid sdf bounds", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                return false;
+            }
+        }
+        else if(!e.sdfAsset.valid()){
+            if(!e.useMeshComponentFallback && !e.meshAsset.valid() && !e.collisionMeshAsset.valid()){
+                if(!MakeMeshShape(Span<f32x4>(e.meshVertices.data(), e.meshVertices.size()), Span<u32>(e.meshIndices.data(), e.meshIndices.size()), e.skinRadius).has_value()){
+                    error("{} '{}': sdf collider requires sdf_asset or valid mesh source", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    if(effType == ShapeType::Heightfield){
         if(e.heightfieldAsset.valid())
             return true;
         if(!IsFinite(VectorSingle(e.heightfieldThickness)) || e.heightfieldThickness < 0.0f){
@@ -778,8 +1066,11 @@ b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
             error("{} '{}': invalid heightfield geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
+        usize effHfMatCount = e.heightfieldMaterials.size();
+        if(!e.heightfieldMaterialAssets.empty())
+            effHfMatCount = e.heightfieldMaterialAssets.size();
         if(!e.heightfieldCellMaterialIndices.empty()){
-            if(e.heightfieldMaterials.empty()){
+            if(effHfMatCount == 0u){
                 error("{} '{}': heightfield cell material indices require materials", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
@@ -790,7 +1081,7 @@ b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
             }
         }
         for(usize ci = 0u; ci < e.heightfieldCellMaterialIndices.size(); ++ci){
-            if(cast<usize>(e.heightfieldCellMaterialIndices[ci]) >= e.heightfieldMaterials.size()){
+            if(cast<usize>(e.heightfieldCellMaterialIndices[ci]) >= effHfMatCount){
                 error("{} '{}': heightfield cell material index out of range", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
@@ -813,26 +1104,20 @@ b8 ApplyColliderShapeField(
     in StringView key,
     in MetascriptValue fieldVal,
     mut ColliderShapeEntry outEntry,
-    mut u32 inOutRotFieldCount
+    mut u32 inOutRotFieldCount,
+    mut b8 inOutExplicitGhostStart,
+    mut b8 inOutExplicitGhostEnd
 ){
-    if(key == "shape_type"){
-        const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, "shape_type");
-        if(!text.has_value())
+    if(key == "shape_type") return ParsePhysicsShapeTypeName(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.shapeType);
+    if(key == "scaled_child_type"){
+        ShapeType childType = ShapeType::Hull;
+        if(!ParsePhysicsShapeTypeName(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, childType))
             return false;
-        if(text.value() == "sphere") outEntry.shapeType = ShapeType::Sphere;
-        else if(text.value() == "capsule") outEntry.shapeType = ShapeType::Capsule;
-        else if(text.value() == "hull") outEntry.shapeType = ShapeType::Hull;
-        else if(text.value() == "mesh") outEntry.shapeType = ShapeType::Mesh;
-        else if(text.value() == "cylinder") outEntry.shapeType = ShapeType::Cylinder;
-        else if(text.value() == "cone") outEntry.shapeType = ShapeType::Cone;
-        else if(text.value() == "tapered_capsule") outEntry.shapeType = ShapeType::TaperedCapsule;
-        else if(text.value() == "heightfield") outEntry.shapeType = ShapeType::Heightfield;
-        else if(text.value() == "plane") outEntry.shapeType = ShapeType::Plane;
-        else if(text.value() == "segment") outEntry.shapeType = ShapeType::Segment;
-        else{
-            error("{} '{}': unsupported 'shape_type' value '{}'", s_ColliderComponentDiagnosticPrefix, PathToString(file), text.value());
+        if(childType == ShapeType::Scaled){
+            error("{} '{}': field 'scaled_child_type' must not be 'scaled'", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
+        outEntry.scaledChildType = childType;
         return true;
     }
     if(key == "center"){
@@ -854,6 +1139,27 @@ b8 ApplyColliderShapeField(
         if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
             return false;
         outEntry.halfExtents = f32x4(v, 0.0f);
+        return true;
+    }
+    if(key == "scaled_factor"){
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+            return false;
+        outEntry.scaledFactor = f32x4(v, 0.0f);
+        return true;
+    }
+    if(key == "sdf_bounds_min"){
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+            return false;
+        outEntry.sdfBoundsMin = f32x4(v, 0.0f);
+        return true;
+    }
+    if(key == "sdf_bounds_max"){
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+            return false;
+        outEntry.sdfBoundsMax = f32x4(v, 0.0f);
         return true;
     }
     VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
@@ -917,6 +1223,7 @@ b8 ApplyColliderShapeField(
     if(key == "vhacd_enable_hull_merging") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.vhacdEnableHullMerging);
     if(key == "vhacd_merge_volume_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.vhacdMergeVolumeTolerance);
     if(key == "sync_csg_cuts") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.syncCsgCuts);
+    if(key == "sync_skinned_mesh") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.syncSkinnedMesh);
     if(key == "use_mesh_component_fallback") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.useMeshComponentFallback);
     if(key == "cylinder_half_height") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.cylinderHalfHeight);
     if(key == "top_radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.topRadius);
@@ -941,22 +1248,79 @@ b8 ApplyColliderShapeField(
     if(key == "heightfield_flip_diagonal") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldFlipDiagonal);
     if(key == "heightfield_cell_holes") return true;
     if(key == "heightfield_materials") return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldMaterials);
+    if(key == "heightfield_material_assets") return ReadPhysicsAssetRefListValue<PhysicsMaterialAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldMaterialAssets);
     if(key == "heightfield_cell_material_indices") return ReadPhysicsU16ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldCellMaterialIndices);
-    if(key == "is_chain") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.isChain);
     if(key == "chain_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainPoints);
     if(key == "chain_closed") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainClosed);
     if(key == "chain_radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainRadius);
-    if(key == "category_bits") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.categoryBits);
-    if(key == "mask_bits") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.maskBits);
+    if(key == "chain_materials") return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainMaterials);
+    if(key == "chain_material_assets") return ReadPhysicsAssetRefListValue<PhysicsMaterialAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainMaterialAssets);
+    if(key == "chain_segment_material_indices") return ReadPhysicsU16ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainSegmentMaterialIndices);
+    if(key == "chain_has_ghost_start"){
+        inOutExplicitGhostStart = true;
+        return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainHasGhostStart);
+    }
+    if(key == "chain_has_ghost_end"){
+        inOutExplicitGhostEnd = true;
+        return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainHasGhostEnd);
+    }
+    if(key == "chain_ghost_start"){
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+            return false;
+        outEntry.chainGhostStart = f32x4(v, 0.0f);
+        if(!inOutExplicitGhostStart)
+            outEntry.chainHasGhostStart = true;
+        return true;
+    }
+    if(key == "chain_ghost_end"){
+        VectorSingle v(0.0f);
+        if(!DecodePhysicsFloat3Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, v))
+            return false;
+        outEntry.chainGhostEnd = f32x4(v, 0.0f);
+        if(!inOutExplicitGhostEnd)
+            outEntry.chainHasGhostEnd = true;
+        return true;
+    }
+    if(key == "sdf_dim_x") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfDimX);
+    if(key == "sdf_dim_y") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfDimY);
+    if(key == "sdf_dim_z") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfDimZ);
+    if(key == "sdf_distances") return ReadPhysicsF32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, false, outEntry.sdfDistances);
+    if(key == "sdf_margin") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfMargin);
+    if(key == "sdf_padding") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfPadding);
+    if(key == "sdf_is_closed") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfIsClosed);
+    if(key == "sdf_build_from_mesh") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfBuildFromMesh);
+    if(key == "compound_sub_shapes"){
+        if(!fieldVal.isList()){
+            error("{} '{}': field 'compound_sub_shapes' must be a list of sub-shape maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+            return false;
+        }
+        const Span<MetascriptValue> items = fieldVal.listView();
+        outEntry.compoundSubShapes.clear();
+        outEntry.compoundSubShapes.resize(items.size());
+        for(usize i = 0u; i < items.size(); ++i){
+            if(!items[i].isMap()){
+                error("{} '{}': 'compound_sub_shapes[{}]' must be a map", s_ColliderComponentDiagnosticPrefix, PathToString(file), i);
+                return false;
+            }
+            if(!ParseCompoundSubShapeEntryMap(file, items[i], outEntry.compoundSubShapes[i]))
+                return false;
+        }
+        return true;
+    }
+    if(key == "category_bits") return ReadPhysicsU64BitMaskValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.categoryBits);
+    if(key == "mask_bits") return ReadPhysicsU64BitMaskValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.maskBits);
     if(key == "group_index") return ReadPhysicsI32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.groupIndex);
+    if(key == "broad_phase_layer") return ReadPhysicsBroadPhaseLayerValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.broadPhaseLayer);
     if(key == "collision_layer") return ReadPhysicsNameValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.collisionLayer);
-    if(key == "user_data") return ReadPhysicsU64Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.userData);
+    if(key == "user_data") return ReadPhysicsU64BitMaskValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.userData);
     if(key == "is_box") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.isBox);
     if(key == "is_sensor") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.isSensor);
     if(key == "enable_contact_events") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.enableContactEvents);
     if(key == "enable_hit_events") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.enableHitEvents);
     if(key == "enable_sensor_events") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.enableSensorEvents);
     if(key == "enable_pre_solve_events") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.enablePreSolveEvents);
+    if(key == "enable_post_solve_events") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.enablePostSolveEvents);
     if(key == "invoke_contact_creation") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.invokeContactCreation);
     if(key == "hull_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.hullPoints);
     if(key == "mesh_vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.meshVertices);
@@ -967,14 +1331,19 @@ b8 ApplyColliderShapeField(
     if(key == "compound_hull_asset") return ReadPhysicsAssetRefValue<CompoundHullAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.compoundHullAsset);
     if(key == "collision_mesh_asset") return ReadPhysicsAssetRefValue<CollisionMeshAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.collisionMeshAsset);
     if(key == "heightfield_asset") return ReadPhysicsAssetRefValue<HeightfieldAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldAsset);
+    if(key == "sdf_asset") return ReadPhysicsAssetRefValue<SdfAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.sdfAsset);
+    if(key == "chain_asset") return ReadPhysicsAssetRefValue<ChainShapeAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainAsset);
+    if(key == "compound_shape_asset") return ReadPhysicsAssetRefValue<CompoundShapeAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.compoundShapeAsset);
     error("{} '{}': unsupported asset field '{}'", s_ColliderComponentDiagnosticPrefix, PathToString(file), key);
     return false;
 }
 
 b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, mut ColliderShapeEntry outEntry){
     u32 rotFieldCount = 0u;
-    if(!mapVal.forEachMapEntry(lambda[in file, mut outEntry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
-        return ApplyColliderShapeField(file, key, fieldVal, outEntry, rotFieldCount);
+    b8 explicitGhostStart = false;
+    b8 explicitGhostEnd = false;
+    if(!mapVal.forEachMapEntry(lambda[in file, mut outEntry, mut rotFieldCount, mut explicitGhostStart, mut explicitGhostEnd](in StringView key, in MetascriptValue fieldVal) -> b8{
+        return ApplyColliderShapeField(file, key, fieldVal, outEntry, rotFieldCount, explicitGhostStart, explicitGhostEnd);
     }))
         return false;
     const Optional<in MetascriptValue> holesOpt = mapVal.borrowField("heightfield_cell_holes");
@@ -1001,7 +1370,9 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
 
     if(value.isMap()){
         u32 rotFieldCount = 0u;
-        if(!value.forEachMapEntry(lambda[in file, mut entry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
+        b8 explicitGhostStart = false;
+        b8 explicitGhostEnd = false;
+        if(!value.forEachMapEntry(lambda[in file, mut entry, mut rotFieldCount, mut explicitGhostStart, mut explicitGhostEnd](in StringView key, in MetascriptValue fieldVal) -> b8{
             if(key == "entity_tag")
                 return ReadPhysicsNameValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, "entity_tag", entry.component.entityTag);
             if(key == "extra_shapes"){
@@ -1023,7 +1394,7 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
                 }
                 return true;
             }
-            return ApplyColliderShapeField(file, key, fieldVal, entry.component.primaryShape, rotFieldCount);
+            return ApplyColliderShapeField(file, key, fieldVal, entry.component.primaryShape, rotFieldCount, explicitGhostStart, explicitGhostEnd);
         }))
             return MakeUnexpected(Failure());
 
@@ -1174,7 +1545,9 @@ b8 ApplyJointEntryField(
     if(key == "collide_connected") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.collideConnected);
     if(key == "body_entity_a") return ReadPhysicsNameValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.bodyEntityNameA);
     if(key == "body_entity_b") return ReadPhysicsNameValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.bodyEntityNameB);
-    if(key == "user_data") return ReadPhysicsU64Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.userData);
+    if(key == "reference_joint_entity_a") return ReadPhysicsNameValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.referenceJointEntityNameA);
+    if(key == "reference_joint_entity_b") return ReadPhysicsNameValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.referenceJointEntityNameB);
+    if(key == "user_data") return ReadPhysicsU64BitMaskValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.userData);
     if(key == "enabled") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enabled);
     if(key == "enable_projection") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableProjection);
     if(key == "projection_linear_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.projectionLinearTolerance);
@@ -1323,6 +1696,31 @@ Expected<PhysicsWorldConfigComponentCookEntry> ParsePhysicsWorldConfigComponentC
             if(key == "interpolate_transforms") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.interpolateTransforms);
             if(key == "publish_events_to_message_bus") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.publishEventsToMessageBus);
             if(key == "publish_continuous_events_to_message_bus") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.publishContinuousEventsToMessageBus);
+            if(key == "enable_block_solver") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableBlockSolver);
+            if(key == "enable_shock_propagation") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableShockPropagation);
+            if(key == "deterministic_mode") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.deterministicMode);
+            if(key == "enable_global_ccd") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableGlobalCcd);
+            if(key == "enable_per_point_friction") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enablePerPointFriction);
+            if(key == "enable_double_precision_positions") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableDoublePrecisionPositions);
+            if(key == "splash_impulse_threshold") return ReadPhysicsF32Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.splashImpulseThreshold);
+            if(key == "broad_phase_layer_masks"){
+                if(!fieldVal.isList()){
+                    error("{} '{}': field 'broad_phase_layer_masks' must be a non-empty list of up to 32 u32 masks", s_PhysicsWorldConfigComponentDiagnosticPrefix, PathToString(file));
+                    return false;
+                }
+                const Span<MetascriptValue> items = fieldVal.listView();
+                if(items.empty() || items.size() > 32u){
+                    error("{} '{}': field 'broad_phase_layer_masks' expects 1..32 entries", s_PhysicsWorldConfigComponentDiagnosticPrefix, PathToString(file));
+                    return false;
+                }
+                for(usize i = 0u; i < items.size(); ++i){
+                    u32 mask = u32.max;
+                    if(!ReadPhysicsU32Value(file, items[i], s_PhysicsWorldConfigComponentDiagnosticPrefix, key, mask))
+                        return false;
+                    entry.component.broadPhaseLayerMasks[i] = mask;
+                }
+                return true;
+            }
             error("{} '{}': unsupported asset field '{}'", s_PhysicsWorldConfigComponentDiagnosticPrefix, PathToString(file), key);
             return false;
         }))

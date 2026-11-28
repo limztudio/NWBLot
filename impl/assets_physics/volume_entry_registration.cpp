@@ -3,9 +3,12 @@
 
 
 #include <impl/assets_physics/volume_entry.adhd.h>
+#include <impl/assets_physics/cook_source_io.h>
 
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_metadata.h>
+#include <core/assets/volume/volume_prepare_registry.h>
+#include <core/metascript/parser.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,6 +19,109 @@ namespace __hidden_assets_physics_volume_entry_registration{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static b8 IsPhysicsExternalSourceKey(const AStringView key)noexcept{
+    return key == "source_mesh"
+        || key == "source_heightmap"
+        || key == "hole_mask_image"
+        || key == "source_material"
+        || key == "source_tet_mesh"
+        || key == "urdf_file"
+        || key == "mjcf_file"
+        || key == "source_skeleton"
+    ;
+}
+
+[[nodiscard]] static b8 MetaTextMayContainExternalPhysicsSource(const AStringView metaText)noexcept{
+    return metaText.find("source_mesh") != AStringView::npos
+        || metaText.find("source_heightmap") != AStringView::npos
+        || metaText.find("hole_mask_image") != AStringView::npos
+        || metaText.find("source_material") != AStringView::npos
+        || metaText.find("source_tet_mesh") != AStringView::npos
+        || metaText.find("urdf_file") != AStringView::npos
+        || metaText.find("mjcf_file") != AStringView::npos
+        || metaText.find("source_skeleton") != AStringView::npos
+    ;
+}
+
+[[nodiscard]] static b8 CollectExternalPathsFromMetascriptValue(
+    const Path& ownerNwbFile,
+    const Core::Metascript::Value& value,
+    Core::Assets::ScratchArena& scratchArena,
+    Vector<::Path<Core::Assets::ScratchArena>, Core::Assets::ScratchArena>& outPaths,
+    b8& outCanUseCache
+)noexcept{
+    if(value.isMap()){
+        return value.forEachMapEntry([&](const Core::Metascript::MStringView key, const Core::Metascript::Value& fieldVal) -> b8{
+            if(IsPhysicsExternalSourceKey(key)){
+                if(!fieldVal.isString()){
+                    outCanUseCache = false;
+                    return false;
+                }
+                const AStringView refText = fieldVal.asString();
+                ::Path<Core::Assets::ScratchArena> resolved(scratchArena);
+                PhysicsCookIO::ResolvePhysicsSourcePath(ownerNwbFile, refText, resolved);
+                outPaths.push_back(resolved);
+                if(key == "source_mesh" && (HasCaseInsensitiveExtensionSuffix(refText, ".gltf") || HasCaseInsensitiveExtensionSuffix(refText, ".glb"))){
+                    const b8 gltfOk = PhysicsCookIO::CollectGltfExternalBufferPaths(
+                        resolved,
+                        [&](const AStringView bufPathText) -> b8{
+                            ::Path<Core::Assets::ScratchArena> bufPath(scratchArena, bufPathText);
+                            outPaths.push_back(Move(bufPath));
+                            return true;
+                        }
+                    );
+                    if(!gltfOk){
+                        outCanUseCache = false;
+                        return false;
+                    }
+                }
+                if(key == "source_tet_mesh" && HasCaseInsensitiveExtensionSuffix(refText, ".node")){
+                    ::Path<Core::Assets::ScratchArena> elePath(resolved);
+                    elePath.replaceExtension(".ele");
+                    outPaths.push_back(Move(elePath));
+                }
+                return true;
+            }
+            return CollectExternalPathsFromMetascriptValue(ownerNwbFile, fieldVal, scratchArena, outPaths, outCanUseCache);
+        });
+    }
+    if(value.isList()){
+        const Span<const Core::Metascript::Value> items = value.listView();
+        for(usize i = 0u; i < items.size(); ++i){
+            if(!CollectExternalPathsFromMetascriptValue(ownerNwbFile, items[i], scratchArena, outPaths, outCanUseCache))
+                return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 CollectPhysicsExternalSourceFiles(
+    const Core::Assets::DiscoveredNwbFile& discoveredNwbFile,
+    const AStringView metaText,
+    Core::Assets::ScratchArena& scratchArena,
+    Vector<::Path<Core::Assets::ScratchArena>, Core::Assets::ScratchArena>& outPaths,
+    b8& outCanUseCache
+)noexcept{
+    if(!MetaTextMayContainExternalPhysicsSource(metaText))
+        return true;
+
+    Core::Metascript::MetaArena parseArena(Name("physics_cook/external_source_parse"));
+    Core::Metascript::Document doc(parseArena);
+    if(!doc.parse(metaText)){
+        outCanUseCache = false;
+        return true;
+    }
+
+    doc.forEachDeclaration([&](const Core::Metascript::MStringView /*declType*/, const Core::Metascript::MStringView declVar) -> b8{
+        const Core::Metascript::Value* varVal = doc.findVariable(declVar);
+        if(varVal != nullptr)
+            (void)CollectExternalPathsFromMetascriptValue(discoveredNwbFile.filePath, *varVal, scratchArena, outPaths, outCanUseCache);
+        return outCanUseCache;
+    });
+    return true;
+}
 
 
 static Core::Assets::CookEntryAutoRegistrar s_PhysicsCookEntriesRegistrar([](Core::Assets::CookEntryRegistry& registry){
@@ -56,6 +162,9 @@ static Core::Assets::CookEntryAutoRegistrar s_PhysicsCookEntriesRegistrar([](Cor
         && Core::Assets::RegisterCookEntry<SoftBodyComponentCookEntry, SoftBodyComponentAsset, SoftBodyComponentCodec, s_SoftBodyComponentDiagnosticPrefix, true>(
             registry, componentLabel, true, NWB_COOK_DISPATCH(ParseSoftBodyComponentCookMetadata), NWB_COOK_DISPATCH(CookSoftBodyComponentVolumeEntry)
         )
+        && Core::Assets::RegisterCookEntry<FractureComponentCookEntry, FractureComponentAsset, FractureComponentCodec, s_FractureComponentDiagnosticPrefix, true>(
+            registry, componentLabel, true, NWB_COOK_DISPATCH(ParseFractureComponentCookMetadata), NWB_COOK_DISPATCH(CookFractureComponentVolumeEntry)
+        )
         && Core::Assets::RegisterCookEntry<GpuRenderTransformExportComponentCookEntry, GpuRenderTransformExportComponentAsset, GpuRenderTransformExportComponentCodec, s_GpuRenderTransformExportComponentDiagnosticPrefix, true>(
             registry, componentLabel, true, NWB_COOK_DISPATCH(ParseGpuRenderTransformExportComponentCookMetadata), NWB_COOK_DISPATCH(CookGpuRenderTransformExportComponentVolumeEntry)
         )
@@ -76,10 +185,75 @@ static Core::Assets::CookEntryAutoRegistrar s_PhysicsCookEntriesRegistrar([](Cor
         )
         && Core::Assets::RegisterCookEntry<HeightfieldCookEntry, HeightfieldAsset, HeightfieldAssetCodec, s_HeightfieldDiagnosticPrefix, true>(
             registry, FOUNDATION_TEXT("heightfield"), true, NWB_COOK_DISPATCH(ParseHeightfieldCookMetadata), NWB_COOK_DISPATCH(CookHeightfieldVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<SdfCookEntry, SdfAsset, SdfAssetCodec, s_SdfDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_sdf"), true, NWB_COOK_DISPATCH(ParseSdfCookMetadata), NWB_COOK_DISPATCH(CookSdfVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<ChainShapeCookEntry, ChainShapeAsset, ChainShapeAssetCodec, s_ChainShapeDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_chain"), true, NWB_COOK_DISPATCH(ParseChainShapeCookMetadata), NWB_COOK_DISPATCH(CookChainShapeVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<CompoundShapeCookEntry, CompoundShapeAsset, CompoundShapeAssetCodec, s_CompoundShapeDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_compound"), true, NWB_COOK_DISPATCH(ParseCompoundShapeCookMetadata), NWB_COOK_DISPATCH(CookCompoundShapeVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<FractureCookEntry, FractureAsset, FractureAssetCodec, s_FractureDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_fracture"), true, NWB_COOK_DISPATCH(ParseFractureCookMetadata), NWB_COOK_DISPATCH(CookFractureVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<SoftBodyCookEntry, SoftBodyAsset, SoftBodyAssetCodec, s_SoftBodyDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_soft_body"), true, NWB_COOK_DISPATCH(ParseSoftBodyCookMetadata), NWB_COOK_DISPATCH(CookSoftBodyVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<RagdollCookEntry, RagdollAsset, RagdollAssetCodec, s_RagdollDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_ragdoll"), true, NWB_COOK_DISPATCH(ParseRagdollCookMetadata), NWB_COOK_DISPATCH(CookRagdollVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<ArticulationCookEntry, ArticulationAsset, ArticulationAssetCodec, s_ArticulationDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_articulation"), true, NWB_COOK_DISPATCH(ParseArticulationCookMetadata), NWB_COOK_DISPATCH(CookArticulationVolumeEntry)
+        )
+        && Core::Assets::RegisterCookEntry<VehicleCookEntry, VehicleAsset, VehicleAssetCodec, s_VehicleDiagnosticPrefix, true>(
+            registry, FOUNDATION_TEXT("physics_vehicle"), true, NWB_COOK_DISPATCH(ParseVehicleCookMetadata), NWB_COOK_DISPATCH(CookVehicleVolumeEntry)
         );
 });
 
+template<typename EntryT>
+[[nodiscard]] static Span<const EntryT> TryCookEntrySpan(const Core::Assets::CookEntryRegistry& registry, const Name& assetType)noexcept{
+    if(!registry.has(assetType))
+        return {};
+    const auto& entries = registry.entries<EntryT>(assetType);
+    return Span<const EntryT>(entries.data(), entries.size());
+}
+
+[[nodiscard]] static b8 PreparePhysicsSceneValidation(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
+    const Core::Assets::CookEntryRegistry& registry = context.parsedMetadata.entryRegistry;
+    const Span<const SceneCookEntry> scenes = TryCookEntrySpan<SceneCookEntry>(registry, SceneAsset::AssetTypeName());
+    if(scenes.empty())
+        return true;
+
+    Vector<Name, Core::Assets::ScratchArena> cachedPaths(context.scratchArena);
+    for(const Core::Assets::NwbFileAssetCacheRecord& record : context.parsedMetadata.fileCacheRecords){
+        if(!record.loadedFromCache)
+            continue;
+        for(const Name cachedPath : record.cachedVirtualPaths)
+            cachedPaths.push_back(cachedPath);
+    }
+
+    return ValidateScenePhysicsEntityReferencesWithCache(
+        scenes,
+        TryCookEntrySpan<EntityCookEntry>(registry, EntityAsset::AssetTypeName()),
+        TryCookEntrySpan<RigidBodyComponentCookEntry>(registry, RigidBodyComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<ColliderComponentCookEntry>(registry, ColliderComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<JointComponentCookEntry>(registry, JointComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<PhysicsParentComponentCookEntry>(registry, PhysicsParentComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<VehicleComponentCookEntry>(registry, VehicleComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<RagdollComponentCookEntry>(registry, RagdollComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<ArticulationComponentCookEntry>(registry, ArticulationComponentAsset::AssetTypeName()),
+        TryCookEntrySpan<SoftBodyComponentCookEntry>(registry, SoftBodyComponentAsset::AssetTypeName()),
+        Span<const Name>(cachedPaths.data(), cachedPaths.size()),
+        true
+    );
+}
+
+
 static Core::Assets::CookDependencyAutoRegistrar s_PhysicsDependencyRegistrar(&RegisterPhysicsComponentCookDependencies);
+static Core::Assets::CookExternalSourceCollectorAutoRegistrar s_PhysicsExternalSourceRegistrar(&CollectPhysicsExternalSourceFiles);
+static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PhysicsSceneValidationPreparer(&PreparePhysicsSceneValidation);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

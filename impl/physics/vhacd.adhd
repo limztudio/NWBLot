@@ -18,6 +18,8 @@ class VhacdParams{
     public b8 enableArbitraryPlanes = true;
     public b8 enableHullMerging = true;
     public f32 mergeVolumeTolerance = 0.05f;
+    public u32 voxelResolution = 24u;
+    public b8 enableVoxelization = true;
 }
 
 class VhacdResult{
@@ -32,13 +34,330 @@ class VhacdTri{
 
 class VhacdPartition{
     public Vector<VhacdTri> triangles;
+    public Vector<u32> voxelIds;
     public HullShape hull;
     public Aabb3D aabb;
     public f32x4 deepestPt(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 concavity = 0.0f;
     public f32 volume = 0.0f;
+    public f32 solidVolume = 0.0f;
     public u32 depth = 0u;
     public b8 hasHull = false;
+}
+
+class VhacdCandidatePlane{
+    public f32x4 planeN(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32 offset = 0.0f;
+}
+
+class VhacdSplitEval{
+    public VhacdPartition neg;
+    public VhacdPartition pos;
+    public f32 score = s_MaxF32;
+    public b8 valid = false;
+}
+
+class VhacdMergePair{
+    public u32 i = 0u;
+    public u32 j = 0u;
+}
+
+class VhacdMergeEval{
+    public HullShape mergedHull;
+    public f32 mergedVol = 0.0f;
+    public f32 mergedConcavity = 0.0f;
+    public f32 mergeScore = s_MaxF32;
+    public f32x4 mergedDeepest(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 valid = false;
+}
+
+b8 VhacdSatAxisSeparated(in f32 p0, in f32 p1, in f32 p2, in f32 radius){
+    return Max(p0, Max(p1, p2)) < -radius || Min(p0, Min(p1, p2)) > radius;
+}
+
+b8 VhacdTriOverlapsAabbBox(
+    in VectorSingle v0,
+    in VectorSingle v1,
+    in VectorSingle v2,
+    in VectorSingle boxCenter,
+    in VectorSingle halfExt
+){
+    const VectorSingle a = v0 - boxCenter;
+    const VectorSingle b = v1 - boxCenter;
+    const VectorSingle c = v2 - boxCenter;
+    const VectorSingle triMin = Min(a, Min(b, c));
+    const VectorSingle triMax = Max(a, Max(b, c));
+    if(
+        triMax.x < -halfExt.x || triMin.x > halfExt.x
+        || triMax.y < -halfExt.y || triMin.y > halfExt.y
+        || triMax.z < -halfExt.z || triMin.z > halfExt.z
+    )
+        return false;
+
+    const VectorSingle e0 = b - a;
+    const VectorSingle e1 = c - b;
+    const VectorSingle e2 = a - c;
+    const VectorSingle n = Cross(e0, e1);
+    const f32 rNorm = Vector3Dot(Abs(n), halfExt).x;
+    if(Abs(Vector3Dot(n, a)).x > rNorm)
+        return false;
+
+    const f32 hx = halfExt.x;
+    const f32 hy = halfExt.y;
+    const f32 hz = halfExt.z;
+
+    const VectorSingle ae0 = Abs(e0);
+    if(VhacdSatAxisSeparated(-a.y * e0.z + a.z * e0.y, -b.y * e0.z + b.z * e0.y, -c.y * e0.z + c.z * e0.y, hy * ae0.z + hz * ae0.y))
+        return false;
+    if(VhacdSatAxisSeparated(a.x * e0.z - a.z * e0.x, b.x * e0.z - b.z * e0.x, c.x * e0.z - c.z * e0.x, hx * ae0.z + hz * ae0.x))
+        return false;
+    if(VhacdSatAxisSeparated(-a.x * e0.y + a.y * e0.x, -b.x * e0.y + b.y * e0.x, -c.x * e0.y + c.y * e0.x, hx * ae0.y + hy * ae0.x))
+        return false;
+
+    const VectorSingle ae1 = Abs(e1);
+    if(VhacdSatAxisSeparated(-a.y * e1.z + a.z * e1.y, -b.y * e1.z + b.z * e1.y, -c.y * e1.z + c.z * e1.y, hy * ae1.z + hz * ae1.y))
+        return false;
+    if(VhacdSatAxisSeparated(a.x * e1.z - a.z * e1.x, b.x * e1.z - b.z * e1.x, c.x * e1.z - c.z * e1.x, hx * ae1.z + hz * ae1.x))
+        return false;
+    if(VhacdSatAxisSeparated(-a.x * e1.y + a.y * e1.x, -b.x * e1.y + b.y * e1.x, -c.x * e1.y + c.y * e1.x, hx * ae1.y + hy * ae1.x))
+        return false;
+
+    const VectorSingle ae2 = Abs(e2);
+    if(VhacdSatAxisSeparated(-a.y * e2.z + a.z * e2.y, -b.y * e2.z + b.z * e2.y, -c.y * e2.z + c.z * e2.y, hy * ae2.z + hz * ae2.y))
+        return false;
+    if(VhacdSatAxisSeparated(a.x * e2.z - a.z * e2.x, b.x * e2.z - b.z * e2.x, c.x * e2.z - c.z * e2.x, hx * ae2.z + hz * ae2.x))
+        return false;
+    if(VhacdSatAxisSeparated(-a.x * e2.y + a.y * e2.x, -b.x * e2.y + b.y * e2.x, -c.x * e2.y + c.y * e2.x, hx * ae2.y + hy * ae2.x))
+        return false;
+
+    return true;
+}
+
+class VhacdVoxelGrid{
+    public u32 dimX = 0u;
+    public u32 dimY = 0u;
+    public u32 dimZ = 0u;
+    public u32 strideZ = 0u;
+    public f32 cellSize = 0.0f;
+    public f32 cellVol = 0.0f;
+    public f32 rootSolidVol = 0.0f;
+    public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
+    public Vector<u8> states;
+    public Vector<u32> compStamp;
+    public Vector<u32> compIdMap;
+    public u32 activeStamp = 0u;
+
+    public b8 isValid()const{
+        return this.dimX > 0u && this.dimY > 0u && this.dimZ > 0u && this.cellSize > 0.0f && !this.states.empty();
+    }
+
+    public VectorSingle voxelCenter(in u32 vid)const{
+        const u32 iz = vid / this.strideZ;
+        const u32 rem = vid - iz * this.strideZ;
+        const u32 iy = rem / this.dimX;
+        const u32 ix = rem - iy * this.dimX;
+        return VectorSingle(this.origin) + VectorSingle(cast<f32>(ix) + 0.5f, cast<f32>(iy) + 0.5f, cast<f32>(iz) + 0.5f, 0.0f) * this.cellSize;
+    }
+
+    public u32 findVoxelIndexAt(in VectorSingle p)const{
+        if(!this.isValid())
+            return s_NullIndex;
+        const VectorSingle rel = (p - VectorSingle(this.origin)) * (1.0f / this.cellSize);
+        const VectorSingle fl = VectorFloor(rel);
+        const i32 ix = cast<i32>(fl.x);
+        const i32 iy = cast<i32>(fl.y);
+        const i32 iz = cast<i32>(fl.z);
+        if(ix < 0 || iy < 0 || iz < 0)
+            return s_NullIndex;
+        const u32 ux = cast<u32>(ix);
+        const u32 uy = cast<u32>(iy);
+        const u32 uz = cast<u32>(iz);
+        if(ux >= this.dimX || uy >= this.dimY || uz >= this.dimZ)
+            return s_NullIndex;
+        return uz * this.strideZ + uy * this.dimX + ux;
+    }
+
+    public void buildFromTriangles(
+        in Span<VhacdTri> triangles,
+        in VectorSingle rootMin,
+        in VectorSingle rootMax,
+        in u32 resolution,
+        mut Vector<u32> outRootVoxels
+    ){
+        outRootVoxels.clear();
+        const u32 res = Clamp(resolution, 8u, 64u);
+        const VectorSingle span = Max(rootMax - rootMin, VectorSingle(1.0e-4f));
+        const f32 maxSpan = Max(span.x, Max(span.y, span.z));
+        const f32 h = Max(maxSpan / cast<f32>(res), 1.0e-4f);
+        const f32 invH = 1.0f / h;
+
+        const u32 innerX = Clamp(cast<u32>(Ceil(VectorSingle(span.x * invH)).x), 1u, res);
+        const u32 innerY = Clamp(cast<u32>(Ceil(VectorSingle(span.y * invH)).x), 1u, res);
+        const u32 innerZ = Clamp(cast<u32>(Ceil(VectorSingle(span.z * invH)).x), 1u, res);
+        this.dimX = innerX + 2u;
+        this.dimY = innerY + 2u;
+        this.dimZ = innerZ + 2u;
+        this.strideZ = this.dimX * this.dimY;
+        this.cellSize = h;
+        this.cellVol = h * h * h;
+
+        const VectorSingle mid = (rootMin + rootMax) * 0.5f;
+        const VectorSingle halfGrid = VectorSingle(cast<f32>(this.dimX), cast<f32>(this.dimY), cast<f32>(this.dimZ), 0.0f) * (0.5f * h);
+        const VectorSingle orig = mid - halfGrid;
+        this.origin = f32x4(orig, h);
+
+        const usize totalVoxels = cast<usize>(this.dimX) * cast<usize>(this.dimY) * cast<usize>(this.dimZ);
+        this.states.assign(totalVoxels, 0u);
+        this.compStamp.assign(totalVoxels, 0u);
+        this.compIdMap.assign(totalVoxels, s_NullIndex);
+        this.activeStamp = 0u;
+
+        const VectorSingle halfE(h * 0.5f + 1.0e-5f, h * 0.5f + 1.0e-5f, h * 0.5f + 1.0e-5f, 0.0f);
+        const i32 maxIx = cast<i32>(this.dimX - 2u);
+        const i32 maxIy = cast<i32>(this.dimY - 2u);
+        const i32 maxIz = cast<i32>(this.dimZ - 2u);
+
+        for(usize ti = 0u; ti < triangles.size(); ++ti){
+            in VhacdTri tr = triangles[ti];
+            const VectorSingle p0(tr.v0);
+            const VectorSingle p1(tr.v1);
+            const VectorSingle p2(tr.v2);
+            const VectorSingle tMin = Min(p0, Min(p1, p2));
+            const VectorSingle tMax = Max(p0, Max(p1, p2));
+            const VectorSingle relMin = VectorFloor((tMin - orig) * invH);
+            const VectorSingle relMax = VectorFloor((tMax - orig) * invH);
+            const u32 ix0 = cast<u32>(Clamp(cast<i32>(relMin.x), 1, maxIx));
+            const u32 iy0 = cast<u32>(Clamp(cast<i32>(relMin.y), 1, maxIy));
+            const u32 iz0 = cast<u32>(Clamp(cast<i32>(relMin.z), 1, maxIz));
+            const u32 ix1 = cast<u32>(Clamp(cast<i32>(relMax.x), 1, maxIx));
+            const u32 iy1 = cast<u32>(Clamp(cast<i32>(relMax.y), 1, maxIy));
+            const u32 iz1 = cast<u32>(Clamp(cast<i32>(relMax.z), 1, maxIz));
+
+            for(u32 iz = iz0; iz <= iz1; ++iz){
+                const f32 cz = orig.z + (cast<f32>(iz) + 0.5f) * h;
+                const u32 zOff = iz * this.strideZ;
+                for(u32 iy = iy0; iy <= iy1; ++iy){
+                    const f32 cy = orig.y + (cast<f32>(iy) + 0.5f) * h;
+                    const u32 yOff = zOff + iy * this.dimX;
+                    for(u32 ix = ix0; ix <= ix1; ++ix){
+                        const u32 vid = yOff + ix;
+                        if(this.states[vid] != 0u)
+                            continue;
+                        const VectorSingle bc(orig.x + (cast<f32>(ix) + 0.5f) * h, cy, cz, 0.0f);
+                        if(VhacdTriOverlapsAabbBox(p0, p1, p2, bc, halfE))
+                            this.states[vid] = 1u;
+                    }
+                }
+            }
+        }
+
+        Vector<u32> queue;
+        queue.reserve(totalVoxels / 4u + 16u);
+        this.states[0u] = 2u;
+        queue.push_back(0u);
+        usize head = 0u;
+        while(head < queue.size()){
+            const u32 vid = queue[head];
+            ++head;
+            const u32 iz = vid / this.strideZ;
+            const u32 rem = vid - iz * this.strideZ;
+            const u32 iy = rem / this.dimX;
+            const u32 ix = rem - iy * this.dimX;
+            if(ix > 0u){
+                const u32 nb = vid - 1u;
+                if(this.states[nb] == 0u){ this.states[nb] = 2u; queue.push_back(nb); }
+            }
+            if(ix + 1u < this.dimX){
+                const u32 nb = vid + 1u;
+                if(this.states[nb] == 0u){ this.states[nb] = 2u; queue.push_back(nb); }
+            }
+            if(iy > 0u){
+                const u32 nb = vid - this.dimX;
+                if(this.states[nb] == 0u){ this.states[nb] = 2u; queue.push_back(nb); }
+            }
+            if(iy + 1u < this.dimY){
+                const u32 nb = vid + this.dimX;
+                if(this.states[nb] == 0u){ this.states[nb] = 2u; queue.push_back(nb); }
+            }
+            if(iz > 0u){
+                const u32 nb = vid - this.strideZ;
+                if(this.states[nb] == 0u){ this.states[nb] = 2u; queue.push_back(nb); }
+            }
+            if(iz + 1u < this.dimZ){
+                const u32 nb = vid + this.strideZ;
+                if(this.states[nb] == 0u){ this.states[nb] = 2u; queue.push_back(nb); }
+            }
+        }
+
+        for(usize vi = 0u; vi < totalVoxels; ++vi){
+            if(this.states[vi] == 0u)
+                this.states[vi] = 3u;
+            if(this.states[vi] == 1u || this.states[vi] == 3u)
+                outRootVoxels.push_back(cast<u32>(vi));
+        }
+        this.rootSolidVol = cast<f32>(outRootVoxels.size()) * this.cellVol;
+    }
+
+    public f32 computeExteriorConcavityVolInsideHull(in HullShape hull, in Aabb3D partBox)const{
+        if(!this.isValid() || hull.facePlanes.empty())
+            return 0.0f;
+        const VectorSingle orig(this.origin);
+        const f32 h = this.cellSize;
+        const f32 invH = 1.0f / h;
+        const VectorSingle relMin = VectorFloor((VectorSingle(partBox.lowerBound) - orig) * invH);
+        const VectorSingle relMax = VectorFloor((VectorSingle(partBox.upperBound) - orig) * invH);
+        const i32 maxX = cast<i32>(this.dimX - 1u);
+        const i32 maxY = cast<i32>(this.dimY - 1u);
+        const i32 maxZ = cast<i32>(this.dimZ - 1u);
+        const u32 ix0 = cast<u32>(Clamp(cast<i32>(relMin.x), 0, maxX));
+        const u32 iy0 = cast<u32>(Clamp(cast<i32>(relMin.y), 0, maxY));
+        const u32 iz0 = cast<u32>(Clamp(cast<i32>(relMin.z), 0, maxZ));
+        const u32 ix1 = cast<u32>(Clamp(cast<i32>(relMax.x), 0, maxX));
+        const u32 iy1 = cast<u32>(Clamp(cast<i32>(relMax.y), 0, maxY));
+        const u32 iz1 = cast<u32>(Clamp(cast<i32>(relMax.z), 0, maxZ));
+        const f32 interiorMargin = -0.25f * h;
+
+        u32 concaveCount = 0u;
+        for(u32 iz = iz0; iz <= iz1; ++iz){
+            const f32 cz = orig.z + (cast<f32>(iz) + 0.5f) * h;
+            const u32 zOff = iz * this.strideZ;
+            for(u32 iy = iy0; iy <= iy1; ++iy){
+                const f32 cy = orig.y + (cast<f32>(iy) + 0.5f) * h;
+                const u32 yOff = zOff + iy * this.dimX;
+                for(u32 ix = ix0; ix <= ix1; ++ix){
+                    const u32 vid = yOff + ix;
+                    if(this.states[vid] != 2u)
+                        continue;
+                    const VectorSingle pt(orig.x + (cast<f32>(ix) + 0.5f) * h, cy, cz, 0.0f);
+                    b8 strictlyInside = true;
+                    for(usize fi = 0u; fi < hull.facePlanes.size(); ++fi){
+                        const f32x4 pl = hull.facePlanes[fi].normalOffset;
+                        const f32 sd = Vector3Dot(VectorSingle(pl.x, pl.y, pl.z, 0.0f), pt).x - pl.w;
+                        if(sd >= interiorMargin){
+                            strictlyInside = false;
+                            break;
+                        }
+                    }
+                    if(strictlyInside)
+                        ++concaveCount;
+                }
+            }
+        }
+        return cast<f32>(concaveCount) * this.cellVol;
+    }
+}
+
+void MoveVhacdPartition(mut VhacdPartition src, mut VhacdPartition dst){
+    dst.aabb = src.aabb;
+    dst.deepestPt = src.deepestPt;
+    dst.volume = src.volume;
+    dst.solidVolume = src.solidVolume;
+    dst.concavity = src.concavity;
+    dst.depth = src.depth;
+    dst.hasHull = src.hasHull;
+    dst.hull = src.hull;
+    dst.triangles.swap(src.triangles);
+    dst.voxelIds.swap(src.voxelIds);
 }
 
 
@@ -335,6 +654,8 @@ void EvaluateVhacdPartitionWithScratch(
     in usize maxHullVerts,
     in b8 hasPrecomputedAabb,
     in Aabb3D precomputedAabb,
+    in VhacdVoxelGrid grid,
+    in b8 useVoxelization,
     mut Vector<f32x4> rawVerts,
     mut Vector<f32x4> samplePts,
     mut VhacdPartition part
@@ -342,6 +663,7 @@ void EvaluateVhacdPartitionWithScratch(
     part.hasHull = false;
     part.concavity = 0.0f;
     part.volume = 0.0f;
+    part.solidVolume = 0.0f;
     if(part.triangles.empty())
         return;
 
@@ -372,7 +694,8 @@ void EvaluateVhacdPartitionWithScratch(
         }
         part.aabb = Aabb3D(bMin, bMax);
     }
-    part.volume = ComputeAabbBoxVolume(part.aabb);
+
+    const f32 boxVol = ComputeAabbBoxVolume(part.aabb);
     part.deepestPt = f32x4((VectorSingle(part.aabb.lowerBound) + VectorSingle(part.aabb.upperBound)) * 0.5f, 0.0f);
 
     samplePts.clear();
@@ -386,17 +709,367 @@ void EvaluateVhacdPartitionWithScratch(
     part.hull = hullRes.value();
     part.hasHull = true;
 
+    f32 hullVol = ComputeHullBuoyancyVolume(part.hull);
+    if(hullVol <= 1.0e-7f)
+        hullVol = boxVol;
+    part.volume = hullVol;
+
+    if(useVoxelization && grid.isValid() && !part.voxelIds.empty())
+        part.solidVolume = cast<f32>(part.voxelIds.size()) * grid.cellVol;
+    else
+        part.solidVolume = hullVol;
+
     f32 maxInteriorDepth = 0.0f;
     VectorSingle deepestPtOut = VectorSingle(part.deepestPt);
     AccumulateHullTriangleConcavityDepth(part.hull, Span<VhacdTri>(part.triangles), VectorSingle(part.deepestPt), maxInteriorDepth, deepestPtOut);
     part.deepestPt = f32x4(deepestPtOut, 0.0f);
-    part.concavity = maxInteriorDepth / Max(rootDiag, 1.0e-4f);
+
+    const f32 depthConc = maxInteriorDepth / Max(rootDiag, 1.0e-4f);
+    f32 volConc = 0.0f;
+    if(useVoxelization && grid.isValid() && !part.voxelIds.empty() && grid.rootSolidVol > 1.0e-6f)
+        volConc = grid.computeExteriorConcavityVolInsideHull(part.hull, part.aabb) / grid.rootSolidVol;
+    part.concavity = Max(volConc, depthConc);
 }
 
-Expected<VhacdResult> ComputeConvexDecomposition(
+void EvaluateVhacdCandidateSplit(
+    in VhacdPartition target,
+    in VectorSingle planeN,
+    in f32 sp,
+    in f32 rootDiag,
+    in f32 hullRadius,
+    in usize maxVerts,
+    in f32 minAllowedVol,
+    in VhacdVoxelGrid grid,
+    in b8 useVoxelization,
+    mut Vector<f32x4> rawVertsScratch,
+    mut Vector<f32x4> samplePtsScratch,
+    mut VhacdSplitEval outEval
+){
+    outEval.valid = false;
+    outEval.score = s_MaxF32;
+    outEval.neg.triangles.clear();
+    outEval.pos.triangles.clear();
+    outEval.neg.voxelIds.clear();
+    outEval.pos.voxelIds.clear();
+    outEval.neg.depth = target.depth + 1u;
+    outEval.pos.depth = target.depth + 1u;
+
+    for(usize ti = 0u; ti < target.triangles.size(); ++ti)
+        ClipVhacdTriangleByPlane(target.triangles[ti], planeN, sp, outEval.neg.triangles, outEval.pos.triangles);
+
+    if(outEval.neg.triangles.size() < 2u || outEval.pos.triangles.size() < 2u)
+        return;
+
+    VectorSingle negMin(s_MaxF32);
+    VectorSingle negMax(-s_MaxF32);
+    for(usize ti = 0u; ti < outEval.neg.triangles.size(); ++ti){
+        in VhacdTri t = outEval.neg.triangles[ti];
+        negMin = Min(negMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
+        negMax = Max(negMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
+    }
+    VectorSingle posMin(s_MaxF32);
+    VectorSingle posMax(-s_MaxF32);
+    for(usize ti = 0u; ti < outEval.pos.triangles.size(); ++ti){
+        in VhacdTri t = outEval.pos.triangles[ti];
+        posMin = Min(posMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
+        posMax = Max(posMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
+    }
+    const Aabb3D negBox(negMin, negMax);
+    const Aabb3D posBox(posMin, posMax);
+    if(ComputeAabbBoxVolume(negBox) < minAllowedVol || ComputeAabbBoxVolume(posBox) < minAllowedVol)
+        return;
+
+    if(useVoxelization && grid.isValid() && !target.voxelIds.empty()){
+        outEval.neg.voxelIds.reserve(target.voxelIds.size() / 2u + 8u);
+        outEval.pos.voxelIds.reserve(target.voxelIds.size() / 2u + 8u);
+        for(usize vi = 0u; vi < target.voxelIds.size(); ++vi){
+            const u32 vid = target.voxelIds[vi];
+            if(Vector3Dot(planeN, grid.voxelCenter(vid)).x <= sp)
+                outEval.neg.voxelIds.push_back(vid);
+            else
+                outEval.pos.voxelIds.push_back(vid);
+        }
+        if(outEval.neg.voxelIds.empty() || outEval.pos.voxelIds.empty())
+            return;
+    }
+
+    EvaluateVhacdPartitionWithScratch(rootDiag, hullRadius, maxVerts, true, negBox, grid, useVoxelization, rawVertsScratch, samplePtsScratch, outEval.neg);
+    EvaluateVhacdPartitionWithScratch(rootDiag, hullRadius, maxVerts, true, posBox, grid, useVoxelization, rawVertsScratch, samplePtsScratch, outEval.pos);
+    if(!outEval.neg.hasHull || !outEval.pos.hasHull)
+        return;
+    if(outEval.neg.volume < minAllowedVol || outEval.pos.volume < minAllowedVol)
+        return;
+
+    outEval.score = Max(outEval.neg.concavity, outEval.pos.concavity);
+    outEval.valid = true;
+}
+
+void SplitPartitionVoxelIslands(
+    in f32 rootDiag,
+    in f32 hullRadius,
+    in usize maxHullVerts,
+    in f32 minAllowedVol,
+    in usize maxExtraSplits,
+    in b8 useVoxelization,
+    mut VhacdVoxelGrid grid,
+    mut VhacdPartition part,
+    mut Vector<f32x4> rawVertsScratch,
+    mut Vector<f32x4> samplePtsScratch,
+    mut Vector<VhacdPartition> outExtraParts
+){
+    outExtraParts.clear();
+    if(!useVoxelization || !grid.isValid() || part.voxelIds.size() < 8u || maxExtraSplits == 0u)
+        return;
+
+    ++grid.activeStamp;
+    if(grid.activeStamp == 0u){
+        grid.compStamp.assign(grid.states.size(), 0u);
+        grid.activeStamp = 1u;
+    }
+    const u32 stamp = grid.activeStamp;
+    for(usize vi = 0u; vi < part.voxelIds.size(); ++vi){
+        const u32 vid = part.voxelIds[vi];
+        grid.compStamp[vid] = stamp;
+        grid.compIdMap[vid] = s_NullIndex;
+    }
+
+    Vector<u32> compStarts;
+    Vector<u32> compCounts;
+    Vector<u32> allCompVoxels;
+    Vector<f32x4> compCentroids;
+    allCompVoxels.reserve(part.voxelIds.size());
+    Vector<u32> queue;
+    queue.reserve(part.voxelIds.size());
+
+    for(usize vi = 0u; vi < part.voxelIds.size(); ++vi){
+        const u32 seed = part.voxelIds[vi];
+        if(grid.compIdMap[seed] != s_NullIndex)
+            continue;
+        const u32 cid = cast<u32>(compStarts.size());
+        const u32 startOff = cast<u32>(allCompVoxels.size());
+        queue.clear();
+        queue.push_back(seed);
+        grid.compIdMap[seed] = cid;
+        VectorSingle cenSum(0.0f);
+        usize head = 0u;
+        while(head < queue.size()){
+            const u32 vid = queue[head];
+            ++head;
+            allCompVoxels.push_back(vid);
+            cenSum = cenSum + grid.voxelCenter(vid);
+            const u32 iz = vid / grid.strideZ;
+            const u32 rem = vid - iz * grid.strideZ;
+            const u32 iy = rem / grid.dimX;
+            const u32 ix = rem - iy * grid.dimX;
+            if(ix > 0u){
+                const u32 nb = vid - 1u;
+                if(grid.compStamp[nb] == stamp && grid.compIdMap[nb] == s_NullIndex){ grid.compIdMap[nb] = cid; queue.push_back(nb); }
+            }
+            if(ix + 1u < grid.dimX){
+                const u32 nb = vid + 1u;
+                if(grid.compStamp[nb] == stamp && grid.compIdMap[nb] == s_NullIndex){ grid.compIdMap[nb] = cid; queue.push_back(nb); }
+            }
+            if(iy > 0u){
+                const u32 nb = vid - grid.dimX;
+                if(grid.compStamp[nb] == stamp && grid.compIdMap[nb] == s_NullIndex){ grid.compIdMap[nb] = cid; queue.push_back(nb); }
+            }
+            if(iy + 1u < grid.dimY){
+                const u32 nb = vid + grid.dimX;
+                if(grid.compStamp[nb] == stamp && grid.compIdMap[nb] == s_NullIndex){ grid.compIdMap[nb] = cid; queue.push_back(nb); }
+            }
+            if(iz > 0u){
+                const u32 nb = vid - grid.strideZ;
+                if(grid.compStamp[nb] == stamp && grid.compIdMap[nb] == s_NullIndex){ grid.compIdMap[nb] = cid; queue.push_back(nb); }
+            }
+            if(iz + 1u < grid.dimZ){
+                const u32 nb = vid + grid.strideZ;
+                if(grid.compStamp[nb] == stamp && grid.compIdMap[nb] == s_NullIndex){ grid.compIdMap[nb] = cid; queue.push_back(nb); }
+            }
+        }
+        const u32 cnt = cast<u32>(allCompVoxels.size()) - startOff;
+        compStarts.push_back(startOff);
+        compCounts.push_back(cnt);
+        compCentroids.push_back(f32x4(cenSum * (1.0f / Max(1.0f, cast<f32>(cnt))), 0.0f));
+    }
+
+    const usize compCount = compStarts.size();
+    if(compCount <= 1u)
+        return;
+
+    const usize maxComponents = maxExtraSplits + 1u;
+    Vector<u8> keepComp;
+    keepComp.assign(compCount, 0u);
+    usize keptCount = 0u;
+    for(usize ci = 0u; ci < compCount; ++ci){
+        const f32 cVol = cast<f32>(compCounts[ci]) * grid.cellVol;
+        if(cVol >= Max(minAllowedVol * 0.25f, grid.cellVol * 2.0f) && keptCount < maxComponents){
+            keepComp[ci] = 1u;
+            ++keptCount;
+        }
+    }
+    if(keptCount <= 1u)
+        return;
+
+    Vector<u32> compRemap;
+    compRemap.assign(compCount, s_NullIndex);
+    u32 nextKept = 0u;
+    for(usize ci = 0u; ci < compCount; ++ci){
+        if(keepComp[ci] != 0u){
+            compRemap[ci] = nextKept;
+            ++nextKept;
+        }
+    }
+    for(usize ci = 0u; ci < compCount; ++ci){
+        if(keepComp[ci] != 0u)
+            continue;
+        f32 bestDistSq = s_MaxF32;
+        u32 bestTarget = 0u;
+        const VectorSingle curC(compCentroids[ci]);
+        for(usize kj = 0u; kj < compCount; ++kj){
+            if(keepComp[kj] == 0u)
+                continue;
+            const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(compCentroids[kj]) - curC, 0.0f)).x;
+            if(dSq < bestDistSq){
+                bestDistSq = dSq;
+                bestTarget = compRemap[kj];
+            }
+        }
+        compRemap[ci] = bestTarget;
+    }
+
+    Vector<f32x4> keptCentroids;
+    keptCentroids.resize(keptCount);
+    Vector<VhacdPartition> islands;
+    islands.resize(keptCount);
+    for(usize ci = 0u; ci < compCount; ++ci){
+        const u32 dstIdx = compRemap[ci];
+        if(keepComp[ci] != 0u)
+            keptCentroids[dstIdx] = compCentroids[ci];
+        const u32 st = compStarts[ci];
+        const u32 ed = st + compCounts[ci];
+        for(u32 vi = st; vi < ed; ++vi){
+            const u32 vid = allCompVoxels[vi];
+            grid.compIdMap[vid] = dstIdx;
+            islands[dstIdx].voxelIds.push_back(vid);
+        }
+    }
+
+    for(usize ti = 0u; ti < part.triangles.size(); ++ti){
+        in VhacdTri tr = part.triangles[ti];
+        const VectorSingle cen = (VectorSingle(tr.v0) + VectorSingle(tr.v1) + VectorSingle(tr.v2)) * (1.0f / 3.0f);
+        u32 targetIsland = s_NullIndex;
+        for(usize k = 0u; k < 4u; ++k){
+            VectorSingle samplePt = cen;
+            if(k == 1u) samplePt = VectorSingle(tr.v0);
+            else if(k == 2u) samplePt = VectorSingle(tr.v1);
+            else if(k == 3u) samplePt = VectorSingle(tr.v2);
+            const u32 vid = grid.findVoxelIndexAt(samplePt);
+            if(vid != s_NullIndex && grid.compStamp[vid] == stamp && grid.compIdMap[vid] < cast<u32>(keptCount)){
+                targetIsland = grid.compIdMap[vid];
+                break;
+            }
+        }
+        if(targetIsland == s_NullIndex){
+            f32 bestDistSq = s_MaxF32;
+            targetIsland = 0u;
+            for(usize ki = 0u; ki < keptCount; ++ki){
+                const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(keptCentroids[ki]) - cen, 0.0f)).x;
+                if(dSq < bestDistSq){
+                    bestDistSq = dSq;
+                    targetIsland = cast<u32>(ki);
+                }
+            }
+        }
+        islands[targetIsland].triangles.push_back(tr);
+    }
+
+    Vector<usize> validIslands;
+    validIslands.reserve(keptCount);
+    for(usize ki = 0u; ki < keptCount; ++ki){
+        islands[ki].depth = part.depth;
+        if(islands[ki].triangles.size() < 2u)
+            continue;
+        EvaluateVhacdPartitionWithScratch(rootDiag, hullRadius, maxHullVerts, false, Aabb3D(), grid, useVoxelization, rawVertsScratch, samplePtsScratch, islands[ki]);
+        if(islands[ki].hasHull && islands[ki].volume >= minAllowedVol)
+            validIslands.push_back(ki);
+    }
+    if(validIslands.size() <= 1u)
+        return;
+
+    MoveVhacdPartition(islands[validIslands[0u]], part);
+    for(usize vi = 1u; vi < validIslands.size(); ++vi){
+        outExtraParts.push_back(VhacdPartition());
+        MoveVhacdPartition(islands[validIslands[vi]], outExtraParts[outExtraParts.size() - 1u]);
+    }
+}
+
+void EvaluateVhacdCandidateMerge(
+    in VhacdPartition partI,
+    in VhacdPartition partJ,
+    in f32 hullVolI,
+    in f32 hullVolJ,
+    in f32 normVolDenom,
+    in f32 invRootDiag,
+    in usize maxVerts,
+    in f32 hullRadius,
+    in b8 mustMerge,
+    in f32 mergeVolTol,
+    in f32 concavityThresh,
+    mut Vector<f32x4> rawVertsScratch,
+    mut Vector<f32x4> samplePtsScratch,
+    mut VhacdMergeEval outEval
+){
+    outEval.valid = false;
+    rawVertsScratch.clear();
+    CollectHullShapeRawVertices(partI.hull, rawVertsScratch);
+    CollectHullShapeRawVertices(partJ.hull, rawVertsScratch);
+    samplePtsScratch.clear();
+    if(!DeduplicateConvexPoints(Span<f32x4>(rawVertsScratch), samplePtsScratch))
+        samplePtsScratch.swap(rawVertsScratch);
+    const Vector<f32x4> mergedPts = DecimateHullPoints(Span<f32x4>(samplePtsScratch), Max(cast<usize>(4u), maxVerts));
+    const Expected<HullShape> mergedRes = BuildConvexHull(Span<f32x4>(mergedPts), hullRadius);
+    if(!mergedRes.has_value())
+        return;
+
+    in HullShape mergedHull = mergedRes.value();
+    f32 mergedVol = ComputeHullBuoyancyVolume(mergedHull);
+    if(mergedVol <= 1.0e-7f)
+        mergedVol = partI.volume + partJ.volume;
+    const f32 volCost = Max(0.0f, mergedVol - (hullVolI + hullVolJ)) / normVolDenom;
+
+    const VectorSingle mergedMin = Min(VectorSingle(partI.aabb.lowerBound), VectorSingle(partJ.aabb.lowerBound));
+    const VectorSingle mergedMax = Max(VectorSingle(partI.aabb.upperBound), VectorSingle(partJ.aabb.upperBound));
+    const VectorSingle mergedMid = (mergedMin + mergedMax) * 0.5f;
+    f32 depthI = 0.0f;
+    f32 depthJ = 0.0f;
+    VectorSingle deepI(0.0f);
+    VectorSingle deepJ(0.0f);
+    AccumulateHullTriangleConcavityDepth(mergedHull, Span<VhacdTri>(partI.triangles), mergedMid, depthI, deepI);
+    AccumulateHullTriangleConcavityDepth(mergedHull, Span<VhacdTri>(partJ.triangles), mergedMid, depthJ, deepJ);
+    f32 maxDepth = depthI;
+    VectorSingle maxDeep = deepI;
+    if(depthJ > depthI){
+        maxDepth = depthJ;
+        maxDeep = deepJ;
+    }
+    const f32 mergedConcavity = maxDepth * invRootDiag;
+
+    if(!mustMerge && (volCost > mergeVolTol || mergedConcavity > concavityThresh))
+        return;
+
+    outEval.mergedHull = mergedHull;
+    outEval.mergedVol = mergedVol;
+    outEval.mergedConcavity = mergedConcavity;
+    outEval.mergeScore = volCost + mergedConcavity;
+    outEval.mergedDeepest = f32x4(maxDeep, 0.0f);
+    outEval.valid = true;
+}
+
+Expected<VhacdResult> ComputeConvexDecompositionWithScheduler(
     in Span<f32x4> vertices,
     in Span<u32> indices,
-    in VhacdParams params
+    in VhacdParams params,
+    mut CpuTaskScheduler cpuScheduler
 ){
     if(vertices.size() < 3u || indices.size() < 3u || (indices.size() % 3u) != 0u)
         return MakeUnexpected(Failure());
@@ -445,23 +1118,47 @@ Expected<VhacdResult> ComputeConvexDecomposition(
         rootMax = Max(rootMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
     }
     const f32 rootDiag = Max(Vector3Length(VectorSingle(rootMax - rootMin, 0.0f)).x, 1.0e-4f);
-    const f32 rootVol = Max(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
     const usize maxVerts = Max(cast<usize>(4u), Min(cast<usize>(params.maxVerticesPerHull), s_MaxHullVertices));
 
-    Vector<f32x4> rawVerts;
-    Vector<f32x4> samplePts;
-    EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, false, Aabb3D(), rawVerts, samplePts, root);
-
-    u32 splitCap = params.maxConvexHulls;
-    if(params.enableHullMerging)
-        splitCap = Min(Max(params.maxConvexHulls, params.maxConvexHulls * 2u), 64u);
-
-    Vector<VhacdPartition> partitions;
-    partitions.reserve(Min(cast<usize>(splitCap), cast<usize>(64u)));
-    partitions.push_back(root);
+    VhacdVoxelGrid grid;
+    const b8 useVoxel = params.enableVoxelization;
+    if(useVoxel)
+        grid.buildFromTriangles(Span<VhacdTri>(root.triangles), rootMin, rootMax, params.voxelResolution, root.voxelIds);
 
     Vector<f32x4> rawVertsScratch;
     Vector<f32x4> samplePtsScratch;
+    EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, false, Aabb3D(), grid, useVoxel, rawVertsScratch, samplePtsScratch, root);
+
+    const f32 aabbVol = Max(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
+    f32 refRootVol = root.volume;
+    if(useVoxel && grid.isValid() && grid.rootSolidVol > 1.0e-6f)
+        refRootVol = Max(root.solidVolume, 1.0e-6f);
+    if(refRootVol <= 1.0e-6f)
+        refRootVol = aabbVol;
+
+    u32 splitCap = Max(params.maxConvexHulls, 1u);
+    if(params.enableHullMerging){
+        if(splitCap <= 512u)
+            splitCap = splitCap * 2u;
+    }
+
+    const f32 minAllowedVol = params.minVolumeRatio * refRootVol;
+    Vector<VhacdPartition> partitions;
+    partitions.reserve(Min(cast<usize>(splitCap), cast<usize>(256u)));
+    partitions.push_back(root);
+
+    Vector<VhacdPartition> islandExtras;
+    if(partitions[0u].hasHull && cast<usize>(splitCap) > partitions.size()){
+        SplitPartitionVoxelIslands(rootDiag, params.hullRadius, maxVerts, minAllowedVol, cast<usize>(splitCap) - partitions.size(), useVoxel, grid, partitions[0u], rawVertsScratch, samplePtsScratch, islandExtras);
+        for(usize ei = 0u; ei < islandExtras.size(); ++ei){
+            partitions.push_back(VhacdPartition());
+            MoveVhacdPartition(islandExtras[ei], partitions[partitions.size() - 1u]);
+        }
+    }
+
+    Vector<VhacdCandidatePlane> candidates;
+    Vector<VhacdSplitEval> splitEvals;
+    VhacdSplitEval serialSplitEval;
 
     while(partitions.size() < cast<usize>(splitCap)){
         usize bestIdx = s_NullIndex;
@@ -478,13 +1175,6 @@ Expected<VhacdResult> ComputeConvexDecomposition(
             break;
 
         in VhacdPartition target = partitions[bestIdx];
-        b8 foundSplit = false;
-        f32 bestSplitScore = s_MaxF32;
-        VhacdPartition bestNeg;
-        VhacdPartition bestPos;
-        VhacdPartition candNeg;
-        VhacdPartition candPos;
-        const f32 minAllowedVol = params.minVolumeRatio * rootVol;
 
         FixedVector<f32x4, 6u> candNormals;
         candNormals.push_back(f32x4(1.0f, 0.0f, 0.0f, 0.0f));
@@ -509,6 +1199,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
             }
         }
 
+        candidates.clear();
         for(usize ni = 0u; ni < candNormals.size(); ++ni){
             const VectorSingle planeN = VectorSingle(candNormals[ni]);
             f32 lo = s_MaxF32;
@@ -521,71 +1212,110 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 lo = Min(lo, Min(p0, Min(p1, p2)));
                 hi = Max(hi, Max(p0, Max(p1, p2)));
             }
-            if(hi - lo <= 1.0e-4f)
+            const f32 span = hi - lo;
+            if(span <= 1.0e-4f)
                 continue;
 
-            Array<f32, 2u> candSplits;
-            candSplits[0u] = 0.5f * (lo + hi);
-            candSplits[1u] = Clamp(Vector3Dot(planeN, VectorSingle(target.deepestPt)).x, lo + 1.0e-4f, hi - 1.0e-4f);
-
-            for(usize si = 0u; si < 2u; ++si){
-                if(si == 1u && Abs(VectorSingle(candSplits[1u] - candSplits[0u])).x <= 1.0e-4f)
-                    continue;
-                const f32 sp = candSplits[si];
-                candNeg.triangles.clear();
-                candPos.triangles.clear();
-                candNeg.depth = target.depth + 1u;
-                candPos.depth = target.depth + 1u;
-                for(usize ti = 0u; ti < target.triangles.size(); ++ti)
-                    ClipVhacdTriangleByPlane(target.triangles[ti], planeN, sp, candNeg.triangles, candPos.triangles);
-
-                if(candNeg.triangles.size() < 2u || candPos.triangles.size() < 2u)
-                    continue;
-
-                VectorSingle negMin(s_MaxF32);
-                VectorSingle negMax(-s_MaxF32);
-                for(usize ti = 0u; ti < candNeg.triangles.size(); ++ti){
-                    in VhacdTri t = candNeg.triangles[ti];
-                    negMin = Min(negMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
-                    negMax = Max(negMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
+            FixedVector<f32, 6u> offsets;
+            for(u32 k = 1u; k <= 5u; ++k)
+                offsets.push_back(lo + span * (cast<f32>(k) / 6.0f));
+            const f32 deepOff = Clamp(Vector3Dot(planeN, VectorSingle(target.deepestPt)).x, lo + 1.0e-4f, hi - 1.0e-4f);
+            b8 dupDeep = false;
+            for(usize oi = 0u; oi < offsets.size(); ++oi){
+                if(Abs(VectorSingle(offsets[oi] - deepOff)).x <= 1.0e-4f){
+                    dupDeep = true;
+                    break;
                 }
-                VectorSingle posMin(s_MaxF32);
-                VectorSingle posMax(-s_MaxF32);
-                for(usize ti = 0u; ti < candPos.triangles.size(); ++ti){
-                    in VhacdTri t = candPos.triangles[ti];
-                    posMin = Min(posMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
-                    posMax = Max(posMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
+            }
+            if(!dupDeep)
+                offsets.push_back(deepOff);
+
+            for(usize oi = 0u; oi < offsets.size(); ++oi){
+                VhacdCandidatePlane cp;
+                cp.planeN = f32x4(planeN, 0.0f);
+                cp.offset = offsets[oi];
+                candidates.push_back(cp);
+            }
+        }
+
+        b8 foundSplit = false;
+        f32 bestSplitScore = s_MaxF32;
+        VhacdPartition bestNeg;
+        VhacdPartition bestPos;
+
+        const usize candCount = candidates.size();
+        b8 ranParallel = false;
+        if(cpuScheduler.isParallelEnabled() && candCount >= 4u && target.triangles.size() >= 16u){
+            splitEvals.resize(candCount);
+            in Vector<VhacdCandidatePlane> candRef = candidates;
+            in VhacdVoxelGrid gridRef = grid;
+            mut Vector<VhacdSplitEval> evalsMut = splitEvals;
+            const f32 hRad = params.hullRadius;
+            const auto res = cpuScheduler.parallelFor(
+                0u,
+                candCount,
+                1u,
+                lambda[in target, in candRef, in rootDiag, in hRad, in maxVerts, in minAllowedVol, in gridRef, in useVoxel, mut evalsMut](in usize ci) -> void{
+                    Vector<f32x4> localRawVerts;
+                    Vector<f32x4> localSamplePts;
+                    in VhacdCandidatePlane cp = candRef[ci];
+                    EvaluateVhacdCandidateSplit(
+                        target,
+                        VectorSingle(cp.planeN),
+                        cp.offset,
+                        rootDiag,
+                        hRad,
+                        maxVerts,
+                        minAllowedVol,
+                        gridRef,
+                        useVoxel,
+                        localRawVerts,
+                        localSamplePts,
+                        evalsMut[ci]
+                    );
+                },
+                CpuTaskOptions()
+            );
+            if(res.has_value()){
+                ranParallel = true;
+                for(usize ci = 0u; ci < candCount; ++ci){
+                    mut VhacdSplitEval ev = splitEvals[ci];
+                    if(!ev.valid)
+                        continue;
+                    if(!foundSplit || ev.score < bestSplitScore){
+                        foundSplit = true;
+                        bestSplitScore = ev.score;
+                        MoveVhacdPartition(ev.neg, bestNeg);
+                        MoveVhacdPartition(ev.pos, bestPos);
+                    }
                 }
-                const Aabb3D negBox(negMin, negMax);
-                const Aabb3D posBox(posMin, posMax);
-                if(ComputeAabbBoxVolume(negBox) < minAllowedVol || ComputeAabbBoxVolume(posBox) < minAllowedVol)
-                    continue;
+            }
+        }
 
-                EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, true, negBox, rawVertsScratch, samplePtsScratch, candNeg);
-                EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, true, posBox, rawVertsScratch, samplePtsScratch, candPos);
-                if(!candNeg.hasHull || !candPos.hasHull)
+        if(!ranParallel){
+            for(usize ci = 0u; ci < candCount; ++ci){
+                in VhacdCandidatePlane cp = candidates[ci];
+                EvaluateVhacdCandidateSplit(
+                    target,
+                    VectorSingle(cp.planeN),
+                    cp.offset,
+                    rootDiag,
+                    params.hullRadius,
+                    maxVerts,
+                    minAllowedVol,
+                    grid,
+                    useVoxel,
+                    rawVertsScratch,
+                    samplePtsScratch,
+                    serialSplitEval
+                );
+                if(!serialSplitEval.valid)
                     continue;
-
-                const f32 score = Max(candNeg.concavity, candPos.concavity);
-                if(!foundSplit || score < bestSplitScore){
+                if(!foundSplit || serialSplitEval.score < bestSplitScore){
                     foundSplit = true;
-                    bestSplitScore = score;
-                    bestNeg.aabb = candNeg.aabb;
-                    bestNeg.deepestPt = candNeg.deepestPt;
-                    bestNeg.volume = candNeg.volume;
-                    bestNeg.concavity = candNeg.concavity;
-                    bestNeg.depth = candNeg.depth;
-                    bestNeg.hasHull = candNeg.hasHull;
-                    bestNeg.hull = candNeg.hull;
-                    bestNeg.triangles.swap(candNeg.triangles);
-                    bestPos.aabb = candPos.aabb;
-                    bestPos.deepestPt = candPos.deepestPt;
-                    bestPos.volume = candPos.volume;
-                    bestPos.concavity = candPos.concavity;
-                    bestPos.depth = candPos.depth;
-                    bestPos.hasHull = candPos.hasHull;
-                    bestPos.hull = candPos.hull;
-                    bestPos.triangles.swap(candPos.triangles);
+                    bestSplitScore = serialSplitEval.score;
+                    MoveVhacdPartition(serialSplitEval.neg, bestNeg);
+                    MoveVhacdPartition(serialSplitEval.pos, bestPos);
                 }
             }
         }
@@ -595,40 +1325,33 @@ Expected<VhacdResult> ComputeConvexDecomposition(
             continue;
         }
 
-        partitions[bestIdx].aabb = bestNeg.aabb;
-        partitions[bestIdx].deepestPt = bestNeg.deepestPt;
-        partitions[bestIdx].volume = bestNeg.volume;
-        partitions[bestIdx].concavity = bestNeg.concavity;
-        partitions[bestIdx].depth = bestNeg.depth;
-        partitions[bestIdx].hasHull = bestNeg.hasHull;
-        partitions[bestIdx].hull = bestNeg.hull;
-        partitions[bestIdx].triangles.swap(bestNeg.triangles);
+        MoveVhacdPartition(bestNeg, partitions[bestIdx]);
+        const usize posIdx = partitions.size();
         partitions.push_back(VhacdPartition());
-        mut VhacdPartition dstPos = partitions[partitions.size() - 1u];
-        dstPos.aabb = bestPos.aabb;
-        dstPos.deepestPt = bestPos.deepestPt;
-        dstPos.volume = bestPos.volume;
-        dstPos.concavity = bestPos.concavity;
-        dstPos.depth = bestPos.depth;
-        dstPos.hasHull = bestPos.hasHull;
-        dstPos.hull = bestPos.hull;
-        dstPos.triangles.swap(bestPos.triangles);
+        MoveVhacdPartition(bestPos, partitions[posIdx]);
+
+        if(cast<usize>(splitCap) > partitions.size()){
+            SplitPartitionVoxelIslands(rootDiag, params.hullRadius, maxVerts, minAllowedVol, cast<usize>(splitCap) - partitions.size(), useVoxel, grid, partitions[bestIdx], rawVertsScratch, samplePtsScratch, islandExtras);
+            for(usize ei = 0u; ei < islandExtras.size(); ++ei){
+                partitions.push_back(VhacdPartition());
+                MoveVhacdPartition(islandExtras[ei], partitions[partitions.size() - 1u]);
+            }
+        }
+        if(cast<usize>(splitCap) > partitions.size()){
+            SplitPartitionVoxelIslands(rootDiag, params.hullRadius, maxVerts, minAllowedVol, cast<usize>(splitCap) - partitions.size(), useVoxel, grid, partitions[posIdx], rawVertsScratch, samplePtsScratch, islandExtras);
+            for(usize ei = 0u; ei < islandExtras.size(); ++ei){
+                partitions.push_back(VhacdPartition());
+                MoveVhacdPartition(islandExtras[ei], partitions[partitions.size() - 1u]);
+            }
+        }
     }
 
     usize writePart = 0u;
     for(usize pi = 0u; pi < partitions.size(); ++pi){
         if(!partitions[pi].hasHull)
             continue;
-        if(writePart != pi){
-            partitions[writePart].aabb = partitions[pi].aabb;
-            partitions[writePart].deepestPt = partitions[pi].deepestPt;
-            partitions[writePart].volume = partitions[pi].volume;
-            partitions[writePart].concavity = partitions[pi].concavity;
-            partitions[writePart].depth = partitions[pi].depth;
-            partitions[writePart].hasHull = partitions[pi].hasHull;
-            partitions[writePart].hull = partitions[pi].hull;
-            partitions[writePart].triangles.swap(partitions[pi].triangles);
-        }
+        if(writePart != pi)
+            MoveVhacdPartition(partitions[pi], partitions[writePart]);
         ++writePart;
     }
     partitions.resize(writePart);
@@ -636,28 +1359,20 @@ Expected<VhacdResult> ComputeConvexDecomposition(
     if(params.enableHullMerging && partitions.size() > 1u){
         Vector<f32> hullVols;
         hullVols.resize(partitions.size(), 0.0f);
-        for(usize pi = 0u; pi < partitions.size(); ++pi){
-            f32 hv = ComputeHullBuoyancyVolume(partitions[pi].hull);
-            if(hv <= 1.0e-7f)
-                hv = partitions[pi].volume;
-            hullVols[pi] = hv;
-        }
+        for(usize pi = 0u; pi < partitions.size(); ++pi)
+            hullVols[pi] = Max(partitions[pi].volume, 1.0e-7f);
 
         const f32 overlapPadScalar = 0.05f * rootDiag;
         const VectorSingle overlapPad(overlapPadScalar, overlapPadScalar, overlapPadScalar, 0.0f);
         const f32 invRootDiag = 1.0f / Max(rootDiag, 1.0e-4f);
+        const f32 normVolDenom = Max(refRootVol, 1.0e-6f);
+        Vector<VhacdMergePair> mergePairs;
+        Vector<VhacdMergeEval> mergeEvals;
+        VhacdMergeEval serialMergeEval;
 
         while(partitions.size() > 1u){
             const b8 mustMerge = partitions.size() > cast<usize>(params.maxConvexHulls);
-            b8 foundMerge = false;
-            usize bestI = 0u;
-            usize bestJ = 0u;
-            f32 bestMergeCost = s_MaxF32;
-            HullShape bestMergedHull;
-            f32 bestMergedVol = 0.0f;
-            f32 bestMergedConcavity = 0.0f;
-            f32x4 bestMergedDeepest(0.0f, 0.0f, 0.0f, 0.0f);
-
+            mergePairs.clear();
             for(usize i = 0u; i + 1u < partitions.size(); ++i){
                 in Aabb3D boxI = partitions[i].aabb;
                 const VectorSingle minI = VectorSingle(boxI.lowerBound) - overlapPad;
@@ -668,53 +1383,110 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                         if(!AabbOverlapsValues(minI, maxI, VectorSingle(boxJ.lowerBound), VectorSingle(boxJ.upperBound)))
                             continue;
                     }
-                    rawVertsScratch.clear();
-                    CollectHullShapeRawVertices(partitions[i].hull, rawVertsScratch);
-                    CollectHullShapeRawVertices(partitions[j].hull, rawVertsScratch);
-                    samplePtsScratch.clear();
-                    if(!DeduplicateConvexPoints(Span<f32x4>(rawVertsScratch), samplePtsScratch))
-                        samplePtsScratch.swap(rawVertsScratch);
-                    const Vector<f32x4> mergedPts = DecimateHullPoints(Span<f32x4>(samplePtsScratch), Max(cast<usize>(4u), maxVerts));
-                    const Expected<HullShape> mergedRes = BuildConvexHull(Span<f32x4>(mergedPts), params.hullRadius);
-                    if(!mergedRes.has_value())
-                        continue;
+                    VhacdMergePair mp;
+                    mp.i = cast<u32>(i);
+                    mp.j = cast<u32>(j);
+                    mergePairs.push_back(mp);
+                }
+            }
 
-                    in HullShape mergedHull = mergedRes.value();
-                    f32 mergedVol = ComputeHullBuoyancyVolume(mergedHull);
-                    if(mergedVol <= 1.0e-7f)
-                        mergedVol = partitions[i].volume + partitions[j].volume;
-                    const f32 volCost = Max(0.0f, mergedVol - (hullVols[i] + hullVols[j])) / rootVol;
+            b8 foundMerge = false;
+            usize bestI = 0u;
+            usize bestJ = 0u;
+            f32 bestMergeCost = s_MaxF32;
+            HullShape bestMergedHull;
+            f32 bestMergedVol = 0.0f;
+            f32 bestMergedConcavity = 0.0f;
+            f32x4 bestMergedDeepest(0.0f, 0.0f, 0.0f, 0.0f);
 
-                    const VectorSingle mergedMin = Min(VectorSingle(partitions[i].aabb.lowerBound), VectorSingle(partitions[j].aabb.lowerBound));
-                    const VectorSingle mergedMax = Max(VectorSingle(partitions[i].aabb.upperBound), VectorSingle(partitions[j].aabb.upperBound));
-                    const VectorSingle mergedMid = (mergedMin + mergedMax) * 0.5f;
-                    f32 depthI = 0.0f;
-                    f32 depthJ = 0.0f;
-                    VectorSingle deepI(0.0f);
-                    VectorSingle deepJ(0.0f);
-                    AccumulateHullTriangleConcavityDepth(mergedHull, Span<VhacdTri>(partitions[i].triangles), mergedMid, depthI, deepI);
-                    AccumulateHullTriangleConcavityDepth(mergedHull, Span<VhacdTri>(partitions[j].triangles), mergedMid, depthJ, deepJ);
-                    f32 maxDepth = depthI;
-                    VectorSingle maxDeep = deepI;
-                    if(depthJ > depthI){
-                        maxDepth = depthJ;
-                        maxDeep = deepJ;
+            const usize pairCount = mergePairs.size();
+            b8 mergedParallel = false;
+            if(cpuScheduler.isParallelEnabled() && pairCount >= 8u){
+                mergeEvals.resize(pairCount);
+                in Vector<VhacdPartition> partsRef = partitions;
+                in Vector<f32> volsRef = hullVols;
+                in Vector<VhacdMergePair> pairsRef = mergePairs;
+                mut Vector<VhacdMergeEval> mEvalsMut = mergeEvals;
+                const f32 hRad = params.hullRadius;
+                const f32 mVolTol = params.mergeVolumeTolerance;
+                const f32 cThresh = params.concavityThreshold;
+                const auto mRes = cpuScheduler.parallelFor(
+                    0u,
+                    pairCount,
+                    2u,
+                    lambda[in partsRef, in volsRef, in pairsRef, in normVolDenom, in invRootDiag, in maxVerts, in hRad, in mustMerge, in mVolTol, in cThresh, mut mEvalsMut](in usize pi) -> void{
+                        Vector<f32x4> localRawVerts;
+                        Vector<f32x4> localSamplePts;
+                        in VhacdMergePair mp = pairsRef[pi];
+                        EvaluateVhacdCandidateMerge(
+                            partsRef[mp.i],
+                            partsRef[mp.j],
+                            volsRef[mp.i],
+                            volsRef[mp.j],
+                            normVolDenom,
+                            invRootDiag,
+                            maxVerts,
+                            hRad,
+                            mustMerge,
+                            mVolTol,
+                            cThresh,
+                            localRawVerts,
+                            localSamplePts,
+                            mEvalsMut[pi]
+                        );
+                    },
+                    CpuTaskOptions()
+                );
+                if(mRes.has_value()){
+                    mergedParallel = true;
+                    for(usize pi = 0u; pi < pairCount; ++pi){
+                        in VhacdMergeEval mev = mergeEvals[pi];
+                        if(!mev.valid)
+                            continue;
+                        if(!foundMerge || mev.mergeScore < bestMergeCost){
+                            foundMerge = true;
+                            bestI = cast<usize>(mergePairs[pi].i);
+                            bestJ = cast<usize>(mergePairs[pi].j);
+                            bestMergeCost = mev.mergeScore;
+                            bestMergedHull = mev.mergedHull;
+                            bestMergedVol = mev.mergedVol;
+                            bestMergedConcavity = mev.mergedConcavity;
+                            bestMergedDeepest = mev.mergedDeepest;
+                        }
                     }
-                    const f32 mergedConcavity = maxDepth * invRootDiag;
+                }
+            }
 
-                    if(!mustMerge && (volCost > params.mergeVolumeTolerance || mergedConcavity > params.concavityThreshold))
+            if(!mergedParallel){
+                for(usize pi = 0u; pi < pairCount; ++pi){
+                    in VhacdMergePair mp = mergePairs[pi];
+                    EvaluateVhacdCandidateMerge(
+                        partitions[mp.i],
+                        partitions[mp.j],
+                        hullVols[mp.i],
+                        hullVols[mp.j],
+                        normVolDenom,
+                        invRootDiag,
+                        maxVerts,
+                        params.hullRadius,
+                        mustMerge,
+                        params.mergeVolumeTolerance,
+                        params.concavityThreshold,
+                        rawVertsScratch,
+                        samplePtsScratch,
+                        serialMergeEval
+                    );
+                    if(!serialMergeEval.valid)
                         continue;
-
-                    const f32 mergeScore = volCost + mergedConcavity;
-                    if(!foundMerge || mergeScore < bestMergeCost){
+                    if(!foundMerge || serialMergeEval.mergeScore < bestMergeCost){
                         foundMerge = true;
-                        bestI = i;
-                        bestJ = j;
-                        bestMergeCost = mergeScore;
-                        bestMergedHull = mergedHull;
-                        bestMergedVol = mergedVol;
-                        bestMergedConcavity = mergedConcavity;
-                        bestMergedDeepest = f32x4(maxDeep, 0.0f);
+                        bestI = cast<usize>(mp.i);
+                        bestJ = cast<usize>(mp.j);
+                        bestMergeCost = serialMergeEval.mergeScore;
+                        bestMergedHull = serialMergeEval.mergedHull;
+                        bestMergedVol = serialMergeEval.mergedVol;
+                        bestMergedConcavity = serialMergeEval.mergedConcavity;
+                        bestMergedDeepest = serialMergeEval.mergedDeepest;
                     }
                 }
             }
@@ -729,7 +1501,8 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 Min(VectorSingle(dst.aabb.lowerBound), VectorSingle(src.aabb.lowerBound)),
                 Max(VectorSingle(dst.aabb.upperBound), VectorSingle(src.aabb.upperBound))
             );
-            dst.volume = ComputeAabbBoxVolume(dst.aabb);
+            dst.volume = bestMergedVol;
+            dst.solidVolume += src.solidVolume;
             dst.concavity = bestMergedConcavity;
             dst.deepestPt = bestMergedDeepest;
             dst.depth = Min(dst.depth, src.depth);
@@ -740,14 +1513,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
 
             const usize lastIdx = partitions.size() - 1u;
             if(bestJ != lastIdx){
-                partitions[bestJ].aabb = partitions[lastIdx].aabb;
-                partitions[bestJ].deepestPt = partitions[lastIdx].deepestPt;
-                partitions[bestJ].volume = partitions[lastIdx].volume;
-                partitions[bestJ].concavity = partitions[lastIdx].concavity;
-                partitions[bestJ].depth = partitions[lastIdx].depth;
-                partitions[bestJ].hasHull = partitions[lastIdx].hasHull;
-                partitions[bestJ].hull = partitions[lastIdx].hull;
-                partitions[bestJ].triangles.swap(partitions[lastIdx].triangles);
+                MoveVhacdPartition(partitions[lastIdx], partitions[bestJ]);
                 hullVols[bestJ] = hullVols[lastIdx];
             }
             partitions.pop_back();
@@ -763,6 +1529,15 @@ Expected<VhacdResult> ComputeConvexDecomposition(
     if(out.hulls.empty())
         return MakeUnexpected(Failure());
     return out;
+}
+
+Expected<VhacdResult> ComputeConvexDecomposition(
+    in Span<f32x4> vertices,
+    in Span<u32> indices,
+    in VhacdParams params
+){
+    CpuTaskScheduler serialScheduler(0u);
+    return ComputeConvexDecompositionWithScheduler(vertices, indices, params, serialScheduler);
 }
 
 

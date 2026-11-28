@@ -26,8 +26,18 @@ class EcsRayCastHit{
     public EntityID entity = s_InvalidEntityId;
 }
 
+class EcsRayCastDoubleHit{
+    public RayCastDoubleHit hit;
+    public EntityID entity = s_InvalidEntityId;
+}
+
 class EcsShapeCastHit{
     public ShapeCastHit hit;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+class EcsShapeCastDoubleHit{
+    public ShapeCastDoubleHit hit;
     public EntityID entity = s_InvalidEntityId;
 }
 
@@ -64,6 +74,35 @@ class RigidBodyComponent{
 }
 
 [arena, reflect]
+class CompoundSubShapeEntry{
+    public ShapeType shapeType = ShapeType::Hull;
+    public f32x4 localPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32 radius = 0.5f;
+    public f32 topRadius = 0.25f;
+    public f32 cylinderHalfHeight = 0.5f;
+    public f32 skinRadius = 0.0f;
+    public f32x4 planeNormalOffset(0.0f, 1.0f, 0.0f, 0.0f);
+    public b8 isBox = true;
+    public f32 density = 1.0f;
+    public b8 overrideMaterial = false;
+    public SurfaceMaterial material;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+    public Vector<f32x4> hullPoints;
+    public AssetRef<ConvexHullAsset> convexHullAsset;
+    public Vector<f32x4> meshVertices;
+    public Vector<u32> meshIndices;
+    public AssetRef<Mesh> meshAsset;
+    public AssetRef<CollisionMeshAsset> collisionMeshAsset;
+    public AssetRef<ChainShapeAsset> chainAsset;
+    public AssetRef<SdfAsset> sdfAsset;
+    public b8 cullBackfaces = false;
+}
+
+[arena, reflect]
 class ColliderShapeEntry{
     public ShapeType shapeType = ShapeType::Hull;
     public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
@@ -77,9 +116,10 @@ class ColliderShapeEntry{
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
-    public u32 categoryBits = 0x00000001u;
-    public u32 maskBits = u32.max;
+    public u64 categoryBits = 1u;
+    public u64 maskBits = u64.max;
     public i32 groupIndex = 0;
+    public u8 broadPhaseLayer = 0u;
     public Name collisionLayer = s_NameNone;
     public u64 userData = 0u;
     public b8 isBox = true;
@@ -88,6 +128,7 @@ class ColliderShapeEntry{
     public b8 enableHitEvents = false;
     public b8 enableSensorEvents = false;
     public b8 enablePreSolveEvents = false;
+    public b8 enablePostSolveEvents = false;
     public b8 invokeContactCreation = false;
     public Vector<f32x4> hullPoints;
     public Vector<f32x4> meshVertices;
@@ -98,6 +139,11 @@ class ColliderShapeEntry{
     public AssetRef<CompoundHullAsset> compoundHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public AssetRef<HeightfieldAsset> heightfieldAsset;
+    public AssetRef<SdfAsset> sdfAsset;
+    public AssetRef<ChainShapeAsset> chainAsset;
+    public AssetRef<CompoundShapeAsset> compoundShapeAsset;
+    public Vector<AssetRef<PhysicsMaterialAsset>> heightfieldMaterialAssets;
+    public Vector<AssetRef<PhysicsMaterialAsset>> chainMaterialAssets;
     public f32 staticFriction = -1.0f;
     public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
@@ -117,10 +163,15 @@ class ColliderShapeEntry{
     public f32 heightfieldThickness = 0.0f;
     public Vector<SurfaceMaterial> heightfieldMaterials;
     public Vector<u16> heightfieldCellMaterialIndices;
-    public b8 isChain = false;
     public Vector<f32x4> chainPoints;
     public b8 chainClosed = false;
     public f32 chainRadius = 0.0f;
+    public Vector<SurfaceMaterial> chainMaterials;
+    public Vector<u16> chainSegmentMaterialIndices;
+    public f32x4 chainGhostStart(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 chainGhostEnd(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 chainHasGhostStart = false;
+    public b8 chainHasGhostEnd = false;
     public b8 heightfieldFlipDiagonal = false;
     public Vector<u8> heightfieldCellHoles;
     public u32 vhacdMaxRecursionDepth = 8u;
@@ -132,6 +183,20 @@ class ColliderShapeEntry{
     public f32 vhacdMergeVolumeTolerance = 0.05f;
     public b8 syncCsgCuts = false;
     public b8 useMeshComponentFallback = false;
+    public Vector<CompoundSubShapeEntry> compoundSubShapes;
+    public ShapeType scaledChildType = ShapeType::Hull;
+    public f32x4 scaledFactor(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 sdfBoundsMin(-0.5f, -0.5f, -0.5f, 0.0f);
+    public f32x4 sdfBoundsMax(0.5f, 0.5f, 0.5f, 0.0f);
+    public u32 sdfDimX = 0u;
+    public u32 sdfDimY = 0u;
+    public u32 sdfDimZ = 0u;
+    public Vector<f32> sdfDistances;
+    public f32 sdfMargin = 0.0f;
+    public f32 sdfPadding = 0.05f;
+    public b8 sdfIsClosed = true;
+    public b8 sdfBuildFromMesh = false;
+    public b8 syncSkinnedMesh = false;
 }
 
 [component("collider")]
@@ -157,6 +222,12 @@ class JointEntry{
     public EntityID bodyEntityB;
     public Name bodyEntityNameA = s_NameNone;
     public Name bodyEntityNameB = s_NameNone;
+    [transient]
+    public EntityID referenceJointEntityA = s_InvalidEntityId;
+    [transient]
+    public EntityID referenceJointEntityB = s_InvalidEntityId;
+    public Name referenceJointEntityNameA = s_NameNone;
+    public Name referenceJointEntityNameB = s_NameNone;
     public u64 userData = 0u;
     public JointSettings settings;
     public Vector<f32x4> pathPoints;
@@ -210,8 +281,21 @@ class PhysicsWorldConfigComponent{
     public b8 interpolateTransforms = false;
     public b8 publishEventsToMessageBus = false;
     public b8 publishContinuousEventsToMessageBus = false;
+    public b8 enableBlockSolver = false;
+    public b8 enableShockPropagation = false;
+    public b8 deterministicMode = false;
+    public b8 enableGlobalCcd = false;
+    public b8 enablePerPointFriction = false;
+    public b8 enableDoublePrecisionPositions = false;
+    public f32 splashImpulseThreshold = 1.5f;
+    public Array<u32, 32u> broadPhaseLayerMasks;
     [transient]
     public b8 dirty = true;
+
+    public PhysicsWorldConfigComponent(){
+        for(usize i = 0u; i < 32u; ++i)
+            this.broadPhaseLayerMasks[i] = u32.max;
+    }
 }
 
 

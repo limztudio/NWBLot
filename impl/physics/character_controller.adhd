@@ -20,6 +20,8 @@ enum<u8> CharacterShapeType{
     Box = 1u,
     Cylinder = 2u,
     Sphere = 3u,
+    ConvexHull = 4u,
+    Compound = 5u,
     kCount
 }
 
@@ -82,6 +84,15 @@ class CharacterControllerDef{
     public BodyId ignoreBodyId;
     [transient]
     public ShapeId ignoreShapeId;
+    [transient]
+    public HullGeometryId customHullGeometryId;
+    [transient]
+    public CompoundGeometryId customCompoundGeometryId;
+    public f32x4 customShapeScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public b8 enableGroundFriction = false;
+    public f32 characterFriction = 0.6f;
+    public f32 characterRestitution = 0.0f;
+    public b8 enableRotationalSweep = true;
     public b8 hitSensors = false;
     public b8 stickToFloor = true;
     public b8 pushDynamicBodies = true;
@@ -92,6 +103,70 @@ class CharacterControllerDef{
     public f32 slopeSlideAcceleration = 9.81f;
     public b8 inheritPlatformVelocity = true;
     public f32x4 up(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
+VectorSingle ComputeValidCharacterScale(in VectorSingle rawScale){
+    f32 sx = rawScale.x;
+    f32 sy = rawScale.y;
+    f32 sz = rawScale.z;
+    if(!IsFinite(VectorSingle(sx)) || Abs(VectorSingle(sx)).x <= 1.0e-4f)
+        sx = 1.0f;
+    if(!IsFinite(VectorSingle(sy)) || Abs(VectorSingle(sy)).x <= 1.0e-4f)
+        sy = 1.0f;
+    if(!IsFinite(VectorSingle(sz)) || Abs(VectorSingle(sz)).x <= 1.0e-4f)
+        sz = 1.0f;
+    return VectorSingle(sx, sy, sz, 0.0f);
+}
+
+b8 CharacterScaleIsUnit(in VectorSingle scaleVec){
+    return Abs(VectorSingle(scaleVec.x - 1.0f)).x <= 1.0e-5f
+        && Abs(VectorSingle(scaleVec.y - 1.0f)).x <= 1.0e-5f
+        && Abs(VectorSingle(scaleVec.z - 1.0f)).x <= 1.0e-5f;
+}
+
+f32 ComputeCharacterAnisotropicFrictionScale(
+    in SurfaceMaterial mat,
+    in VectorSingle shapeRot,
+    in VectorSingle surfNormal,
+    in VectorSingle tangentDir
+){
+    if(mat.anisotropicFriction.w == 0.0f || !IsFinite(VectorSingle(mat.anisotropicFriction).xyz) || !IsFinite(VectorSingle(mat.frictionDirection).xyz))
+        return 1.0f;
+    const VectorSingle tDir = SafeNormalizeVec3(tangentDir - surfNormal * Vector3Dot(tangentDir, surfNormal).x, VectorSingle(0.0f));
+    if(Vector3LengthSq(tDir).x <= 1.0e-10f)
+        return 1.0f;
+    const VectorSingle dirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(mat.frictionDirection, 0.0f), shapeRot), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle proj = dirW - surfNormal * Vector3Dot(dirW, surfNormal).x;
+    const b8 hasTanProj = Vector3LengthSq(proj).x > 1.0e-10f;
+    const VectorSingle afVec = Max(VectorSingle(mat.anisotropicFriction.x, mat.anisotropicFriction.y, mat.anisotropicFriction.z, 0.0f), VectorSingle(0.0f));
+    if(Abs(VectorSingle(afVec.z - 1.0f)).x <= 1.0e-6f && hasTanProj){
+        const VectorSingle outT1 = SafeNormalizeVec3(proj, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+        const VectorSingle outT2 = SafeNormalizeVec3(Cross(surfNormal, outT1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        const f32 c1 = Vector3Dot(tDir, outT1).x;
+        const f32 c2 = Vector3Dot(tDir, outT2).x;
+        return Sqrt(afVec.x * afVec.x * c1 * c1 + afVec.y * afVec.y * c2 * c2);
+    }
+    VectorSingle refUp(0.0f, 1.0f, 0.0f, 0.0f);
+    if(Abs(Vector3Dot(dirW, refUp)).x > 0.99f)
+        refUp = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+    const VectorSingle e2 = SafeNormalizeVec3(Cross(dirW, refUp), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+    const VectorSingle e1 = SafeNormalizeVec3(Cross(e2, dirW), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const f32 c0 = Vector3Dot(tDir, dirW).x;
+    const f32 c1 = Vector3Dot(tDir, e1).x;
+    const f32 c2 = Vector3Dot(tDir, e2).x;
+    return Sqrt(afVec.x * afVec.x * c0 * c0 + afVec.y * afVec.y * c1 * c1 + afVec.z * afVec.z * c2 * c2);
+}
+
+VectorSingle ComputeBodyWorldShapeRotation(in PhysicsWorld world, in BodyId bodyId, in Shape shape){
+    VectorSingle rot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(bodyId.valid() && world.isValidBody(bodyId)){
+        const Expected<Transform3D> xfRes = world.tryGetBodyTransform(bodyId);
+        if(xfRes.has_value())
+            rot = SafeNormalizeQuat(VectorSingle(xfRes.value().rotation));
+    }
+    if(shape.hasLocalTransform())
+        rot = SafeNormalizeQuat(QuaternionMultiply(rot, VectorSingle(shape.localTransform.rotation)));
+    return rot;
 }
 
 VectorSingle SolveCharacterMultiPlaneLcp(in Span<f32x4> planeNormals, in VectorSingle desiredVec){
@@ -163,6 +238,7 @@ class CharacterController{
     public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 groundNormal(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 groundVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 groundPoint(0.0f, 0.0f, 0.0f, 0.0f);
@@ -170,6 +246,7 @@ class CharacterController{
     public BodyId groundBodyId;
     public ShapeId groundShapeId;
     public u32 groundTriangleIndex = s_NullIndex;
+    public u32 groundSubShapeIndex = s_NullIndex;
     public SurfaceMaterial groundMaterial;
     public b8 hitCeiling = false;
     public b8 isCrushed = false;
@@ -179,9 +256,23 @@ class CharacterController{
     public Vector<CharacterContactInfo> activeContacts;
     public Vector<CharacterControllerEvent> stepEvents;
     private f32x4 m_groundConveyorVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    private f32x4 m_prevProxyRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    private b8 m_hasPrevProxyRotation = false;
+    private u32 m_activeGravityOverrideEpoch = 0u;
+    private f32x4 m_customLocalMin(0.0f, 0.0f, 0.0f, 0.0f);
+    private f32x4 m_customLocalMax(0.0f, 0.0f, 0.0f, 0.0f);
+    private b8 m_hasCustomLocalBounds = false;
+    private CharacterShapeType m_cachedCustomShapeType = CharacterShapeType::Capsule;
+    private HullGeometryId m_cachedCustomHullId;
+    private CompoundGeometryId m_cachedCustomCompId;
+    private f32x4 m_cachedCustomScale(1.0f, 1.0f, 1.0f, 0.0f);
+    private f32x4 m_groundShapeRot(0.0f, 0.0f, 0.0f, 1.0f);
     private Vector<ShapeOverlapHit> m_scratchHits;
+    private Vector<ShapeOverlapHit> m_scratchLeafHits;
     private Vector<u32> m_scratchCandShapes;
     private Vector<CharacterContactInfo> m_scratchStepContacts;
+    private Vector<ShapeProxy> m_scratchLeafProxies;
+    private Vector<Transform3D> m_scratchLeafTransforms;
     private FixedVector<f32x4, 8u> m_lastBlockingNormals;
     private Optional<CharacterContactValidateCallback> m_onContactValidateCallback;
     private Optional<CharacterContactAddedCallback> m_onContactAddedCallback;
@@ -202,6 +293,11 @@ class CharacterController{
 
     public void clearOnContactAddedCallback(){
         this.m_onContactAddedCallback.reset();
+    }
+
+    public void copyCallbacksFrom(in CharacterController src){
+        this.m_onContactValidateCallback = src.m_onContactValidateCallback;
+        this.m_onContactAddedCallback = src.m_onContactAddedCallback;
     }
 
     public void applyKnockback(in VectorSingle impulse){
@@ -225,6 +321,9 @@ class CharacterController{
         if(this.def.halfHeight < 0.0f)
             this.def.halfHeight = 0.0f;
         this.def.boxHalfExtents = f32x4(Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f)), 0.0f);
+        this.def.customShapeScale = f32x4(ComputeValidCharacterScale(VectorSingle(this.def.customShapeScale)), 0.0f);
+        this.def.characterFriction = Max(0.0f, this.def.characterFriction);
+        this.def.characterRestitution = Clamp(this.def.characterRestitution, 0.0f, 1.0f);
         if(this.def.skinWidth < 0.002f)
             this.def.skinWidth = 0.002f;
         if(this.def.maxCollisionIterations == 0u)
@@ -233,6 +332,7 @@ class CharacterController{
             this.def.maxConstraintIterations = 1u;
         const VectorSingle upVec = SafeNormalizeVec3(VectorSingle(this.def.up), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         this.def.up = f32x4(upVec, 0.0f);
+        this.m_hasCustomLocalBounds = false;
         this.m_cachedSlopeAngleRad = -1.0f;
         this.syncWalkableCos();
     }
@@ -245,8 +345,21 @@ class CharacterController{
         return VectorSingle(this.m_groundConveyorVelocity);
     }
 
-    public void finalizeSnapshotRestore(in VectorSingle groundConveyorVel){
+    public VectorSingle snapshotPrevProxyRotation()const{
+        return VectorSingle(this.m_prevProxyRotation);
+    }
+
+    public b8 snapshotHasPrevProxyRotation()const{
+        return this.m_hasPrevProxyRotation;
+    }
+
+    public void finalizeSnapshotRestore(in VectorSingle groundConveyorVel, in VectorSingle prevProxyRot, in b8 hasPrevProxyRot){
         this.m_groundConveyorVelocity = f32x4(groundConveyorVel, 0.0f);
+        this.m_prevProxyRotation = f32x4(SafeNormalizeQuat(prevProxyRot));
+        this.m_hasPrevProxyRotation = hasPrevProxyRot;
+        this.m_activeGravityOverrideEpoch = 0u;
+        this.m_hasCustomLocalBounds = false;
+        this.m_groundShapeRot = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         this.m_cachedSlopeAngleRad = -1.0f;
         this.syncWalkableCos();
         this.stepEvents.clear();
@@ -269,6 +382,7 @@ class CharacterController{
         this.position = f32x4(startPosition, 0.0f);
         this.rotation = f32x4(SafeNormalizeQuat(startRotation));
         this.linearVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.angularVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.groundNormal = this.def.up;
         this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.groundPoint = f32x4(startPosition, 0.0f);
@@ -276,11 +390,17 @@ class CharacterController{
         this.groundBodyId = BodyId();
         this.groundShapeId = ShapeId();
         this.groundTriangleIndex = s_NullIndex;
+        this.groundSubShapeIndex = s_NullIndex;
         this.groundMaterial = SurfaceMaterial();
+        this.m_groundShapeRot = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         this.hitCeiling = false;
         this.isCrushed = false;
         this.platformInheritedVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.m_prevProxyRotation = f32x4(this.effectiveProxyRotation());
+        this.m_hasPrevProxyRotation = true;
+        this.m_activeGravityOverrideEpoch = 0u;
+        this.m_hasCustomLocalBounds = false;
         this.prevGroundTransform = Transform3D();
         this.hasPrevGroundTransform = false;
         this.activeContacts.clear();
@@ -288,25 +408,7 @@ class CharacterController{
     }
 
     private VectorSingle effectiveProxyRotation()const{
-        const VectorSingle baseRot = SafeNormalizeQuat(VectorSingle(this.rotation));
-        const VectorSingle upW = SafeNormalizeVec3(this.upDirection(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        const VectorSingle rotY = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), baseRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        const f32 cosA = Clamp(Vector3Dot(rotY, upW).x, -1.0f, 1.0f);
-        if(cosA >= 0.99999f)
-            return baseRot;
-        VectorSingle alignQ(0.0f, 0.0f, 0.0f, 1.0f);
-        if(cosA <= -0.99999f){
-            VectorSingle ortho = Cross(rotY, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-            if(Vector3LengthSq(ortho).x <= 1.0e-6f)
-                ortho = Cross(rotY, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-            ortho = SafeNormalizeVec3(ortho, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-            alignQ = VectorSingle(ortho.x, ortho.y, ortho.z, 0.0f);
-        }
-        else{
-            const VectorSingle axis = Cross(rotY, upW);
-            alignQ = SafeNormalizeQuat(VectorSingle(axis.x, axis.y, axis.z, 1.0f + cosA));
-        }
-        return SafeNormalizeQuat(QuaternionMultiply(alignQ, baseRot));
+        return this.computeEffectiveProxyRotationFor(VectorSingle(this.rotation));
     }
 
     public VectorSingle upDirection()const{
@@ -314,6 +416,8 @@ class CharacterController{
     }
 
     public f32 footHalfHeight()const{
+        if((this.def.shapeType == CharacterShapeType::ConvexHull || this.def.shapeType == CharacterShapeType::Compound) && this.m_hasCustomLocalBounds)
+            return Max(0.05f, 0.5f * (this.m_customLocalMax.y - this.m_customLocalMin.y));
         if(this.def.shapeType == CharacterShapeType::Cylinder)
             return Max(0.01f, this.def.halfHeight);
         if(this.def.shapeType == CharacterShapeType::Sphere)
@@ -324,6 +428,8 @@ class CharacterController{
     }
 
     public f32 horizontalExtent()const{
+        if((this.def.shapeType == CharacterShapeType::ConvexHull || this.def.shapeType == CharacterShapeType::Compound) && this.m_hasCustomLocalBounds)
+            return Max(0.05f, Max(0.5f * (this.m_customLocalMax.x - this.m_customLocalMin.x), 0.5f * (this.m_customLocalMax.z - this.m_customLocalMin.z)));
         if(this.def.shapeType == CharacterShapeType::Box)
             return Max(Max(0.05f, this.def.boxHalfExtents.x), Max(0.05f, this.def.boxHalfExtents.z));
         return this.def.radius;
@@ -336,22 +442,41 @@ class CharacterController{
         return Vector3Dot(SafeNormalizeVec3(normal, this.upDirection()), this.upDirection()).x >= minCos - 1.0e-4f;
     }
 
-    private ShapeProxyView makeShapeProxyView(in f32 extraRadius, mut Array<f32x3u, 8u> outPts)const{
-        const f32 extra = Max(0.0f, extraRadius);
-        if(this.def.shapeType == CharacterShapeType::Sphere){
-            outPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
-            return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 1u), this.def.radius + extra);
+    private b8 isRotationalSweepRelevant(in VectorSingle startRot, in VectorSingle endRot)const{
+        if(!this.def.enableRotationalSweep)
+            return false;
+        if(this.def.shapeType == CharacterShapeType::Sphere)
+            return false;
+        const VectorSingle qStart = SafeNormalizeQuat(startRot);
+        const VectorSingle qEnd = SafeNormalizeQuat(endRot);
+        const f32 qDot = Abs(Vector4Dot(qStart, qEnd)).x;
+        if(qDot >= 1.0f - 1.0e-6f)
+            return false;
+        if(this.def.shapeType == CharacterShapeType::Capsule || this.def.shapeType == CharacterShapeType::Cylinder){
+            const VectorSingle yStart = Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), qStart);
+            const VectorSingle yEnd = Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), qEnd);
+            if(Vector3Dot(yStart, yEnd).x >= 1.0f - 1.0e-6f)
+                return false;
         }
-        if(this.def.shapeType == CharacterShapeType::Cylinder){
+        return true;
+    }
+
+    private ShapeProxyView makePrimitiveProxyViewForDef(in CharacterControllerDef inDef, in f32 extraRadius, mut Array<f32x3u, 8u> outPts)const{
+        const f32 extra = Max(0.0f, extraRadius);
+        if(inDef.shapeType == CharacterShapeType::Sphere){
+            outPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+            return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 1u), inDef.radius + extra);
+        }
+        if(inDef.shapeType == CharacterShapeType::Cylinder){
             ShapeProxyView view;
             view.kind = ProxyKind::Cylinder;
-            view.param0 = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
-            view.param1 = f32x4(Max(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
+            view.param0 = f32x4(0.0f, 0.0f, 0.0f, inDef.radius);
+            view.param1 = f32x4(Max(0.01f, inDef.halfHeight), 0.0f, 0.0f, 0.0f);
             view.radius = extra;
             return view;
         }
-        if(this.def.shapeType == CharacterShapeType::Box){
-            const VectorSingle he = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
+        if(inDef.shapeType == CharacterShapeType::Box){
+            const VectorSingle he = Max(VectorSingle(inDef.boxHalfExtents), VectorSingle(0.05f));
             usize ci = 0u;
             for(u32 iz = 0u; iz < 2u; ++iz){
                 f32 sz = -he.z;
@@ -369,9 +494,143 @@ class CharacterController{
             }
             return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 8u), extra);
         }
-        outPts[0u] = f32x3u(0.0f, -this.def.halfHeight, 0.0f);
-        outPts[1u] = f32x3u(0.0f, this.def.halfHeight, 0.0f);
-        return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 2u), this.def.radius + extra);
+        outPts[0u] = f32x3u(0.0f, -inDef.halfHeight, 0.0f);
+        outPts[1u] = f32x3u(0.0f, inDef.halfHeight, 0.0f);
+        return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 2u), inDef.radius + extra);
+    }
+
+    private b8 buildShapeLeavesForDef(
+        in PhysicsWorld world,
+        in CharacterControllerDef inDef,
+        in f32 extraRadius,
+        mut Array<f32x3u, 8u> outInlinePts,
+        mut ShapeProxyView outSingleView,
+        mut Vector<ShapeProxy> outMultiProxies,
+        mut Vector<Transform3D> outMultiTransforms
+    )const{
+        outMultiProxies.clear();
+        outMultiTransforms.clear();
+        const f32 extra = Max(0.0f, extraRadius);
+        const VectorSingle scaleVec = ComputeValidCharacterScale(VectorSingle(inDef.customShapeScale));
+        if(inDef.shapeType == CharacterShapeType::ConvexHull && world.isHullGeometryValid(inDef.customHullGeometryId)){
+            in HullShape hull = world.m_hullShapes[inDef.customHullGeometryId.index];
+            outSingleView = MakeHullProxyView(hull);
+            if(!CharacterScaleIsUnit(scaleVec))
+                outSingleView = MakeScaledProxyView(outSingleView, scaleVec);
+            outSingleView.radius += extra;
+            return false;
+        }
+        if(inDef.shapeType == CharacterShapeType::Compound && world.isCompoundGeometryValid(inDef.customCompoundGeometryId)){
+            Shape cShape;
+            cShape.type = ShapeType::Compound;
+            cShape.geometryIndex = inDef.customCompoundGeometryId.index;
+            world.collectConvexQueryLeavesRecursive(cShape, Transform3D(), scaleVec, 0u, outMultiProxies, outMultiTransforms);
+            if(!outMultiProxies.empty()){
+                for(usize li = 0u; li < outMultiProxies.size(); ++li)
+                    outMultiProxies[li].radius += extra;
+                return true;
+            }
+        }
+        outSingleView = this.makePrimitiveProxyViewForDef(inDef, extra, outInlinePts);
+        return false;
+    }
+
+    private void ensureCustomLocalBounds(in PhysicsWorld world){
+        if(this.def.shapeType != CharacterShapeType::ConvexHull && this.def.shapeType != CharacterShapeType::Compound){
+            this.m_hasCustomLocalBounds = false;
+            return;
+        }
+        if(
+            this.m_hasCustomLocalBounds
+            && this.m_cachedCustomShapeType == this.def.shapeType
+            && this.m_cachedCustomHullId.index == this.def.customHullGeometryId.index
+            && this.m_cachedCustomHullId.generation == this.def.customHullGeometryId.generation
+            && this.m_cachedCustomHullId.worldIndex == this.def.customHullGeometryId.worldIndex
+            && this.m_cachedCustomCompId.index == this.def.customCompoundGeometryId.index
+            && this.m_cachedCustomCompId.generation == this.def.customCompoundGeometryId.generation
+            && this.m_cachedCustomCompId.worldIndex == this.def.customCompoundGeometryId.worldIndex
+            && this.m_cachedCustomScale.x == this.def.customShapeScale.x
+            && this.m_cachedCustomScale.y == this.def.customShapeScale.y
+            && this.m_cachedCustomScale.z == this.def.customShapeScale.z
+        )
+            return;
+
+        Array<f32x3u, 8u> inlinePts;
+        ShapeProxyView singleView;
+        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, 0.0f, inlinePts, singleView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        VectorSingle bMin(s_MaxF32);
+        VectorSingle bMax(-s_MaxF32);
+        if(useMulti){
+            for(usize li = 0u; li < this.m_scratchLeafProxies.size(); ++li){
+                VectorSingle lMin(0.0f);
+                VectorSingle lMax(0.0f);
+                in Transform3D lxf = this.m_scratchLeafTransforms[li];
+                ComputeShapeProxyViewWorldAabbValues(MakeShapeProxyView(this.m_scratchLeafProxies[li]), VectorSingle(lxf.position), SafeNormalizeQuat(VectorSingle(lxf.rotation)), 0.0f, lMin, lMax);
+                bMin = Min(bMin, lMin);
+                bMax = Max(bMax, lMax);
+            }
+        }
+        else{
+            ComputeShapeProxyViewWorldAabbValues(singleView, VectorSingle(0.0f), QuaternionIdentity(), 0.0f, bMin, bMax);
+        }
+        if(bMin.x <= bMax.x && IsFinite(bMin.xyz) && IsFinite(bMax.xyz)){
+            this.m_customLocalMin = f32x4(bMin, 0.0f);
+            this.m_customLocalMax = f32x4(bMax, 0.0f);
+            this.m_hasCustomLocalBounds = true;
+            this.m_cachedCustomShapeType = this.def.shapeType;
+            this.m_cachedCustomHullId = this.def.customHullGeometryId;
+            this.m_cachedCustomCompId = this.def.customCompoundGeometryId;
+            this.m_cachedCustomScale = this.def.customShapeScale;
+        }
+        else{
+            this.m_hasCustomLocalBounds = false;
+        }
+    }
+
+    private VectorSingle computeLocalHalfExtent(in b8 useMulti, in ShapeProxyView skinView, in Span<ShapeProxy> leafSkins, in Span<Transform3D> leafXfs, in VectorSingle effRot)const{
+        VectorSingle bMin(s_MaxF32);
+        VectorSingle bMax(-s_MaxF32);
+        if(useMulti){
+            for(usize li = 0u; li < leafSkins.size(); ++li){
+                VectorSingle lp(0.0f);
+                VectorSingle lr(0.0f, 0.0f, 0.0f, 1.0f);
+                ComposeTransformValues(VectorSingle(0.0f), effRot, VectorSingle(leafXfs[li].position), SafeNormalizeQuat(VectorSingle(leafXfs[li].rotation)), lp, lr);
+                VectorSingle lMin(0.0f);
+                VectorSingle lMax(0.0f);
+                ComputeShapeProxyViewWorldAabbValues(MakeShapeProxyView(leafSkins[li]), lp, lr, 0.0f, lMin, lMax);
+                bMin = Min(bMin, lMin);
+                bMax = Max(bMax, lMax);
+            }
+        }
+        else{
+            ComputeShapeProxyViewWorldAabbValues(skinView, VectorSingle(0.0f), effRot, 0.0f, bMin, bMax);
+        }
+        if(bMin.x > bMax.x)
+            return VectorSingle(this.def.radius + this.def.skinWidth);
+        return Max(Abs(bMin), Abs(bMax)) + VectorSingle(0.01f, 0.01f, 0.01f, 0.0f);
+    }
+
+    private b8 validateContactHit(
+        in PhysicsWorld world,
+        in ShapeId shapeId,
+        in u32 triIdx,
+        in VectorSingle point,
+        in VectorSingle outNormal,
+        in f32 penDepth
+    )const{
+        if(!this.m_onContactValidateCallback.has_value())
+            return true;
+        CharacterContactInfo valInfo;
+        valInfo.shapeId = shapeId;
+        valInfo.triangleIndex = triIdx;
+        const Expected<BodyId> vbRes = world.tryGetShapeBody(shapeId);
+        if(vbRes.has_value())
+            valInfo.bodyId = vbRes.value();
+        valInfo.point = f32x4(point, 0.0f);
+        valInfo.normal = f32x4(outNormal, 0.0f);
+        valInfo.penetrationDepth = penDepth;
+        valInfo.isWalkable = this.isWalkableNormal(outNormal);
+        return this.m_onContactValidateCallback.value()(valInfo);
     }
 
     private void ensureCandidateCacheForAabb(
@@ -403,7 +662,10 @@ class CharacterController{
 
     private void gatherOverlapsWithCache(
         in PhysicsWorld world,
+        in b8 useMulti,
         in ShapeProxyView skinView,
+        in Span<ShapeProxy> leafSkins,
+        in Span<Transform3D> leafXfs,
         in VectorSingle effRot,
         in VectorSingle halfExt,
         in VectorSingle testPos,
@@ -412,14 +674,100 @@ class CharacterController{
         mut VectorSingle ioCandMax
     ){
         this.ensureCandidateCacheForAabb(world, testPos - halfExt, testPos + halfExt, ioCacheValid, ioCandMin, ioCandMax);
-        const Transform3D xf(testPos, effRot);
-        world.overlapShapeDetailedInCandidates(skinView, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, Span<u32>(this.m_scratchCandShapes), this.m_scratchHits);
+        if(!useMulti){
+            const Transform3D xf(testPos, effRot);
+            world.overlapShapeDetailedInCandidates(skinView, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, Span<u32>(this.m_scratchCandShapes), this.m_scratchHits);
+            return;
+        }
+        this.m_scratchHits.clear();
+        for(usize li = 0u; li < leafSkins.size(); ++li){
+            VectorSingle lPos(0.0f);
+            VectorSingle lRot(0.0f, 0.0f, 0.0f, 1.0f);
+            ComposeTransformValues(testPos, effRot, VectorSingle(leafXfs[li].position), SafeNormalizeQuat(VectorSingle(leafXfs[li].rotation)), lPos, lRot);
+            world.overlapShapeDetailedInCandidates(MakeShapeProxyView(leafSkins[li]), Transform3D(lPos, lRot), this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, Span<u32>(this.m_scratchCandShapes), this.m_scratchLeafHits);
+            for(usize hi = 0u; hi < this.m_scratchLeafHits.size(); ++hi)
+                this.m_scratchHits.push_back(this.m_scratchLeafHits[hi]);
+        }
+    }
+
+    private f32 computeRotationalQueryBound(
+        in b8 useMulti,
+        in ShapeProxyView baseView,
+        in Span<ShapeProxy> leafBases,
+        in Span<Transform3D> leafXfs
+    )const{
+        if(!useMulti)
+            return ComputeProxyViewBoundingRadius(baseView, VectorSingle(0.0f)) + this.def.skinWidth + 0.02f;
+        f32 maxR = 0.05f;
+        for(usize li = 0u; li < leafBases.size(); ++li){
+            const f32 offset = Vector3Length(VectorSingle(leafXfs[li].position, 0.0f)).x;
+            const f32 lr = ComputeProxyViewBoundingRadius(MakeShapeProxyView(leafBases[li]), VectorSingle(0.0f));
+            maxR = Max(maxR, offset + lr);
+        }
+        return maxR + this.def.skinWidth + 0.02f;
     }
 
     private ShapeCastHit castWithCache(
         in PhysicsWorld world,
+        in b8 useMulti,
         in ShapeProxyView baseView,
-        in VectorSingle effRot,
+        in Span<ShapeProxy> leafBases,
+        in Span<Transform3D> leafXfs,
+        in VectorSingle startRot,
+        in VectorSingle endRot,
+        in b8 requestRotation,
+        in VectorSingle halfExt,
+        in VectorSingle fromPos,
+        in VectorSingle delta,
+        in Span<u32> excludedShapeIndices,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax
+    ){
+        const b8 doRot = requestRotation && this.isRotationalSweepRelevant(startRot, endRot);
+        VectorSingle queryHalfExt = halfExt;
+        if(doRot){
+            const f32 rotR = this.computeRotationalQueryBound(useMulti, baseView, leafBases, leafXfs);
+            queryHalfExt = Max(queryHalfExt, VectorSingle(rotR, rotR, rotR, 0.0f));
+        }
+        const VectorSingle qMin = Min(fromPos, fromPos + delta) - queryHalfExt;
+        const VectorSingle qMax = Max(fromPos, fromPos + delta) + queryHalfExt;
+        this.ensureCandidateCacheForAabb(world, qMin, qMax, ioCacheValid, ioCandMin, ioCandMax);
+        ShapeCastInput input;
+        input.originTransform = Transform3D(fromPos, startRot);
+        input.translation = f32x4(delta, 0.0f);
+        input.endRotation = f32x4(endRot);
+        input.hasRotation = doRot;
+        input.radius = this.def.skinWidth;
+        input.filter = this.def.filter;
+        input.ignoreBodyId = this.def.ignoreBodyId;
+        input.ignoreShapeId = this.def.ignoreShapeId;
+        input.hitSensors = this.def.hitSensors;
+        input.useCustomFilter = true;
+        if(!useMulti)
+            return world.shapeCastClosestInCandidates(baseView, input, Span<u32>(this.m_scratchCandShapes), excludedShapeIndices);
+
+        ShapeCastHit best;
+        best.fraction = 1.0f;
+        best.hit = false;
+        for(usize li = 0u; li < leafBases.size(); ++li){
+            const ShapeCastInput subIn = world.makeSubShapeCastInput(input, leafXfs[li]);
+            const ShapeCastHit cand = world.shapeCastClosestInCandidates(MakeShapeProxyView(leafBases[li]), subIn, Span<u32>(this.m_scratchCandShapes), excludedShapeIndices);
+            if(cand.hit && (!best.hit || cand.fraction < best.fraction))
+                best = cand;
+        }
+        return best;
+    }
+
+    private ShapeCastHit castValidatedWithCache(
+        in PhysicsWorld world,
+        in b8 useMulti,
+        in ShapeProxyView baseView,
+        in Span<ShapeProxy> leafBases,
+        in Span<Transform3D> leafXfs,
+        in VectorSingle startRot,
+        in VectorSingle endRot,
+        in b8 requestRotation,
         in VectorSingle halfExt,
         in VectorSingle fromPos,
         in VectorSingle delta,
@@ -427,27 +775,32 @@ class CharacterController{
         mut VectorSingle ioCandMin,
         mut VectorSingle ioCandMax
     ){
-        const VectorSingle qMin = Min(fromPos, fromPos + delta) - halfExt;
-        const VectorSingle qMax = Max(fromPos, fromPos + delta) + halfExt;
-        this.ensureCandidateCacheForAabb(world, qMin, qMax, ioCacheValid, ioCandMin, ioCandMax);
-        ShapeCastInput input;
-        input.originTransform = Transform3D(fromPos, effRot);
-        input.translation = f32x4(delta, 0.0f);
-        input.radius = this.def.skinWidth;
-        input.filter = this.def.filter;
-        input.ignoreBodyId = this.def.ignoreBodyId;
-        input.ignoreShapeId = this.def.ignoreShapeId;
-        input.hitSensors = this.def.hitSensors;
-        input.hasRotation = false;
-        input.useCustomFilter = true;
-        return world.shapeCastClosestInCandidates(baseView, input, Span<u32>(this.m_scratchCandShapes));
-    }
+        if(!this.m_onContactValidateCallback.has_value())
+            return this.castWithCache(world, useMulti, baseView, leafBases, leafXfs, startRot, endRot, requestRotation, halfExt, fromPos, delta, Span<u32>(), ioCacheValid, ioCandMin, ioCandMax);
 
-    private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius){
-        Array<f32x3u, 8u> pts;
-        const ShapeProxyView view = this.makeShapeProxyView(extraRadius, pts);
-        const Transform3D xf(testPos, this.effectiveProxyRotation());
-        world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchHits);
+        FixedVector<u32, 16u> excludedShapes;
+        const VectorSingle up = this.upDirection();
+        for(u32 attempt = 0u; attempt < 16u; ++attempt){
+            const ShapeCastHit hit = this.castWithCache(world, useMulti, baseView, leafBases, leafXfs, startRot, endRot, requestRotation, halfExt, fromPos, delta, Span<u32>(excludedShapes.data(), excludedShapes.size()), ioCacheValid, ioCandMin, ioCandMax);
+            if(!hit.hit)
+                return hit;
+            const VectorSingle hitN = SafeNormalizeVec3(VectorSingle(hit.normal), up);
+            if(this.validateContactHit(world, hit.shapeId, hit.triangleIndex, VectorSingle(hit.point), hitN, 0.0f))
+                return hit;
+            if(!hit.shapeId.valid() || excludedShapes.size() >= 16u)
+                return ShapeCastHit();
+            b8 already = false;
+            for(usize ei = 0u; ei < excludedShapes.size(); ++ei){
+                if(excludedShapes[ei] == hit.shapeId.index){
+                    already = true;
+                    break;
+                }
+            }
+            if(already)
+                return ShapeCastHit();
+            excludedShapes.push_back(hit.shapeId.index);
+        }
+        return ShapeCastHit();
     }
 
     private void recordContactTo(
@@ -457,6 +810,7 @@ class CharacterController{
         in VectorSingle point,
         in VectorSingle outNormal,
         in f32 depth,
+        in b8 fireAddedCallback,
         mut Vector<CharacterContactInfo> dstContacts
     )const{
         for(usize i = 0u; i < dstContacts.size(); ++i){
@@ -465,8 +819,6 @@ class CharacterController{
                 dstContacts[i].normal = f32x4(outNormal, 0.0f);
                 dstContacts[i].penetrationDepth = Max(dstContacts[i].penetrationDepth, depth);
                 dstContacts[i].isWalkable = this.isWalkableNormal(outNormal);
-                if(this.m_onContactAddedCallback.has_value())
-                    this.m_onContactAddedCallback.value()(dstContacts[i]);
                 return;
             }
         }
@@ -480,48 +832,99 @@ class CharacterController{
         hitInfo.normal = f32x4(outNormal, 0.0f);
         hitInfo.penetrationDepth = depth;
         hitInfo.isWalkable = this.isWalkableNormal(outNormal);
-        if(this.m_onContactAddedCallback.has_value())
+        if(fireAddedCallback && this.m_onContactAddedCallback.has_value())
             this.m_onContactAddedCallback.value()(hitInfo);
         dstContacts.push_back(hitInfo);
     }
 
-    private void pushDynamicBody(mut PhysicsWorld world, in ShapeId shapeId, in VectorSingle hitPt, in VectorSingle outNormal, in VectorSingle approachVel, in f32 dt){
-        if(!this.def.pushDynamicBodies || dt <= 0.0f)
-            return;
+    private f32 computeCombinedContactRestitution(in PhysicsWorld world, in ShapeId shapeId, in u32 triIdx, in u32 subShapeIdx)const{
+        if(!shapeId.valid() || !world.isValidShape(shapeId))
+            return Clamp(this.def.characterRestitution, 0.0f, 1.0f);
+        in Shape hitShape = world.m_shapes[shapeId.index];
+        const SurfaceMaterial otherMat = world.resolveShapeContactMaterial(hitShape, triIdx, subShapeIdx);
+        const MaterialCombineMode mode = ResolveMaterialCombineMode(MaterialCombineMode::Max, otherMat.restitutionCombineMode, MaterialCombineMode::Max);
+        return Clamp(CombineMaterialWithMode(Clamp(this.def.characterRestitution, 0.0f, 1.0f), Max(0.0f, otherMat.restitution), mode), 0.0f, 1.0f);
+    }
+
+    private f32 pushDynamicBody(
+        in ShapeId shapeId,
+        in VectorSingle hitPt,
+        in VectorSingle outNormal,
+        in VectorSingle approachVel,
+        in f32 combinedRestitution,
+        in f32 restitutionThreshold,
+        in f32 dt,
+        in b8 applyPushImpulse,
+        mut PhysicsWorld world
+    ){
+        const f32 vC_n = Vector3Dot(approachVel, outNormal).x;
         const Expected<BodyId> bodyRes = world.tryGetShapeBody(shapeId);
-        if(!bodyRes.has_value())
-            return;
+        if(!bodyRes.has_value()){
+            if(combinedRestitution > 0.0f && -vC_n > restitutionThreshold)
+                return combinedRestitution * (-vC_n);
+            return 0.0f;
+        }
         const BodyId otherBody = bodyRes.value();
-        const Expected<BodyType> typeRes = world.tryGetBodyType(otherBody);
-        if(!typeRes.has_value() || typeRes.value() != BodyType::Dynamic)
-            return;
-        VectorSingle bodyVelAtHit(0.0f);
-        const Expected<f32x4> lvRes = world.tryGetLinearVelocity(otherBody);
-        if(lvRes.has_value())
-            bodyVelAtHit = VectorSingle(lvRes.value());
-        const Expected<f32x4> avRes = world.tryGetAngularVelocity(otherBody);
-        const Expected<Transform3D> xfRes = world.tryGetBodyTransform(otherBody);
-        if(avRes.has_value() && xfRes.has_value())
-            bodyVelAtHit = bodyVelAtHit + Cross(VectorSingle(avRes.value()), hitPt - VectorSingle(xfRes.value().position));
-        const f32 approachSpeed = -Vector3Dot(approachVel - bodyVelAtHit, outNormal).x;
-        if(approachSpeed <= 0.0f)
-            return;
-        const Expected<f32> massRes = world.tryGetBodyMass(otherBody);
-        f32 otherMass = 1.0f;
-        if(massRes.has_value() && massRes.value() > 0.0f)
-            otherMass = massRes.value();
-        const f32 reducedMass = (this.def.mass * otherMass) / Max(1.0e-4f, this.def.mass + otherMass);
-        const f32 desiredImpulse = reducedMass * approachSpeed;
+        if(!world.isValidBody(otherBody)){
+            if(combinedRestitution > 0.0f && -vC_n > restitutionThreshold)
+                return combinedRestitution * (-vC_n);
+            return 0.0f;
+        }
+
+        in Body otherBodyRec = world.m_bodies[otherBody.index];
+        if(otherBodyRec.type == BodyType::Static){
+            if(combinedRestitution > 0.0f && -vC_n > restitutionThreshold)
+                return combinedRestitution * (-vC_n);
+            return 0.0f;
+        }
+
+        in BodySim bSim = world.m_solverSets[otherBodyRec.setIndex].sims[otherBodyRec.localIndex];
+        in BodyState bState = world.m_solverSets[otherBodyRec.setIndex].states[otherBodyRec.localIndex];
+        const VectorSingle r = hitPt - bSim.center();
+        const VectorSingle bodyVelAtHit = VectorSingle(bState.linearVelocity) + Cross(VectorSingle(bState.angularVelocity), r);
+        const f32 vB_n = Vector3Dot(bodyVelAtHit, outNormal).x;
+
+        if(otherBodyRec.type != BodyType::Dynamic){
+            if(combinedRestitution > 0.0f && (vB_n - vC_n) > restitutionThreshold)
+                return vB_n + combinedRestitution * (vB_n - vC_n);
+            return vB_n;
+        }
+
+        const f32 approachSpeed = vB_n - vC_n;
+        if(approachSpeed <= 0.0f || !this.def.pushDynamicBodies || !applyPushImpulse || dt <= 0.0f)
+            return vB_n;
+
+        f32 invMB_lin = 0.0f;
+        if((otherBodyRec.flags & 0x07u) != 0x07u)
+            invMB_lin = bSim.invMass();
+        const VectorSingle rn = Cross(r, outNormal);
+        const MatrixSingle invIWorld = Matrix3MaskAngularLocks(Matrix3FromSymMat3(bSim.invInertiaWorld), otherBodyRec.flags);
+        const f32 invMB_ang = Max(0.0f, Vector3Dot(rn, Matrix3MulVec(invIWorld, rn)).x);
+        const f32 invMB_eff = invMB_lin + invMB_ang;
+        const f32 invMC = 1.0f / Max(1.0f, this.def.mass);
+
+        f32 effRest = 0.0f;
+        if(approachSpeed > restitutionThreshold)
+            effRest = combinedRestitution;
+        const f32 jRaw = ((1.0f + effRest) * approachSpeed) / Max(1.0e-6f, invMC + invMB_eff);
         const f32 maxImpulse = Max(0.0f, this.def.maxStrength) * dt;
-        const f32 impMag = Min(desiredImpulse, maxImpulse);
-        if(impMag > 1.0e-5f)
-            world.applyLinearImpulseAtPoint(otherBody, outNormal * (-impMag), hitPt, true);
+        const f32 jPush = Min(jRaw, maxImpulse);
+        if(jPush > 1.0e-5f)
+            world.applyLinearImpulseAtPoint(otherBody, outNormal * (-jPush), hitPt, true);
+
+        const f32 vB_n_after = vB_n - jPush * invMB_eff;
+        const f32 vC_n_after = vC_n + jPush * invMC;
+        return Max(vB_n_after, vC_n_after);
     }
 
     private void depenetrateCached(
+        in b8 useMulti,
         in ShapeProxyView skinView,
+        in Span<ShapeProxy> leafSkins,
+        in Span<Transform3D> leafXfs,
         in VectorSingle effRot,
         in VectorSingle halfExt,
+        in f32 dt,
         mut PhysicsWorld world,
         mut b8 ioCacheValid,
         mut VectorSingle ioCandMin,
@@ -533,20 +936,30 @@ class CharacterController{
         outLastProbeClean = false;
         VectorSingle pos = VectorSingle(this.position);
         const f32 depMargin = 1.0e-3f;
+        const f32 charMass = Max(1.0f, this.def.mass);
+        const f32 invMC = 1.0f / charMass;
+        FixedVector<f32x4, 16u> lastIterNormals;
+        FixedVector<u32, 16u> impulseAppliedBodies;
+
         for(u32 iter = 0u; iter < this.def.maxConstraintIterations; ++iter){
-            this.gatherOverlapsWithCache(world, skinView, effRot, halfExt, pos, ioCacheValid, ioCandMin, ioCandMax);
+            this.gatherOverlapsWithCache(world, useMulti, skinView, leafSkins, leafXfs, effRot, halfExt, pos, ioCacheValid, ioCandMin, ioCandMax);
             const usize hitCount = this.m_scratchHits.size();
             if(hitCount == 0u){
                 outLastProbeClean = true;
                 break;
             }
+            lastIterNormals.clear();
             VectorSingle totalCorr(0.0f);
             f32 maxPen = 0.0f;
             for(usize i = 0u; i < hitCount; ++i){
                 in ShapeOverlapHit ov = this.m_scratchHits[i];
                 const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(ov.normal), this.upDirection());
                 const f32 depth = ov.penetrationDepth;
-                this.recordContactTo(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), outN, depth, this.activeContacts);
+                if(!this.validateContactHit(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), outN, depth))
+                    continue;
+                if(lastIterNormals.size() < 16u)
+                    lastIterNormals.push_back(f32x4(outN, 0.0f));
+                this.recordContactTo(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), outN, depth, true, this.activeContacts);
                 if(depth > maxPen)
                     maxPen = depth;
                 if(depth > 1.0e-5f){
@@ -554,6 +967,50 @@ class CharacterController{
                     const f32 already = Vector3Dot(totalCorr, outN).x;
                     if(target > already)
                         totalCorr = totalCorr + outN * (target - already);
+
+                    if(dt > 0.0f && ov.shapeId.valid() && world.isValidShape(ov.shapeId)){
+                        const u32 bodyIdx = world.m_shapes[ov.shapeId.index].bodyId;
+                        if(bodyIdx < world.m_bodies.size()){
+                            in Body bRec = world.m_bodies[bodyIdx];
+                            if(bRec.type == BodyType::Dynamic){
+                                b8 seenBody = false;
+                                for(usize bi = 0u; bi < impulseAppliedBodies.size(); ++bi){
+                                    if(impulseAppliedBodies[bi] == bodyIdx){
+                                        seenBody = true;
+                                        break;
+                                    }
+                                }
+                                if(!seenBody && impulseAppliedBodies.size() < 16u){
+                                    impulseAppliedBodies.push_back(bodyIdx);
+                                    in BodySim bSim = world.m_solverSets[bRec.setIndex].sims[bRec.localIndex];
+                                    in BodyState bState = world.m_solverSets[bRec.setIndex].states[bRec.localIndex];
+                                    const VectorSingle hitPt(ov.pointB);
+                                    const VectorSingle r = hitPt - bSim.center();
+                                    const VectorSingle bVel = VectorSingle(bState.linearVelocity) + Cross(VectorSingle(bState.angularVelocity), r);
+                                    const VectorSingle cVel = VectorSingle(this.linearVelocity);
+                                    const f32 relN = Vector3Dot(bVel - cVel, outN).x;
+                                    if(relN > 1.0e-4f){
+                                        f32 invMB_lin = 0.0f;
+                                        if((bRec.flags & 0x07u) != 0x07u)
+                                            invMB_lin = bSim.invMass();
+                                        const VectorSingle rn = Cross(r, outN);
+                                        const MatrixSingle invIWorld = Matrix3MaskAngularLocks(Matrix3FromSymMat3(bSim.invInertiaWorld), bRec.flags);
+                                        const f32 invMB_eff = invMB_lin + Max(0.0f, Vector3Dot(rn, Matrix3MulVec(invIWorld, rn)).x);
+                                        if(invMB_eff > 0.0f){
+                                            const f32 reducedM = 1.0f / Max(1.0e-6f, invMC + invMB_eff);
+                                            const f32 jTransfer = reducedM * relN;
+                                            this.linearVelocity = f32x4(cVel + outN * (jTransfer * invMC), 0.0f);
+                                            if(this.def.pushDynamicBodies){
+                                                const f32 jBody = Min(jTransfer, Max(0.0f, this.def.maxStrength) * dt);
+                                                if(jBody > 1.0e-5f)
+                                                    world.applyLinearImpulseAtPoint(world.makeBodyId(bodyIdx), outN * (-jBody), hitPt, true);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if(maxPen <= 1.0e-5f || Vector3LengthSq(VectorSingle(totalCorr, 0.0f)).x <= 1.0e-10f){
@@ -563,23 +1020,37 @@ class CharacterController{
             pos = pos + totalCorr;
             outMovedAny = true;
         }
+
+        if(!outLastProbeClean && lastIterNormals.size() >= 2u){
+            for(usize a = 0u; a < lastIterNormals.size(); ++a){
+                const VectorSingle nA = VectorSingle(lastIterNormals[a]);
+                for(usize b = a + 1u; b < lastIterNormals.size(); ++b){
+                    if(Vector3Dot(nA, VectorSingle(lastIterNormals[b])).x < -0.7f){
+                        this.isCrushed = true;
+                        break;
+                    }
+                }
+                if(this.isCrushed)
+                    break;
+            }
+        }
         this.position = f32x4(pos, 0.0f);
     }
 
     public void depenetrate(mut PhysicsWorld world){
+        world.ensureCpuBroadphaseSynced();
+        this.ensureCustomLocalBounds(world);
         Array<f32x3u, 8u> ptsSkin;
-        const ShapeProxyView skinView = this.makeShapeProxyView(this.def.skinWidth, ptsSkin);
+        ShapeProxyView singleSkin;
+        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, this.def.skinWidth, ptsSkin, singleSkin, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
         const VectorSingle effRot = this.effectiveProxyRotation();
-        VectorSingle lMin(0.0f);
-        VectorSingle lMax(0.0f);
-        ComputeShapeProxyViewWorldAabbValues(skinView, VectorSingle(0.0f), effRot, 0.0f, lMin, lMax);
-        const VectorSingle halfExt = Max(Abs(lMin), Abs(lMax)) + VectorSingle(0.01f, 0.01f, 0.01f, 0.0f);
+        const VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, singleSkin, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
         b8 cacheValid = false;
         VectorSingle candMin(0.0f);
         VectorSingle candMax(0.0f);
         b8 unusedMoved = false;
         b8 unusedClean = false;
-        this.depenetrateCached(skinView, effRot, halfExt, world, cacheValid, candMin, candMax, unusedMoved, unusedClean);
+        this.depenetrateCached(useMulti, singleSkin, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, 0.0f, world, cacheValid, candMin, candMax, unusedMoved, unusedClean);
     }
 
     private void pushOrMergeStepEvent(in CharacterControllerEvent ev){
@@ -606,7 +1077,11 @@ class CharacterController{
         in f32 dt,
         in b8 pushBodies,
         in b8 emitSlideEvents,
+        in b8 fireAddedCallback,
+        in b8 useMulti,
         in ShapeProxyView baseView,
+        in Span<ShapeProxy> leafBases,
+        in Span<Transform3D> leafXfs,
         in VectorSingle effRot,
         in VectorSingle halfExt,
         mut PhysicsWorld world,
@@ -615,10 +1090,12 @@ class CharacterController{
         mut VectorSingle ioCandMax,
         mut Vector<CharacterContactInfo> dstContacts,
         mut b8 outHitSteepWall,
-        mut b8 outHitCeiling
+        mut b8 outHitCeiling,
+        mut f32 outBestFloorBounceVn
     ){
         outHitSteepWall = false;
         outHitCeiling = false;
+        outBestFloorBounceVn = 0.0f;
         const VectorSingle up = this.upDirection();
         VectorSingle curPos = startPos;
         VectorSingle remDelta = initialDelta;
@@ -629,7 +1106,7 @@ class CharacterController{
             const f32 remLenSq = Vector3LengthSq(VectorSingle(remDelta, 0.0f)).x;
             if(remLenSq <= 1.0e-10f)
                 break;
-            const ShapeCastHit hit = this.castWithCache(world, baseView, effRot, halfExt, curPos, remDelta, ioCacheValid, ioCandMin, ioCandMax);
+            const ShapeCastHit hit = this.castValidatedWithCache(world, useMulti, baseView, leafBases, leafXfs, effRot, effRot, false, halfExt, curPos, remDelta, ioCacheValid, ioCandMin, ioCandMax);
             if(!hit.hit){
                 curPos = curPos + remDelta;
                 remDelta = VectorSingle(0.0f);
@@ -638,32 +1115,11 @@ class CharacterController{
 
             const VectorSingle n = SafeNormalizeVec3(VectorSingle(hit.normal), up);
             const b8 walkable = this.isWalkableNormal(n);
-            if(this.m_onContactValidateCallback.has_value()){
-                CharacterContactInfo valInfo;
-                valInfo.shapeId = hit.shapeId;
-                valInfo.triangleIndex = hit.triangleIndex;
-                const Expected<BodyId> vbRes = world.tryGetShapeBody(hit.shapeId);
-                if(vbRes.has_value())
-                    valInfo.bodyId = vbRes.value();
-                valInfo.point = hit.point;
-                valInfo.normal = f32x4(n, 0.0f);
-                valInfo.penetrationDepth = 0.0f;
-                valInfo.isWalkable = walkable;
-                if(!this.m_onContactValidateCallback.value()(valInfo)){
-                    const f32 skipFrac = Max(0.01f, hit.fraction + 1.0e-3f);
-                    curPos = curPos + remDelta * Min(1.0f, skipFrac);
-                    remDelta = remDelta * Max(0.0f, 1.0f - skipFrac);
-                    remFrac = Max(1.0e-3f, remFrac * Max(0.0f, 1.0f - skipFrac));
-                    continue;
-                }
-            }
             const f32 nDotUp = Vector3Dot(n, up).x;
             if(nDotUp < -0.5f)
                 outHitCeiling = true;
             if(!walkable)
                 outHitSteepWall = true;
-            if((!walkable || nDotUp < -0.5f) && this.m_lastBlockingNormals.size() < 8u)
-                this.m_lastBlockingNormals.push_back(f32x4(n, 0.0f));
 
             const VectorSingle approachVel = remDelta / Max(dt * remFrac, 1.0e-4f);
             if(emitSlideEvents && (nDotUp < -0.5f || !walkable)){
@@ -689,9 +1145,19 @@ class CharacterController{
             remDelta = remDelta * (1.0f - safeFrac);
             remFrac = Max(1.0e-3f, remFrac * (1.0f - safeFrac));
 
-            if(pushBodies)
-                this.pushDynamicBody(world, hit.shapeId, VectorSingle(hit.point), n, approachVel, dt);
-            this.recordContactTo(world, hit.shapeId, hit.triangleIndex, VectorSingle(hit.point), n, 0.0f, dstContacts);
+            const f32 combinedRest = this.computeCombinedContactRestitution(world, hit.shapeId, hit.triangleIndex, hit.subShapeIndex);
+            const f32 targetVn = this.pushDynamicBody(hit.shapeId, VectorSingle(hit.point), n, approachVel, combinedRest, world.m_def.restitutionThreshold, dt, pushBodies, world);
+            if((!walkable || nDotUp < -0.5f) && this.m_lastBlockingNormals.size() < 8u)
+                this.m_lastBlockingNormals.push_back(f32x4(n.x, n.y, n.z, targetVn));
+            if(walkable && combinedRest > 0.0f && targetVn > outBestFloorBounceVn)
+                outBestFloorBounceVn = targetVn;
+            if(nDotUp < -0.5f && combinedRest > 0.0f && targetVn < 0.0f){
+                const f32 curVn = Vector3Dot(VectorSingle(this.linearVelocity), n).x;
+                if(curVn < targetVn)
+                    this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + n * (targetVn - curVn), 0.0f);
+            }
+
+            this.recordContactTo(world, hit.shapeId, hit.triangleIndex, VectorSingle(hit.point), n, 0.0f, fireAddedCallback, dstContacts);
 
             VectorSingle clipN = n;
             if(!walkable && nDotUp > 0.05f){
@@ -729,8 +1195,12 @@ class CharacterController{
         in VectorSingle startPos,
         in VectorSingle horizDelta,
         in f32 dt,
+        in b8 useMulti,
         in ShapeProxyView baseView,
         in ShapeProxyView skinView,
+        in Span<ShapeProxy> leafBases,
+        in Span<ShapeProxy> leafSkins,
+        in Span<Transform3D> leafXfs,
         in VectorSingle effRot,
         in VectorSingle halfExt,
         mut PhysicsWorld world,
@@ -743,7 +1213,7 @@ class CharacterController{
             return false;
         const VectorSingle up = this.upDirection();
         const VectorSingle upVec = up * this.def.stepUpHeight;
-        const ShapeCastHit upHit = this.castWithCache(world, baseView, effRot, halfExt, startPos, upVec, ioCacheValid, ioCandMin, ioCandMax);
+        const ShapeCastHit upHit = this.castValidatedWithCache(world, useMulti, baseView, leafBases, leafXfs, effRot, effRot, false, halfExt, startPos, upVec, ioCacheValid, ioCandMin, ioCandMax);
         f32 lifted = this.def.stepUpHeight;
         if(upHit.hit)
             lifted = Max(0.0f, upHit.fraction - 0.002f) * this.def.stepUpHeight;
@@ -754,10 +1224,11 @@ class CharacterController{
         const VectorSingle topPos = startPos + up * lifted;
         b8 hitSteep = false;
         b8 hitCeil = false;
-        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, this.def.pushDynamicBodies, false, baseView, effRot, halfExt, world, ioCacheValid, ioCandMin, ioCandMax, this.m_scratchStepContacts, hitSteep, hitCeil);
+        f32 unusedBounce = 0.0f;
+        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, this.def.pushDynamicBodies, false, false, useMulti, baseView, leafBases, leafXfs, effRot, halfExt, world, ioCacheValid, ioCandMin, ioCandMax, this.m_scratchStepContacts, hitSteep, hitCeil, unusedBounce);
 
         const VectorSingle downVec = up * (-(lifted + this.def.stepDownHeight));
-        ShapeCastHit downHit = this.castWithCache(world, baseView, effRot, halfExt, movedTop, downVec, ioCacheValid, ioCandMin, ioCandMax);
+        ShapeCastHit downHit = this.castValidatedWithCache(world, useMulti, baseView, leafBases, leafXfs, effRot, effRot, false, halfExt, movedTop, downVec, ioCacheValid, ioCandMin, ioCandMax);
         if(!downHit.hit)
             return false;
 
@@ -772,8 +1243,8 @@ class CharacterController{
             const f32 maxSlopeSin = Sqrt(VectorSingle(Max(0.0f, 1.0f - this.m_minWalkableCos * this.m_minWalkableCos))).x;
             const f32 extraForward = effR * (1.0f - maxSlopeSin) + 0.02f;
             const VectorSingle extraHoriz = horizDelta * (extraForward * Rsqrt(VectorSingle(horizLenSq)).x);
-            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, this.def.pushDynamicBodies, false, baseView, effRot, halfExt, world, ioCacheValid, ioCandMin, ioCandMax, this.m_scratchStepContacts, hitSteep, hitCeil);
-            const ShapeCastHit probeDown = this.castWithCache(world, baseView, effRot, halfExt, probeTop, downVec, ioCacheValid, ioCandMin, ioCandMax);
+            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, this.def.pushDynamicBodies, false, false, useMulti, baseView, leafBases, leafXfs, effRot, halfExt, world, ioCacheValid, ioCandMin, ioCandMax, this.m_scratchStepContacts, hitSteep, hitCeil, unusedBounce);
+            const ShapeCastHit probeDown = this.castValidatedWithCache(world, useMulti, baseView, leafBases, leafXfs, effRot, effRot, false, halfExt, probeTop, downVec, ioCacheValid, ioCandMin, ioCandMax);
             if(!probeDown.hit)
                 return false;
             const VectorSingle probeLandN = SafeNormalizeVec3(VectorSingle(probeDown.normal), up);
@@ -791,34 +1262,93 @@ class CharacterController{
         if(candDistSq <= 1.0e-7f)
             return false;
 
-        this.gatherOverlapsWithCache(world, skinView, effRot, halfExt, candidate, ioCacheValid, ioCandMin, ioCandMax);
+        this.gatherOverlapsWithCache(world, useMulti, skinView, leafSkins, leafXfs, effRot, halfExt, candidate, ioCacheValid, ioCandMin, ioCandMax);
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
-            if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth)
-                return false;
+            in ShapeOverlapHit ov = this.m_scratchHits[i];
+            if(ov.penetrationDepth > this.def.skinWidth){
+                const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(ov.normal), up);
+                if(this.validateContactHit(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), outN, ov.penetrationDepth))
+                    return false;
+            }
         }
 
-        this.recordContactTo(world, downHit.shapeId, downHit.triangleIndex, VectorSingle(downHit.point), landN, 0.0f, this.m_scratchStepContacts);
+        this.recordContactTo(world, downHit.shapeId, downHit.triangleIndex, VectorSingle(downHit.point), landN, 0.0f, false, this.m_scratchStepContacts);
         outSteppedPos = candidate;
         return true;
     }
 
-    private void updateGroundMaterialAndConveyor(in PhysicsWorld world, in ShapeId shapeId, in u32 triIdx, mut VectorSingle inoutGroundVel){
+    private VectorSingle quatSlerp(in VectorSingle rawQ0, in VectorSingle rawQ1, in f32 t)const{
+        const VectorSingle q0 = SafeNormalizeQuat(rawQ0);
+        VectorSingle q1 = SafeNormalizeQuat(rawQ1);
+        f32 dot = Vector4Dot(q0, q1).x;
+        if(dot < 0.0f){
+            q1 = -q1;
+            dot = -dot;
+        }
+        const f32 tc = Clamp(t, 0.0f, 1.0f);
+        if(dot > 0.9995f)
+            return SafeNormalizeQuat(q0 * (1.0f - tc) + q1 * tc);
+        const f32 theta = ACos(VectorSingle(Clamp(dot, 0.0f, 1.0f))).x;
+        const f32 sinTheta = Sin(VectorSingle(theta)).x;
+        if(sinTheta <= 1.0e-5f)
+            return SafeNormalizeQuat(q0 * (1.0f - tc) + q1 * tc);
+        const VectorSingle sines = Sin(VectorSingle((1.0f - tc) * theta, tc * theta, 0.0f, 0.0f));
+        const f32 invSin = 1.0f / sinTheta;
+        return SafeNormalizeQuat(q0 * (sines.x * invSin) + q1 * (sines.y * invSin));
+    }
+
+    private VectorSingle computeEffectiveProxyRotationFor(in VectorSingle rawRot)const{
+        const VectorSingle baseRot = SafeNormalizeQuat(rawRot);
+        const VectorSingle upW = SafeNormalizeVec3(this.upDirection(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle rotY = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), baseRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const f32 cosA = Clamp(Vector3Dot(rotY, upW).x, -1.0f, 1.0f);
+        if(cosA >= 0.99999f)
+            return baseRot;
+        VectorSingle alignQ(0.0f, 0.0f, 0.0f, 1.0f);
+        if(cosA <= -0.99999f){
+            VectorSingle ortho = Cross(rotY, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            if(Vector3LengthSq(ortho).x <= 1.0e-6f)
+                ortho = Cross(rotY, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+            ortho = SafeNormalizeVec3(ortho, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            alignQ = VectorSingle(ortho.x, ortho.y, ortho.z, 0.0f);
+        }
+        else{
+            const VectorSingle axis = Cross(rotY, upW);
+            alignQ = SafeNormalizeQuat(VectorSingle(axis.x, axis.y, axis.z, 1.0f + cosA));
+        }
+        return SafeNormalizeQuat(QuaternionMultiply(alignQ, baseRot));
+    }
+
+    private void computeCombinedGroundFriction(
+        in VectorSingle surfNormal,
+        in VectorSingle moveDir,
+        mut f32 outMuKinetic,
+        mut f32 outMuStatic
+    )const{
+        const MaterialCombineMode fricMode = ResolveMaterialCombineMode(MaterialCombineMode::GeometricMean, this.groundMaterial.frictionCombineMode, MaterialCombineMode::GeometricMean);
+        const f32 charMu = Max(0.0f, this.def.characterFriction);
+        f32 matStat = this.groundMaterial.staticFriction;
+        if(matStat < 0.0f)
+            matStat = this.groundMaterial.friction;
+        const f32 aniso = ComputeCharacterAnisotropicFrictionScale(this.groundMaterial, VectorSingle(this.m_groundShapeRot), surfNormal, moveDir);
+        outMuKinetic = Max(0.0f, CombineMaterialWithMode(charMu, Max(0.0f, this.groundMaterial.friction), fricMode) * aniso);
+        outMuStatic = Max(outMuKinetic, CombineMaterialWithMode(charMu, Max(0.0f, matStat), fricMode) * aniso);
+    }
+
+    private void updateGroundMaterialAndConveyor(in PhysicsWorld world, in ShapeId shapeId, in u32 triIdx, in u32 subShapeIdx, mut VectorSingle inoutGroundVel){
         this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.groundSubShapeIndex = subShapeIdx;
         if(!shapeId.valid() || !world.isValidShape(shapeId)){
             this.groundMaterial = SurfaceMaterial();
+            this.m_groundShapeRot = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+            this.groundSubShapeIndex = s_NullIndex;
             return;
         }
         in Shape gShape = world.m_shapes[shapeId.index];
-        this.groundMaterial = world.resolveShapeContactMaterial(gShape, triIdx);
+        this.groundMaterial = world.resolveShapeContactMaterial(gShape, triIdx, subShapeIdx);
+        const VectorSingle shapeRot = ComputeBodyWorldShapeRotation(world, this.groundBodyId, gShape);
+        this.m_groundShapeRot = f32x4(shapeRot);
         if(this.groundMaterial.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(this.groundMaterial.surfaceVelocity).xyz)){
-            VectorSingle shapeRot(0.0f, 0.0f, 0.0f, 1.0f);
-            if(this.groundBodyId.valid() && world.isValidBody(this.groundBodyId)){
-                const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.groundBodyId);
-                if(xfRes.has_value())
-                    shapeRot = SafeNormalizeQuat(VectorSingle(xfRes.value().rotation));
-            }
-            if(gShape.hasLocalTransform())
-                shapeRot = SafeNormalizeQuat(QuaternionMultiply(shapeRot, VectorSingle(gShape.localTransform.rotation)));
             const VectorSingle convW = Vector3Rotate(VectorSingle(this.groundMaterial.surfaceVelocity, 0.0f), shapeRot);
             this.m_groundConveyorVelocity = f32x4(convW, 0.0f);
             inoutGroundVel = inoutGroundVel + convW;
@@ -827,8 +1357,12 @@ class CharacterController{
 
     private void updateGroundState(
         in PhysicsWorld world,
+        in b8 useMulti,
         in ShapeProxyView baseView,
         in ShapeProxyView skinView,
+        in Span<ShapeProxy> leafBases,
+        in Span<ShapeProxy> leafSkins,
+        in Span<Transform3D> leafXfs,
         in VectorSingle effRot,
         in VectorSingle halfExt,
         in b8 hasPrecomputedStickHit,
@@ -845,7 +1379,7 @@ class CharacterController{
         if(hasPrecomputedStickHit)
             groundHit = stickHit;
         else
-            groundHit = this.castWithCache(world, baseView, effRot, halfExt, curPos, up * (-probeDist), ioCacheValid, ioCandMin, ioCandMax);
+            groundHit = this.castValidatedWithCache(world, useMulti, baseView, leafBases, leafXfs, effRot, effRot, false, halfExt, curPos, up * (-probeDist), ioCacheValid, ioCandMin, ioCandMax);
 
         if(groundHit.hit){
             const VectorSingle n = SafeNormalizeVec3(VectorSingle(groundHit.normal), up);
@@ -883,13 +1417,13 @@ class CharacterController{
                 this.groundBodyId = BodyId();
                 this.hasPrevGroundTransform = false;
             }
-            this.updateGroundMaterialAndConveyor(world, groundHit.shapeId, groundHit.triangleIndex, gVel);
+            this.updateGroundMaterialAndConveyor(world, groundHit.shapeId, groundHit.triangleIndex, groundHit.subShapeIndex, gVel);
             this.groundVelocity = f32x4(gVel, 0.0f);
             return;
         }
 
         if(!reuseDepOverlaps)
-            this.gatherOverlapsWithCache(world, skinView, effRot, halfExt, curPos, ioCacheValid, ioCandMin, ioCandMax);
+            this.gatherOverlapsWithCache(world, useMulti, skinView, leafSkins, leafXfs, effRot, halfExt, curPos, ioCacheValid, ioCandMin, ioCandMax);
         f32 minWalkCos = this.m_minWalkableCos;
         if(this.def.maxSlopeAngleRad != this.m_cachedSlopeAngleRad)
             minWalkCos = Cos(Clamp(VectorSingle(this.def.maxSlopeAngleRad), VectorSingle(0.0f), VectorSingle(1.56f))).x;
@@ -899,16 +1433,21 @@ class CharacterController{
         VectorSingle bestPt = curPos;
         ShapeId bestShape;
         u32 bestTriIdx = s_NullIndex;
+        u32 bestSubIdx = s_NullIndex;
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
-            const VectorSingle n = SafeNormalizeVec3(-VectorSingle(this.m_scratchHits[i].normal), up);
+            in ShapeOverlapHit ov = this.m_scratchHits[i];
+            const VectorSingle n = SafeNormalizeVec3(-VectorSingle(ov.normal), up);
+            if(!this.validateContactHit(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), n, ov.penetrationDepth))
+                continue;
             const f32 d = Vector3Dot(n, up).x;
             if(!foundAny || d > bestDot){
                 foundAny = true;
                 bestDot = d;
                 bestN = n;
-                bestPt = VectorSingle(this.m_scratchHits[i].pointB);
-                bestShape = this.m_scratchHits[i].shapeId;
-                bestTriIdx = this.m_scratchHits[i].triangleIndex;
+                bestPt = VectorSingle(ov.pointB);
+                bestShape = ov.shapeId;
+                bestTriIdx = ov.triangleIndex;
+                bestSubIdx = ov.subShapeIndex;
             }
         }
         if(foundAny){
@@ -944,13 +1483,15 @@ class CharacterController{
                     this.groundBodyId = BodyId();
                     this.hasPrevGroundTransform = false;
                 }
-                this.updateGroundMaterialAndConveyor(world, bestShape, bestTriIdx, gVel);
+                this.updateGroundMaterialAndConveyor(world, bestShape, bestTriIdx, bestSubIdx, gVel);
                 this.groundVelocity = f32x4(gVel, 0.0f);
             }
             else{
                 this.groundState = CharacterGroundState::NotSupported;
                 this.groundBodyId = BodyId();
+                this.groundSubShapeIndex = s_NullIndex;
                 this.groundMaterial = SurfaceMaterial();
+                this.m_groundShapeRot = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
                 this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 this.hasPrevGroundTransform = false;
@@ -961,8 +1502,10 @@ class CharacterController{
             this.groundNormal = f32x4(up, 0.0f);
             this.groundShapeId = ShapeId();
             this.groundTriangleIndex = s_NullIndex;
+            this.groundSubShapeIndex = s_NullIndex;
             this.groundBodyId = BodyId();
             this.groundMaterial = SurfaceMaterial();
+            this.m_groundShapeRot = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
             this.m_groundConveyorVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             this.hasPrevGroundTransform = false;
@@ -974,7 +1517,9 @@ class CharacterController{
         if(dt <= 0.0f)
             return;
         world.ensureCpuBroadphaseSynced();
+        world.flushDirtyBodyMasses();
         this.syncWalkableCos();
+        this.ensureCustomLocalBounds(world);
         this.activeContacts.clear();
         this.m_lastBlockingNormals.clear();
         this.hitCeiling = false;
@@ -983,7 +1528,7 @@ class CharacterController{
         const CharacterGroundState prevGroundState = this.groundState;
         const b8 wasOnGround = (prevGroundState == CharacterGroundState::OnGround);
         const b8 wasGroundedAny = (prevGroundState == CharacterGroundState::OnGround || prevGroundState == CharacterGroundState::OnSteepGround);
-        const VectorSingle prevGroundVel = VectorSingle(this.groundVelocity);
+        VectorSingle stepExitGroundVel = VectorSingle(this.groundVelocity);
 
         if(this.def.enableGravityAndSlopeSlide){
             if(prevGroundState == CharacterGroundState::InAir || prevGroundState == CharacterGroundState::NotSupported){
@@ -993,19 +1538,56 @@ class CharacterController{
                 const VectorSingle slopeN = SafeNormalizeVec3(VectorSingle(this.groundNormal), up);
                 const VectorSingle downSlope = -up + slopeN * Vector3Dot(up, slopeN).x;
                 const VectorSingle downSlopeDir = SafeNormalizeVec3(downSlope, VectorSingle(0.0f));
-                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + downSlopeDir * (this.def.slopeSlideAcceleration * dt), 0.0f);
+                f32 muK = 0.0f;
+                f32 muS = 0.0f;
+                this.computeCombinedGroundFriction(slopeN, downSlopeDir, muK, muS);
+                const f32 slopeCos = Clamp(Vector3Dot(slopeN, up).x, 0.0f, 1.0f);
+                const f32 effSlideAcc = this.def.slopeSlideAcceleration * Max(0.2f, 1.0f - 0.5f * muK * slopeCos);
+                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + downSlopeDir * (effSlideAcc * dt), 0.0f);
+            }
+        }
+        if(prevGroundState == CharacterGroundState::OnGround && this.def.enableGroundFriction){
+            const VectorSingle gN = SafeNormalizeVec3(VectorSingle(this.groundNormal), up);
+            const VectorSingle vRel = VectorSingle(this.linearVelocity) - stepExitGroundVel;
+            const VectorSingle vTan = vRel - gN * Vector3Dot(vRel, gN).x;
+            const f32 tanSq = Vector3LengthSq(vTan).x;
+            if(tanSq > 1.0e-10f){
+                const f32 tanSp = Sqrt(VectorSingle(tanSq)).x;
+                const VectorSingle tanDir = vTan * (1.0f / tanSp);
+                f32 muK = 0.0f;
+                f32 muS = 0.0f;
+                this.computeCombinedGroundFriction(gN, tanDir, muK, muS);
+                const f32 normAccel = Max(0.0f, -Vector3Dot(world.gravity() * this.def.gravityScale, gN).x);
+                if(normAccel > 0.0f){
+                    if(tanSp <= muS * normAccel * dt)
+                        this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) - vTan, 0.0f);
+                    else
+                        this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) - tanDir * Min(tanSp, muK * normAccel * dt), 0.0f);
+                }
             }
         }
 
-        const VectorSingle effRot = this.effectiveProxyRotation();
+        VectorSingle effRot = this.effectiveProxyRotation();
         Array<f32x3u, 8u> ptsBase;
         Array<f32x3u, 8u> ptsSkin;
-        const ShapeProxyView baseView = this.makeShapeProxyView(0.0f, ptsBase);
-        const ShapeProxyView skinView = this.makeShapeProxyView(this.def.skinWidth, ptsSkin);
-        VectorSingle lMin(0.0f);
-        VectorSingle lMax(0.0f);
-        ComputeShapeProxyViewWorldAabbValues(skinView, VectorSingle(0.0f), effRot, 0.0f, lMin, lMax);
-        const VectorSingle halfExt = Max(Abs(lMin), Abs(lMax)) + VectorSingle(0.01f, 0.01f, 0.01f, 0.0f);
+        ShapeProxyView baseView;
+        ShapeProxyView skinView;
+        Vector<ShapeProxy> leafSkins;
+        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, 0.0f, ptsBase, baseView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        if(useMulti){
+            leafSkins = this.m_scratchLeafProxies;
+            for(usize li = 0u; li < leafSkins.size(); ++li)
+                leafSkins[li].radius += this.def.skinWidth;
+        }
+        else{
+            skinView = this.makePrimitiveProxyViewForDef(this.def, this.def.skinWidth, ptsSkin);
+            if(this.def.shapeType == CharacterShapeType::ConvexHull && world.isHullGeometryValid(this.def.customHullGeometryId)){
+                skinView = baseView;
+                skinView.radius += this.def.skinWidth;
+            }
+        }
+
+        VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
         b8 cacheValid = false;
         VectorSingle candMin(0.0f);
         VectorSingle candMax(0.0f);
@@ -1020,44 +1602,142 @@ class CharacterController{
             world.gatherCandidateShapesAabb(candMin, candMax, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchCandShapes);
         }
 
+        if(this.m_hasPrevProxyRotation && this.isRotationalSweepRelevant(VectorSingle(this.m_prevProxyRotation), effRot)){
+            const ShapeCastHit uRotHit = this.castValidatedWithCache(world, useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), VectorSingle(this.m_prevProxyRotation), effRot, true, halfExt, VectorSingle(this.position), VectorSingle(0.0f), cacheValid, candMin, candMax);
+            if(uRotHit.hit){
+                const f32 safeU = Max(0.0f, uRotHit.fraction - 0.002f);
+                effRot = this.quatSlerp(VectorSingle(this.m_prevProxyRotation), effRot, safeU);
+                this.rotation = f32x4(effRot);
+                halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
+            }
+        }
+
         if(wasOnGround && this.hasPrevGroundTransform && this.groundBodyId.valid() && world.isValidBody(this.groundBodyId)){
             const Expected<Transform3D> curGroundRes = world.tryGetBodyTransform(this.groundBodyId);
             if(curGroundRes.has_value()){
                 in Transform3D curG = curGroundRes.value();
+                const Expected<f32x4> curGLv = world.tryGetLinearVelocity(this.groundBodyId);
+                const Expected<f32x4> curGAv = world.tryGetAngularVelocity(this.groundBodyId);
+                if(curGLv.has_value()){
+                    VectorSingle cgV = VectorSingle(curGLv.value());
+                    if(curGAv.has_value()){
+                        const VectorSingle arm = VectorSingle(this.groundPoint) - VectorSingle(curG.position);
+                        cgV = cgV + Cross(VectorSingle(curGAv.value()), arm);
+                    }
+                    stepExitGroundVel = cgV + VectorSingle(this.m_groundConveyorVelocity);
+                }
+
                 const VectorSingle localP = InverseTransformPointValues(VectorSingle(this.prevGroundTransform.position), VectorSingle(this.prevGroundTransform.rotation), VectorSingle(this.position));
                 const VectorSingle carriedP = TransformPointValues(VectorSingle(curG.position), VectorSingle(curG.rotation), localP);
                 const VectorSingle carryDelta = carriedP - VectorSingle(this.position);
                 const f32 carryLenSq = Vector3LengthSq(VectorSingle(carryDelta, 0.0f)).x;
-                if(carryLenSq > 1.0e-10f){
-                    this.m_scratchStepContacts.clear();
-                    b8 carrySteep = false;
-                    b8 carryCeil = false;
-                    const VectorSingle carryBefore = VectorSingle(this.position);
-                    const VectorSingle carriedEnd = this.slideMoveFrom(carryBefore, carryDelta, dt, this.def.pushDynamicBodies, false, baseView, effRot, halfExt, world, cacheValid, candMin, candMax, this.m_scratchStepContacts, carrySteep, carryCeil);
-                    this.position = f32x4(carriedEnd, 0.0f);
-                    const f32 carryLen = Sqrt(VectorSingle(carryLenSq)).x;
-                    const VectorSingle carryDir = carryDelta * (1.0f / carryLen);
-                    const f32 movedAlong = Vector3Dot(carriedEnd - carryBefore, carryDir).x;
-                    if(carryCeil && (carryLen - movedAlong) > this.def.skinWidth * 1.5f)
-                        this.isCrushed = true;
-                    for(usize ci = 0u; ci < this.m_scratchStepContacts.size(); ++ci){
-                        in CharacterContactInfo sc = this.m_scratchStepContacts[ci];
-                        this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
-                    }
-                }
                 const VectorSingle dQ = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(curG.rotation), QuaternionConjugate(VectorSingle(this.prevGroundTransform.rotation))));
                 VectorSingle applyRotQ = dQ;
                 if(!this.def.followPlatformPitchRoll){
                     const VectorSingle proj = up * Vector3Dot(VectorSingle(dQ.x, dQ.y, dQ.z, 0.0f), up).x;
                     applyRotQ = SafeNormalizeQuat(VectorSingle(proj.x, proj.y, proj.z, dQ.w));
                 }
-                this.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(applyRotQ, VectorSingle(this.rotation))));
+                const VectorSingle preCarryBaseRot = VectorSingle(this.rotation);
+                const VectorSingle postCarryBaseRot = SafeNormalizeQuat(QuaternionMultiply(applyRotQ, preCarryBaseRot));
+                const VectorSingle postCarryEffRot = this.computeEffectiveProxyRotationFor(postCarryBaseRot);
+                const b8 rotCarryChanged = this.isRotationalSweepRelevant(effRot, postCarryEffRot);
+
+                if(carryLenSq > 1.0e-10f || rotCarryChanged){
+                    this.m_scratchStepContacts.clear();
+                    b8 carrySteep = false;
+                    b8 carryCeil = false;
+                    f32 unusedCarryBounce = 0.0f;
+                    const VectorSingle carryBefore = VectorSingle(this.position);
+                    VectorSingle slideStartPos = carryBefore;
+                    VectorSingle remCarryDelta = carryDelta;
+                    VectorSingle activeCarryEffRot = effRot;
+
+                    if(rotCarryChanged){
+                        const ShapeCastHit rotHit = this.castValidatedWithCache(world, useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, postCarryEffRot, true, halfExt, carryBefore, carryDelta, cacheValid, candMin, candMax);
+                        if(!rotHit.hit){
+                            this.position = f32x4(carryBefore + carryDelta, 0.0f);
+                            this.rotation = f32x4(postCarryBaseRot);
+                            remCarryDelta = VectorSingle(0.0f);
+                        }
+                        else{
+                            const f32 safeRotFrac = Max(0.0f, rotHit.fraction - 0.002f);
+                            const VectorSingle rotHitN = SafeNormalizeVec3(VectorSingle(rotHit.normal), up);
+                            const f32 rotNDotUp = Vector3Dot(rotHitN, up).x;
+                            if(rotNDotUp < -0.5f)
+                                carryCeil = true;
+                            if(!this.isWalkableNormal(rotHitN))
+                                carrySteep = true;
+                            this.rotation = f32x4(this.quatSlerp(preCarryBaseRot, postCarryBaseRot, safeRotFrac));
+                            activeCarryEffRot = this.effectiveProxyRotation();
+                            f32 pushClear = 2.0e-4f;
+                            if(rotHit.fraction <= 1.0e-4f)
+                                pushClear = Max(1.0e-3f, this.def.skinWidth * 0.25f);
+                            slideStartPos = carryBefore + carryDelta * safeRotFrac + rotHitN * pushClear;
+                            remCarryDelta = carryDelta * (1.0f - safeRotFrac);
+                            const f32 intoRotN = Vector3Dot(remCarryDelta, rotHitN).x;
+                            if(intoRotN < 0.0f)
+                                remCarryDelta = remCarryDelta - rotHitN * intoRotN;
+                            this.recordContactTo(world, rotHit.shapeId, rotHit.triangleIndex, VectorSingle(rotHit.point), rotHitN, 0.0f, false, this.m_scratchStepContacts);
+                        }
+                    }
+                    else{
+                        this.rotation = f32x4(postCarryBaseRot);
+                        activeCarryEffRot = this.effectiveProxyRotation();
+                    }
+
+                    VectorSingle carriedEnd = slideStartPos;
+                    if(Vector3LengthSq(VectorSingle(remCarryDelta, 0.0f)).x > 1.0e-10f){
+                        b8 subCarrySteep = false;
+                        b8 subCarryCeil = false;
+                        carriedEnd = this.slideMoveFrom(slideStartPos, remCarryDelta, dt, this.def.pushDynamicBodies, false, false, useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), activeCarryEffRot, halfExt, world, cacheValid, candMin, candMax, this.m_scratchStepContacts, subCarrySteep, subCarryCeil, unusedCarryBounce);
+                        if(subCarrySteep)
+                            carrySteep = true;
+                        if(subCarryCeil)
+                            carryCeil = true;
+                    }
+                    this.position = f32x4(carriedEnd, 0.0f);
+
+                    if(carryLenSq > 1.0e-10f){
+                        const f32 carryLen = Sqrt(VectorSingle(carryLenSq)).x;
+                        const VectorSingle carryDir = carryDelta * (1.0f / carryLen);
+                        const f32 movedAlong = Vector3Dot(carriedEnd - carryBefore, carryDir).x;
+                        if((carryCeil || carrySteep) && (carryLen - movedAlong) > this.def.skinWidth * 1.5f){
+                            if(carryCeil){
+                                this.isCrushed = true;
+                            }
+                            else{
+                                this.gatherOverlapsWithCache(world, useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), activeCarryEffRot, halfExt, carriedEnd, cacheValid, candMin, candMax);
+                                for(usize oi = 0u; oi < this.m_scratchHits.size(); ++oi){
+                                    in ShapeOverlapHit ov = this.m_scratchHits[oi];
+                                    if(ov.penetrationDepth > 1.0e-5f){
+                                        const VectorSingle ovN = SafeNormalizeVec3(-VectorSingle(ov.normal), up);
+                                        if(this.validateContactHit(world, ov.shapeId, ov.triangleIndex, VectorSingle(ov.pointB), ovN, ov.penetrationDepth) && Vector3Dot(ovN, carryDir).x < -0.5f){
+                                            this.isCrushed = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for(usize ci = 0u; ci < this.m_scratchStepContacts.size(); ++ci){
+                        in CharacterContactInfo sc = this.m_scratchStepContacts[ci];
+                        this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, true, this.activeContacts);
+                    }
+                }
+                else{
+                    this.rotation = f32x4(postCarryBaseRot);
+                }
+
+                effRot = this.effectiveProxyRotation();
+                halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
             }
         }
 
         b8 depMoved = false;
         b8 depClean = false;
-        this.depenetrateCached(skinView, effRot, halfExt, world, cacheValid, candMin, candMax, depMoved, depClean);
+        this.depenetrateCached(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, dt, world, cacheValid, candMin, candMax, depMoved, depClean);
 
         const VectorSingle vel = VectorSingle(this.linearVelocity);
         VectorSingle fullDelta = vel * dt;
@@ -1070,6 +1750,7 @@ class CharacterController{
         const VectorSingle curPos = VectorSingle(this.position);
         b8 hitSteep = false;
         b8 hitCeil = false;
+        f32 bestFloorBounceVn = 0.0f;
         VectorSingle flatEndPos = curPos;
 
         const f32 fullDistSq = Vector3LengthSq(VectorSingle(fullDelta, 0.0f)).x;
@@ -1086,11 +1767,14 @@ class CharacterController{
         for(u32 ms = 0u; ms < moveSubSteps; ++ms){
             b8 subSteep = false;
             b8 subCeil = false;
-            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, baseView, effRot, halfExt, world, cacheValid, candMin, candMax, this.activeContacts, subSteep, subCeil);
+            f32 subBounce = 0.0f;
+            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, true, useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, world, cacheValid, candMin, candMax, this.activeContacts, subSteep, subCeil, subBounce);
             if(subSteep)
                 hitSteep = true;
             if(subCeil)
                 hitCeil = true;
+            if(subBounce > bestFloorBounceVn)
+                bestFloorBounceVn = subBounce;
         }
 
         if(hitCeil){
@@ -1100,15 +1784,25 @@ class CharacterController{
                 this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) - up * vUpVel, 0.0f);
         }
         for(usize bi = 0u; bi < this.m_lastBlockingNormals.size(); ++bi){
-            const VectorSingle bn = VectorSingle(this.m_lastBlockingNormals[bi]);
+            const f32x4 bRec = this.m_lastBlockingNormals[bi];
+            const VectorSingle bn(bRec.x, bRec.y, bRec.z, 0.0f);
+            const f32 targetVn = bRec.w;
             const f32 vn = Vector3Dot(VectorSingle(this.linearVelocity), bn).x;
-            if(vn < 0.0f && !this.isWalkableNormal(bn))
-                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) - bn * vn, 0.0f);
+            if(vn < targetVn && !this.isWalkableNormal(bn))
+                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + bn * (targetVn - vn), 0.0f);
+        }
+        b8 bouncedOnFloor = false;
+        if(bestFloorBounceVn > 0.0f){
+            const f32 vUpNow = Vector3Dot(VectorSingle(this.linearVelocity), up).x;
+            if(vUpNow < bestFloorBounceVn){
+                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + up * (bestFloorBounceVn - vUpNow), 0.0f);
+                bouncedOnFloor = true;
+            }
         }
 
         if(wasOnGround && hitSteep && Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x > 1.0e-8f){
             VectorSingle steppedPos(0.0f);
-            if(this.tryStepUp(curPos, horizDelta, dt, baseView, skinView, effRot, halfExt, world, cacheValid, candMin, candMax, steppedPos)){
+            if(this.tryStepUp(curPos, horizDelta, dt, useMulti, baseView, skinView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, world, cacheValid, candMin, candMax, steppedPos)){
                 const VectorSingle dFlat = flatEndPos - curPos;
                 const VectorSingle hFlat = dFlat - up * Vector3Dot(dFlat, up).x;
                 const VectorSingle dStep = steppedPos - curPos;
@@ -1117,7 +1811,7 @@ class CharacterController{
                     flatEndPos = steppedPos;
                     for(usize si = 0u; si < this.m_scratchStepContacts.size(); ++si){
                         in CharacterContactInfo sc = this.m_scratchStepContacts[si];
-                        this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
+                        this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, true, this.activeContacts);
                     }
                     CharacterControllerEvent stepEv;
                     stepEv.type = CharacterControllerEventType::StepUp;
@@ -1139,10 +1833,10 @@ class CharacterController{
 
         b8 stickProbeHit = false;
         ShapeCastHit floorProbe;
-        const f32 velUp = Vector3Dot(vel, up).x;
-        if(this.def.stickToFloor && wasOnGround && velUp <= 0.1f){
+        const f32 velUp = Vector3Dot(VectorSingle(this.linearVelocity), up).x;
+        if(!bouncedOnFloor && this.def.stickToFloor && wasOnGround && velUp <= 0.1f){
             const f32 stickDist = this.def.stepDownHeight + this.def.skinWidth;
-            floorProbe = this.castWithCache(world, baseView, effRot, halfExt, VectorSingle(this.position), up * (-stickDist), cacheValid, candMin, candMax);
+            floorProbe = this.castValidatedWithCache(world, useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, effRot, false, halfExt, VectorSingle(this.position), up * (-stickDist), cacheValid, candMin, candMax);
             if(floorProbe.hit){
                 const VectorSingle n = SafeNormalizeVec3(VectorSingle(floorProbe.normal), up);
                 if(this.isWalkableNormal(n)){
@@ -1159,9 +1853,9 @@ class CharacterController{
             }
         }
 
-        this.depenetrateCached(skinView, effRot, halfExt, world, cacheValid, candMin, candMax, depMoved, depClean);
+        this.depenetrateCached(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, dt, world, cacheValid, candMin, candMax, depMoved, depClean);
         const b8 reuseStick = stickProbeHit && !depMoved;
-        this.updateGroundState(world, baseView, skinView, effRot, halfExt, reuseStick, floorProbe, depClean, cacheValid, candMin, candMax);
+        this.updateGroundState(world, useMulti, baseView, skinView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, reuseStick, floorProbe, depClean, cacheValid, candMin, candMax);
         const b8 nowGroundedAny = (this.groundState == CharacterGroundState::OnGround || this.groundState == CharacterGroundState::OnSteepGround);
         if(!wasGroundedAny && nowGroundedAny){
             this.platformInheritedVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1176,9 +1870,9 @@ class CharacterController{
             this.stepEvents.push_back(landEv);
         }
         else if(wasGroundedAny && !nowGroundedAny){
-            this.platformInheritedVelocity = f32x4(prevGroundVel, 0.0f);
-            if(this.def.inheritPlatformVelocity && Vector3Dot(vel, up).x > 0.05f && Vector3LengthSq(prevGroundVel).x > 1.0e-6f)
-                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + prevGroundVel, 0.0f);
+            this.platformInheritedVelocity = f32x4(stepExitGroundVel, 0.0f);
+            if(this.def.inheritPlatformVelocity && Vector3LengthSq(stepExitGroundVel).x > 1.0e-6f)
+                this.linearVelocity = f32x4(VectorSingle(this.linearVelocity) + stepExitGroundVel, 0.0f);
             CharacterControllerEvent airEv;
             airEv.type = CharacterControllerEventType::LeftGround;
             airEv.point = this.position;
@@ -1205,15 +1899,18 @@ class CharacterController{
         if(this.def.ignoreBodyId.valid() && world.isValidBody(this.def.ignoreBodyId)){
             const Expected<BodyType> ibType = world.tryGetBodyType(this.def.ignoreBodyId);
             if(ibType.has_value() && ibType.value() == BodyType::Kinematic){
-                const Transform3D targetXf(VectorSingle(this.position), this.effectiveProxyRotation());
+                const Transform3D targetXf(VectorSingle(this.position), effRot);
                 world.setKinematicTarget(this.def.ignoreBodyId, targetXf, dt);
             }
         }
+        this.m_prevProxyRotation = f32x4(effRot);
+        this.m_hasPrevProxyRotation = true;
     }
 
     private void syncCompanionBodyShape(mut PhysicsWorld world){
         if(!this.def.ignoreBodyId.valid() || !world.isValidBody(this.def.ignoreBodyId))
             return;
+        this.ensureCustomLocalBounds(world);
 
         ShapeId targetShapeId;
         if(this.def.ignoreShapeId.valid() && world.isValidShape(this.def.ignoreShapeId)){
@@ -1229,8 +1926,10 @@ class CharacterController{
                 desiredType = ShapeType::Sphere;
             else if(this.def.shapeType == CharacterShapeType::Cylinder)
                 desiredType = ShapeType::Cylinder;
-            else if(this.def.shapeType == CharacterShapeType::Box)
+            else if(this.def.shapeType == CharacterShapeType::Box || this.def.shapeType == CharacterShapeType::ConvexHull)
                 desiredType = ShapeType::Hull;
+            else if(this.def.shapeType == CharacterShapeType::Compound)
+                desiredType = ShapeType::Compound;
             for(usize si = 0u; si < bodyShapeIds.size(); ++si){
                 const Expected<ShapeType> stRes = world.tryGetShapeType(bodyShapeIds[si]);
                 if(stRes.has_value() && stRes.value() == desiredType){
@@ -1248,29 +1947,53 @@ class CharacterController{
             updMass = true;
 
         if(targetShapeId.valid()){
-            if(this.def.shapeType == CharacterShapeType::Sphere || (this.def.shapeType == CharacterShapeType::Capsule && this.def.halfHeight <= 1.0e-4f)){
-                SphereShape sp;
-                sp.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
-                world.setSphereShape(targetShapeId, sp, updMass);
+            b8 handledCustom = false;
+            const VectorSingle scaleVec = ComputeValidCharacterScale(VectorSingle(this.def.customShapeScale));
+            if(this.def.shapeType == CharacterShapeType::ConvexHull && world.isHullGeometryValid(this.def.customHullGeometryId)){
+                if(CharacterScaleIsUnit(scaleVec)){
+                    handledCustom = world.setShapeHullGeometry(targetShapeId, this.def.customHullGeometryId, updMass);
+                }
+                else{
+                    in HullShape rawHull = world.m_hullShapes[this.def.customHullGeometryId.index];
+                    Vector<f32x4> scaledPts;
+                    scaledPts.reserve(rawHull.vertices.size());
+                    for(usize vi = 0u; vi < rawHull.vertices.size(); ++vi)
+                        scaledPts.push_back(f32x4(VectorSingle(rawHull.vertices[vi], 0.0f) * scaleVec, 0.0f));
+                    const Expected<HullShape> builtHull = BuildConvexHull(Span<f32x4>(scaledPts), rawHull.centroidRadius.w);
+                    if(builtHull.has_value())
+                        handledCustom = world.setHullShape(targetShapeId, builtHull.value(), updMass);
+                }
             }
-            else if(this.def.shapeType == CharacterShapeType::Cylinder){
-                CylinderShape cy;
-                cy.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
-                cy.halfHeightRadiusConvex = f32x4(Max(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
-                world.setCylinderShape(targetShapeId, cy, updMass);
+            else if(this.def.shapeType == CharacterShapeType::Compound && world.isCompoundGeometryValid(this.def.customCompoundGeometryId)){
+                if(CharacterScaleIsUnit(scaleVec))
+                    handledCustom = world.setShapeCompoundGeometry(targetShapeId, this.def.customCompoundGeometryId, updMass);
             }
-            else if(this.def.shapeType == CharacterShapeType::Box){
-                const VectorSingle he = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
-                const Expected<HullShape> boxHull = MakeBoxHull(he.x, he.y, he.z, 0.0f);
-                if(boxHull.has_value())
-                    world.setHullShape(targetShapeId, boxHull.value(), updMass);
-            }
-            else{
-                CapsuleShape cap;
-                const f32 hh = Max(this.def.halfHeight, 0.5f * s_MinCapsuleLength + 1.0e-3f);
-                cap.center1Radius = f32x4(0.0f, -hh, 0.0f, this.def.radius);
-                cap.center2 = f32x4(0.0f, hh, 0.0f, 0.0f);
-                world.setCapsuleShape(targetShapeId, cap, updMass);
+
+            if(!handledCustom){
+                if(this.def.shapeType == CharacterShapeType::Sphere || (this.def.shapeType == CharacterShapeType::Capsule && this.def.halfHeight <= 1.0e-4f)){
+                    SphereShape sp;
+                    sp.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
+                    world.setSphereShape(targetShapeId, sp, updMass);
+                }
+                else if(this.def.shapeType == CharacterShapeType::Cylinder){
+                    CylinderShape cy;
+                    cy.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
+                    cy.halfHeightRadiusConvex = f32x4(Max(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
+                    world.setCylinderShape(targetShapeId, cy, updMass);
+                }
+                else if(this.def.shapeType == CharacterShapeType::Box){
+                    const VectorSingle he = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
+                    const Expected<HullShape> boxHull = MakeBoxHull(he.x, he.y, he.z, 0.0f);
+                    if(boxHull.has_value())
+                        world.setHullShape(targetShapeId, boxHull.value(), updMass);
+                }
+                else{
+                    CapsuleShape cap;
+                    const f32 hh = Max(this.def.halfHeight, 0.5f * s_MinCapsuleLength + 1.0e-3f);
+                    cap.center1Radius = f32x4(0.0f, -hh, 0.0f, this.def.radius);
+                    cap.center2 = f32x4(0.0f, hh, 0.0f, 0.0f);
+                    world.setCapsuleShape(targetShapeId, cap, updMass);
+                }
             }
         }
 
@@ -1279,66 +2002,67 @@ class CharacterController{
     }
 
     private b8 probeResizeClearance(in PhysicsWorld world, in CharacterControllerDef testDef, in VectorSingle testPos)const{
-        CharacterShapeType effType = testDef.shapeType;
         Array<f32x3u, 8u> pts;
-        const f32 extra = 0.0f;
-        ShapeProxyView view;
-        if(effType == CharacterShapeType::Sphere){
-            pts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
-            view = MakeSpanProxyView(Span<f32x3u>(pts.data(), 1u), testDef.radius + extra);
-        }
-        else if(effType == CharacterShapeType::Cylinder){
-            view.kind = ProxyKind::Cylinder;
-            view.param0 = f32x4(0.0f, 0.0f, 0.0f, testDef.radius);
-            view.param1 = f32x4(Max(0.01f, testDef.halfHeight), 0.0f, 0.0f, 0.0f);
-            view.radius = extra;
-        }
-        else if(effType == CharacterShapeType::Box){
-            const VectorSingle he = Max(VectorSingle(testDef.boxHalfExtents), VectorSingle(0.05f));
-            usize ci = 0u;
-            for(u32 iz = 0u; iz < 2u; ++iz){
-                f32 sz = -he.z;
-                if(iz != 0u) sz = he.z;
-                for(u32 iy = 0u; iy < 2u; ++iy){
-                    f32 sy = -he.y;
-                    if(iy != 0u) sy = he.y;
-                    for(u32 ix = 0u; ix < 2u; ++ix){
-                        f32 sx = -he.x;
-                        if(ix != 0u) sx = he.x;
-                        pts[ci] = f32x3u(sx, sy, sz);
-                        ++ci;
-                    }
-                }
-            }
-            view = MakeSpanProxyView(Span<f32x3u>(pts.data(), 8u), extra);
-        }
-        else{
-            pts[0u] = f32x3u(0.0f, -testDef.halfHeight, 0.0f);
-            pts[1u] = f32x3u(0.0f, testDef.halfHeight, 0.0f);
-            view = MakeSpanProxyView(Span<f32x3u>(pts.data(), 2u), testDef.radius + extra);
-        }
-        const Transform3D xf(testPos, this.effectiveProxyRotation());
+        ShapeProxyView singleView;
+        Vector<ShapeProxy> multiProxies;
+        Vector<Transform3D> multiXfs;
+        const b8 useMulti = this.buildShapeLeavesForDef(world, testDef, 0.0f, pts, singleView, multiProxies, multiXfs);
+        const VectorSingle effRot = this.effectiveProxyRotation();
+        const Optional<in PhysicsWorld> worldOpt(world);
         b8 clear = true;
-        world.overlapShapeCollectView(
-            view,
-            xf,
-            this.def.filter,
-            this.def.hitSensors,
-            this.def.ignoreBodyId,
-            this.def.ignoreShapeId,
-            lambda[in this, mut clear](in ShapeOverlapHit hit) -> b8{
-                if(hit.penetrationDepth > this.def.skinWidth){
-                    clear = false;
-                    return false;
+        if(!useMulti){
+            world.overlapShapeCollectView(
+                singleView,
+                Transform3D(testPos, effRot),
+                this.def.filter,
+                this.def.hitSensors,
+                this.def.ignoreBodyId,
+                this.def.ignoreShapeId,
+                lambda[in this, in worldOpt, mut clear](in ShapeOverlapHit hit) -> b8{
+                    if(hit.penetrationDepth > this.def.skinWidth){
+                        const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(hit.normal), this.upDirection());
+                        if(this.validateContactHit(worldOpt.value(), hit.shapeId, hit.triangleIndex, VectorSingle(hit.pointB), outN, hit.penetrationDepth)){
+                            clear = false;
+                            return false;
+                        }
+                    }
+                    return true;
                 }
-                return true;
-            }
-        );
+            );
+            return clear;
+        }
+        for(usize li = 0u; li < multiProxies.size() && clear; ++li){
+            VectorSingle lPos(0.0f);
+            VectorSingle lRot(0.0f, 0.0f, 0.0f, 1.0f);
+            ComposeTransformValues(testPos, effRot, VectorSingle(multiXfs[li].position), SafeNormalizeQuat(VectorSingle(multiXfs[li].rotation)), lPos, lRot);
+            world.overlapShapeCollectView(
+                MakeShapeProxyView(multiProxies[li]),
+                Transform3D(lPos, lRot),
+                this.def.filter,
+                this.def.hitSensors,
+                this.def.ignoreBodyId,
+                this.def.ignoreShapeId,
+                lambda[in this, in worldOpt, mut clear](in ShapeOverlapHit hit) -> b8{
+                    if(hit.penetrationDepth > this.def.skinWidth){
+                        const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(hit.normal), this.upDirection());
+                        if(this.validateContactHit(worldOpt.value(), hit.shapeId, hit.triangleIndex, VectorSingle(hit.pointB), outN, hit.penetrationDepth)){
+                            clear = false;
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            );
+        }
         return clear;
     }
 
     public b8 canResizeShape(in PhysicsWorld world, in f32 newRadius, in f32 newHalfHeight)const{
-        if(this.def.shapeType == CharacterShapeType::Box)
+        if(
+            this.def.shapeType == CharacterShapeType::Box
+            || this.def.shapeType == CharacterShapeType::ConvexHull
+            || this.def.shapeType == CharacterShapeType::Compound
+        )
             return false;
         if(!IsFinite(VectorSingle(newRadius, newHalfHeight, 0.0f, 0.0f)) || newRadius < 0.05f || newHalfHeight < 0.0f)
             return false;
@@ -1371,26 +2095,29 @@ class CharacterController{
     }
 
     public b8 trySetShapeDimensions(mut PhysicsWorld world, in f32 newRadius, in f32 newHalfHeight){
-        if(this.def.shapeType == CharacterShapeType::Box)
+        if(
+            this.def.shapeType == CharacterShapeType::Box
+            || this.def.shapeType == CharacterShapeType::ConvexHull
+            || this.def.shapeType == CharacterShapeType::Compound
+        )
             return false;
         if(!IsFinite(VectorSingle(newRadius, newHalfHeight, 0.0f, 0.0f)) || newRadius < 0.05f || newHalfHeight < 0.0f)
             return false;
         world.ensureCpuBroadphaseSynced();
-        const f32 oldR = this.def.radius;
-        const f32 oldH = this.def.halfHeight;
-        const f32 oldFoot = this.footHalfHeight();
+        CharacterControllerDef testDef = this.def;
+        testDef.radius = newRadius;
+        testDef.halfHeight = newHalfHeight;
+        f32 newFoot = newHalfHeight + newRadius;
+        if(testDef.shapeType == CharacterShapeType::Cylinder)
+            newFoot = Max(0.01f, newHalfHeight);
+        else if(testDef.shapeType == CharacterShapeType::Sphere)
+            newFoot = newRadius;
+        const f32 footDelta = newFoot - this.footHalfHeight();
+        const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
+        if(!this.probeResizeClearance(world, testDef, testPos))
+            return false;
         this.def.radius = newRadius;
         this.def.halfHeight = newHalfHeight;
-        const f32 footDelta = this.footHalfHeight() - oldFoot;
-        const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
-        this.gatherOverlapsAt(world, testPos, 0.0f);
-        for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
-            if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
-                this.def.radius = oldR;
-                this.def.halfHeight = oldH;
-                return false;
-            }
-        }
         this.position = f32x4(testPos, 0.0f);
         this.syncCompanionBodyShape(world);
         return true;
@@ -1405,121 +2132,734 @@ class CharacterController{
         if(clamped.x < 0.05f || clamped.y < 0.05f || clamped.z < 0.05f)
             return false;
         world.ensureCpuBroadphaseSynced();
-        const f32x4 oldExt = this.def.boxHalfExtents;
-        const f32 oldFoot = this.footHalfHeight();
-        this.def.boxHalfExtents = f32x4(clamped, 0.0f);
-        const f32 footDelta = this.footHalfHeight() - oldFoot;
+        CharacterControllerDef testDef = this.def;
+        testDef.boxHalfExtents = f32x4(clamped, 0.0f);
+        const f32 footDelta = Max(0.05f, clamped.y) - this.footHalfHeight();
         const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
-        this.gatherOverlapsAt(world, testPos, 0.0f);
-        for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
-            if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
-                this.def.boxHalfExtents = oldExt;
-                return false;
-            }
-        }
+        if(!this.probeResizeClearance(world, testDef, testPos))
+            return false;
+        this.def.boxHalfExtents = f32x4(clamped, 0.0f);
         this.position = f32x4(testPos, 0.0f);
         this.syncCompanionBodyShape(world);
         return true;
     }
 
-    public b8 resolveAgainstOtherCharacter(mut CharacterController other){
+    private b8 validateCharacterVsCharacterContact(
+        in PhysicsWorld world,
+        in ShapeId shapeId,
+        in BodyId fallbackBodyId,
+        in VectorSingle point,
+        in VectorSingle outNormal,
+        in f32 depth
+    )const{
+        if(!this.m_onContactValidateCallback.has_value())
+            return true;
+        CharacterContactInfo valInfo;
+        valInfo.shapeId = shapeId;
+        valInfo.triangleIndex = s_NullIndex;
+        valInfo.bodyId = fallbackBodyId;
+        if(!valInfo.bodyId.valid() && shapeId.valid()){
+            const Expected<BodyId> bRes = world.tryGetShapeBody(shapeId);
+            if(bRes.has_value())
+                valInfo.bodyId = bRes.value();
+        }
+        valInfo.point = f32x4(point, 0.0f);
+        valInfo.normal = f32x4(outNormal, 0.0f);
+        valInfo.penetrationDepth = depth;
+        valInfo.isWalkable = this.isWalkableNormal(outNormal);
+        return this.m_onContactValidateCallback.value()(valInfo);
+    }
+
+    private void recordCharacterVsCharacterContact(
+        in ShapeId shapeId,
+        in BodyId fallbackBodyId,
+        in VectorSingle point,
+        in VectorSingle outNormal,
+        in f32 depth
+    ){
+        for(usize i = 0u; i < this.activeContacts.size(); ++i){
+            if(
+                this.activeContacts[i].shapeId == shapeId
+                && this.activeContacts[i].bodyId == fallbackBodyId
+                && this.activeContacts[i].triangleIndex == s_NullIndex
+            ){
+                this.activeContacts[i].point = f32x4(point, 0.0f);
+                this.activeContacts[i].normal = f32x4(outNormal, 0.0f);
+                this.activeContacts[i].penetrationDepth = Max(this.activeContacts[i].penetrationDepth, depth);
+                this.activeContacts[i].isWalkable = this.isWalkableNormal(outNormal);
+                return;
+            }
+        }
+        CharacterContactInfo hitInfo;
+        hitInfo.shapeId = shapeId;
+        hitInfo.triangleIndex = s_NullIndex;
+        hitInfo.bodyId = fallbackBodyId;
+        hitInfo.point = f32x4(point, 0.0f);
+        hitInfo.normal = f32x4(outNormal, 0.0f);
+        hitInfo.penetrationDepth = depth;
+        hitInfo.isWalkable = this.isWalkableNormal(outNormal);
+        if(this.m_onContactAddedCallback.has_value())
+            this.m_onContactAddedCallback.value()(hitInfo);
+        this.activeContacts.push_back(hitInfo);
+    }
+
+    private VectorSingle clampCharacterPushAgainstWorld(
+        in PhysicsWorld world,
+        in ShapeId otherIgnoreShape,
+        in BodyId otherIgnoreBody,
+        in VectorSingle wantDelta,
+        mut b8 outBlocked,
+        mut VectorSingle outBlockNormal
+    ){
+        outBlocked = false;
+        outBlockNormal = VectorSingle(0.0f);
+        if(Vector3LengthSq(VectorSingle(wantDelta, 0.0f)).x <= 1.0e-10f)
+            return VectorSingle(0.0f);
+
+        const VectorSingle effRot = this.effectiveProxyRotation();
+        Array<f32x3u, 8u> ptsBase;
+        ShapeProxyView baseView;
+        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, 0.0f, ptsBase, baseView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        const VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot) + VectorSingle(this.def.skinWidth);
+        const VectorSingle startPos = VectorSingle(this.position);
+        const VectorSingle qMin = Min(startPos, startPos + wantDelta) - halfExt;
+        const VectorSingle qMax = Max(startPos, startPos + wantDelta) + halfExt;
+        world.gatherCandidateShapesAabb(qMin, qMax, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchCandShapes);
+
+        FixedVector<u32, 32u> excl;
+        if(otherIgnoreShape.valid() && world.isValidShape(otherIgnoreShape))
+            excl.push_back(otherIgnoreShape.index);
+        if(otherIgnoreBody.valid() && world.isValidBody(otherIgnoreBody)){
+            Vector<ShapeId> bShapes;
+            world.bodyShapes(otherIgnoreBody, bShapes);
+            for(usize bi = 0u; bi < bShapes.size(); ++bi){
+                if(bShapes[bi].valid() && excl.size() < 32u){
+                    b8 dup = false;
+                    for(usize ei = 0u; ei < excl.size(); ++ei){
+                        if(excl[ei] == bShapes[bi].index){
+                            dup = true;
+                            break;
+                        }
+                    }
+                    if(!dup)
+                        excl.push_back(bShapes[bi].index);
+                }
+            }
+        }
+
+        b8 cacheValid = true;
+        VectorSingle candMin = qMin;
+        VectorSingle candMax = qMax;
+        FixedVector<u32, 16u> valExcl;
+        ShapeCastHit hit;
+        for(u32 attempt = 0u; attempt < 16u; ++attempt){
+            FixedVector<u32, 48u> allExcl;
+            for(usize ei = 0u; ei < excl.size(); ++ei)
+                allExcl.push_back(excl[ei]);
+            for(usize ei = 0u; ei < valExcl.size() && allExcl.size() < 48u; ++ei)
+                allExcl.push_back(valExcl[ei]);
+            hit = this.castWithCache(world, useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, effRot, false, halfExt, startPos, wantDelta, Span<u32>(allExcl.data(), allExcl.size()), cacheValid, candMin, candMax);
+            if(!hit.hit || !this.m_onContactValidateCallback.has_value())
+                break;
+            const VectorSingle hitN = SafeNormalizeVec3(VectorSingle(hit.normal), this.upDirection());
+            if(this.validateContactHit(world, hit.shapeId, hit.triangleIndex, VectorSingle(hit.point), hitN, 0.0f))
+                break;
+            if(!hit.shapeId.valid() || valExcl.size() >= 16u){
+                hit.hit = false;
+                break;
+            }
+            valExcl.push_back(hit.shapeId.index);
+        }
+
+        if(!hit.hit){
+            this.position = f32x4(startPos + wantDelta, 0.0f);
+            return wantDelta;
+        }
+        outBlocked = true;
+        outBlockNormal = SafeNormalizeVec3(VectorSingle(hit.normal), this.upDirection());
+        const f32 safeFrac = Max(0.0f, hit.fraction - 0.002f);
+        const VectorSingle moved = wantDelta * safeFrac;
+        this.position = f32x4(startPos + moved, 0.0f);
+        return moved;
+    }
+
+    public b8 resolveAgainstOtherCharacter(mut PhysicsWorld world, mut CharacterController other){
         if(!ShouldCollideFilters(this.def.filter, other.def.filter))
             return false;
-        const f32 hhA = this.footHalfHeight();
-        const f32 hhB = other.footHalfHeight();
+        world.ensureCpuBroadphaseSynced();
+        this.ensureCustomLocalBounds(world);
+        other.ensureCustomLocalBounds(world);
+
         const VectorSingle pA = VectorSingle(this.position);
         const VectorSingle pB = VectorSingle(other.position);
+        const VectorSingle rotA = this.effectiveProxyRotation();
+        const VectorSingle rotB = other.effectiveProxyRotation();
         const VectorSingle up = this.upDirection();
-        const f32 yDiff = Abs(VectorSingle(Vector3Dot(pB - pA, up).x)).x;
-        if(yDiff > hhA + hhB + this.def.skinWidth + other.def.skinWidth)
-            return false;
 
-        const VectorSingle dVec = pA - pB;
-        const VectorSingle horiz = dVec - up * Vector3Dot(dVec, up).x;
-        const f32 rSum = this.horizontalExtent() + other.horizontalExtent() + 0.5f * (this.def.skinWidth + other.def.skinWidth);
-        const f32 distSq = Vector3LengthSq(horiz).x;
-        if(distSq >= rSum * rSum)
-            return false;
+        Array<f32x3u, 8u> ptsA;
+        Array<f32x3u, 8u> ptsB;
+        ShapeProxyView singleA;
+        ShapeProxyView singleB;
+        Vector<ShapeProxy> multiA;
+        Vector<Transform3D> xfsA;
+        Vector<ShapeProxy> multiB;
+        Vector<Transform3D> xfsB;
+        const f32 halfSkinA = 0.5f * this.def.skinWidth;
+        const f32 halfSkinB = 0.5f * other.def.skinWidth;
+        const b8 isMultiA = this.buildShapeLeavesForDef(world, this.def, halfSkinA, ptsA, singleA, multiA, xfsA);
+        const b8 isMultiB = other.buildShapeLeavesForDef(world, other.def, halfSkinB, ptsB, singleB, multiB, xfsB);
 
-        f32 dist = 0.0f;
+        usize leafCountA = 1u;
+        if(isMultiA)
+            leafCountA = multiA.size();
+        usize leafCountB = 1u;
+        if(isMultiB)
+            leafCountB = multiB.size();
+        b8 hasOverlap = false;
+        f32 deepestPen = 0.0f;
         VectorSingle sepDir(1.0f, 0.0f, 0.0f, 0.0f);
-        if(distSq > 1.0e-8f){
-            dist = Sqrt(VectorSingle(distSq)).x;
-            sepDir = horiz * (1.0f / dist);
+        VectorSingle contactPt = (pA + pB) * 0.5f;
+
+        for(usize ia = 0u; ia < leafCountA; ++ia){
+            ShapeProxyView va = singleA;
+            VectorSingle posLeafA = pA;
+            VectorSingle rotLeafA = rotA;
+            if(isMultiA){
+                va = MakeShapeProxyView(multiA[ia]);
+                ComposeTransformValues(pA, rotA, VectorSingle(xfsA[ia].position), SafeNormalizeQuat(VectorSingle(xfsA[ia].rotation)), posLeafA, rotLeafA);
+            }
+            for(usize ib = 0u; ib < leafCountB; ++ib){
+                ShapeProxyView vb = singleB;
+                VectorSingle posLeafB = pB;
+                VectorSingle rotLeafB = rotB;
+                if(isMultiB){
+                    vb = MakeShapeProxyView(multiB[ib]);
+                    ComposeTransformValues(pB, rotB, VectorSingle(xfsB[ib].position), SafeNormalizeQuat(VectorSingle(xfsB[ib].rotation)), posLeafB, rotLeafB);
+                }
+                const Manifold m = CollideConvexProxyViews(va, posLeafA, rotLeafA, vb, posLeafB, rotLeafB, 0.0f);
+                if(m.pointCount() == 0u)
+                    continue;
+                for(u32 pi = 0u; pi < m.pointCount(); ++pi){
+                    in ManifoldPoint mp = m.points[pi];
+                    const f32 penCand = -mp.separation();
+                    if(penCand > 1.0e-5f && (!hasOverlap || penCand > deepestPen)){
+                        hasOverlap = true;
+                        deepestPen = penCand;
+                        const VectorSingle rawNorm = -VectorSingle(m.normal());
+                        if(Vector3LengthSq(rawNorm).x > 1.0e-10f){
+                            sepDir = SafeNormalizeVec3(rawNorm, sepDir);
+                        }
+                        else{
+                            const VectorSingle dVec = pA - pB;
+                            if(Vector3LengthSq(dVec).x > 1.0e-8f)
+                                sepDir = SafeNormalizeVec3(dVec, sepDir);
+                            else
+                                sepDir = SafeNormalizeVec3(Cross(up, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+                        }
+                        contactPt = posLeafB + mp.anchorB();
+                    }
+                }
+            }
+        }
+        if(!hasOverlap || deepestPen <= 1.0e-5f)
+            return false;
+
+        if(!this.validateCharacterVsCharacterContact(world, other.def.ignoreShapeId, other.def.ignoreBodyId, contactPt, sepDir, deepestPen))
+            return false;
+        if(!other.validateCharacterVsCharacterContact(world, this.def.ignoreShapeId, this.def.ignoreBodyId, contactPt, -sepDir, deepestPen))
+            return false;
+
+        const b8 aOnTop = this.isWalkableNormal(sepDir);
+        const b8 bOnTop = other.isWalkableNormal(-sepDir);
+        f32 wA = 0.5f;
+        f32 wB = 0.5f;
+        if(aOnTop && other.groundState == CharacterGroundState::OnGround){
+            wA = 1.0f;
+            wB = 0.0f;
+        }
+        else if(bOnTop && this.groundState == CharacterGroundState::OnGround){
+            wA = 0.0f;
+            wB = 1.0f;
         }
         else{
-            const VectorSingle fallback = SafeNormalizeVec3(Cross(up, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-            sepDir = fallback;
+            const f32 invA = 1.0f / Max(1.0f, this.def.mass);
+            const f32 invB = 1.0f / Max(1.0f, other.def.mass);
+            const f32 invSum = invA + invB;
+            wA = invA / invSum;
+            wB = invB / invSum;
         }
-        const f32 pen = rSum - dist;
-        if(pen <= 1.0e-5f)
-            return false;
 
-        const f32 invA = 1.0f / Max(1.0f, this.def.mass);
-        const f32 invB = 1.0f / Max(1.0f, other.def.mass);
-        const f32 invSum = invA + invB;
-        const f32 wA = invA / invSum;
-        const f32 wB = invB / invSum;
-        this.position = f32x4(pA + sepDir * (pen * wA), 0.0f);
-        other.position = f32x4(pB - sepDir * (pen * wB), 0.0f);
+        const VectorSingle fullPushA = sepDir * (deepestPen * wA);
+        const VectorSingle fullPushB = (-sepDir) * (deepestPen * wB);
+        b8 blockedA = false;
+        VectorSingle blockNA(0.0f);
+        const VectorSingle movedA = this.clampCharacterPushAgainstWorld(world, other.def.ignoreShapeId, other.def.ignoreBodyId, fullPushA, blockedA, blockNA);
+        const VectorSingle remA = fullPushA - movedA;
+        VectorSingle adjPushB = fullPushB;
+        if(Vector3LengthSq(VectorSingle(remA, 0.0f)).x > 1.0e-8f)
+            adjPushB = adjPushB - remA;
+
+        b8 blockedB = false;
+        VectorSingle blockNB(0.0f);
+        const VectorSingle movedB = other.clampCharacterPushAgainstWorld(world, this.def.ignoreShapeId, this.def.ignoreBodyId, adjPushB, blockedB, blockNB);
+        const VectorSingle remB = adjPushB - movedB;
+        if(!blockedA && Vector3LengthSq(VectorSingle(remB, 0.0f)).x > 1.0e-8f){
+            b8 extraBlockedA = false;
+            VectorSingle extraBlockNA(0.0f);
+            this.clampCharacterPushAgainstWorld(world, other.def.ignoreShapeId, other.def.ignoreBodyId, -remB, extraBlockedA, extraBlockNA);
+            if(extraBlockedA){
+                blockedA = true;
+                blockNA = extraBlockNA;
+            }
+        }
+
+        const f32 resolvedDist = Vector3Dot(movedA - movedB, sepDir).x;
+        const f32 residualPen = Max(0.0f, deepestPen - resolvedDist);
+        if(blockedA && blockedB && residualPen > Max(this.def.skinWidth, other.def.skinWidth) && Vector3Dot(blockNA, blockNB).x < -0.5f){
+            this.isCrushed = true;
+            other.isCrushed = true;
+        }
 
         const VectorSingle vA = VectorSingle(this.linearVelocity);
         const VectorSingle vB = VectorSingle(other.linearVelocity);
         const f32 relN = Vector3Dot(vA - vB, sepDir).x;
         if(relN < 0.0f){
-            this.linearVelocity = f32x4(vA - sepDir * (relN * wA), 0.0f);
-            other.linearVelocity = f32x4(vB + sepDir * (relN * wB), 0.0f);
+            f32 effRest = 0.0f;
+            if(-relN > world.m_def.restitutionThreshold){
+                effRest = Max(Clamp(this.def.characterRestitution, 0.0f, 1.0f), Clamp(other.def.characterRestitution, 0.0f, 1.0f));
+            }
+            const f32 jScale = (1.0f + effRest) * relN;
+            this.linearVelocity = f32x4(vA - sepDir * (jScale * wA), 0.0f);
+            other.linearVelocity = f32x4(vB + sepDir * (jScale * wB), 0.0f);
         }
+
+        const f32 impactSpeed = Max(0.0f, -relN);
+        if(aOnTop){
+            this.groundState = CharacterGroundState::OnGround;
+            this.groundNormal = f32x4(sepDir, 0.0f);
+            this.groundPoint = f32x4(contactPt, 0.0f);
+            this.groundVelocity = other.linearVelocity;
+            this.groundBodyId = other.def.ignoreBodyId;
+            this.groundShapeId = other.def.ignoreShapeId;
+            this.groundTriangleIndex = s_NullIndex;
+            this.groundSubShapeIndex = s_NullIndex;
+            CharacterControllerEvent landEv;
+            landEv.type = CharacterControllerEventType::Landed;
+            landEv.otherBodyId = other.def.ignoreBodyId;
+            landEv.otherShapeId = other.def.ignoreShapeId;
+            landEv.point = f32x4(contactPt, 0.0f);
+            landEv.normal = f32x4(sepDir, 0.0f);
+            landEv.speed = impactSpeed;
+            this.stepEvents.push_back(landEv);
+
+            if(Vector3Dot(-sepDir, other.upDirection()).x < -0.5f){
+                other.hitCeiling = true;
+                CharacterControllerEvent ceilEv;
+                ceilEv.type = CharacterControllerEventType::CeilingHit;
+                ceilEv.otherBodyId = this.def.ignoreBodyId;
+                ceilEv.otherShapeId = this.def.ignoreShapeId;
+                ceilEv.point = f32x4(contactPt, 0.0f);
+                ceilEv.normal = f32x4(-sepDir, 0.0f);
+                ceilEv.speed = impactSpeed;
+                other.pushOrMergeStepEvent(ceilEv);
+            }
+        }
+        else if(bOnTop){
+            other.groundState = CharacterGroundState::OnGround;
+            other.groundNormal = f32x4(-sepDir, 0.0f);
+            other.groundPoint = f32x4(contactPt, 0.0f);
+            other.groundVelocity = this.linearVelocity;
+            other.groundBodyId = this.def.ignoreBodyId;
+            other.groundShapeId = this.def.ignoreShapeId;
+            other.groundTriangleIndex = s_NullIndex;
+            other.groundSubShapeIndex = s_NullIndex;
+            CharacterControllerEvent landEvB;
+            landEvB.type = CharacterControllerEventType::Landed;
+            landEvB.otherBodyId = this.def.ignoreBodyId;
+            landEvB.otherShapeId = this.def.ignoreShapeId;
+            landEvB.point = f32x4(contactPt, 0.0f);
+            landEvB.normal = f32x4(-sepDir, 0.0f);
+            landEvB.speed = impactSpeed;
+            other.stepEvents.push_back(landEvB);
+
+            if(Vector3Dot(sepDir, up).x < -0.5f){
+                this.hitCeiling = true;
+                CharacterControllerEvent ceilEvA;
+                ceilEvA.type = CharacterControllerEventType::CeilingHit;
+                ceilEvA.otherBodyId = other.def.ignoreBodyId;
+                ceilEvA.otherShapeId = other.def.ignoreShapeId;
+                ceilEvA.point = f32x4(contactPt, 0.0f);
+                ceilEvA.normal = f32x4(sepDir, 0.0f);
+                ceilEvA.speed = impactSpeed;
+                this.pushOrMergeStepEvent(ceilEvA);
+            }
+        }
+        else{
+            CharacterControllerEvent wallEvA;
+            wallEvA.type = CharacterControllerEventType::WallHit;
+            wallEvA.otherBodyId = other.def.ignoreBodyId;
+            wallEvA.otherShapeId = other.def.ignoreShapeId;
+            wallEvA.point = f32x4(contactPt, 0.0f);
+            wallEvA.normal = f32x4(sepDir, 0.0f);
+            wallEvA.speed = impactSpeed;
+            this.pushOrMergeStepEvent(wallEvA);
+
+            CharacterControllerEvent wallEvB;
+            wallEvB.type = CharacterControllerEventType::WallHit;
+            wallEvB.otherBodyId = this.def.ignoreBodyId;
+            wallEvB.otherShapeId = this.def.ignoreShapeId;
+            wallEvB.point = f32x4(contactPt, 0.0f);
+            wallEvB.normal = f32x4(-sepDir, 0.0f);
+            wallEvB.speed = impactSpeed;
+            other.pushOrMergeStepEvent(wallEvB);
+        }
+
+        this.recordCharacterVsCharacterContact(other.def.ignoreShapeId, other.def.ignoreBodyId, contactPt, sepDir, deepestPen);
+        other.recordCharacterVsCharacterContact(this.def.ignoreShapeId, this.def.ignoreBodyId, contactPt, -sepDir, deepestPen);
         return true;
+    }
+
+    private void computeCharacterFluidSubmersion(
+        in PhysicsWorld world,
+        in FluidVolume fv,
+        in VectorSingle pos,
+        in VectorSingle effRot,
+        in VectorSingle surfNorm,
+        in VectorSingle waveT1,
+        in VectorSingle waveT2,
+        in f32 timeSec,
+        mut f32 outTotalVol,
+        mut f32 outSubVol,
+        mut VectorSingle outCob,
+        mut f32 outSubArea
+    )const{
+        outTotalVol = 0.0f;
+        outSubVol = 0.0f;
+        outCob = pos;
+        outSubArea = 0.0f;
+
+        if(this.def.shapeType == CharacterShapeType::Sphere){
+            const f32 r = Max(0.05f, this.def.radius);
+            outTotalVol = (4.0f / 3.0f) * s_Pi * r * r * r;
+            if(fv.shape == FluidVolumeShape::Sphere && !fv.hasSurfaceCallback() && !fv.hasDynamicWaveGrid()){
+                const VectorSingle fc = VectorSingle(fv.surfaceNormalOffset, 0.0f);
+                const f32 rf = Max(1.0e-4f, fv.surfaceNormalOffset.w);
+                const VectorSingle delta = fc - pos;
+                const f32 dist = Vector3Length(VectorSingle(delta, 0.0f)).x;
+                if(dist >= r + rf)
+                    return;
+                if(dist + r <= rf){
+                    outSubVol = outTotalVol;
+                    outCob = pos;
+                    outSubArea = s_Pi * r * r;
+                    return;
+                }
+                if(dist + rf <= r){
+                    outSubVol = Min(outTotalVol, (4.0f / 3.0f) * s_Pi * rf * rf * rf);
+                    outCob = fc;
+                    outSubArea = s_Pi * rf * rf;
+                    return;
+                }
+                const VectorSingle dir = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const f32 xp = (dist * dist + r * r - rf * rf) / (2.0f * dist);
+                const f32 h1 = Clamp(r - xp, 0.0f, 2.0f * r);
+                const f32 h2 = Clamp(rf + xp - dist, 0.0f, 2.0f * rf);
+                const f32 v1 = (s_Pi / 3.0f) * h1 * h1 * (3.0f * r - h1);
+                const f32 v2 = (s_Pi / 3.0f) * h2 * h2 * (3.0f * rf - h2);
+                const f32 c1Off = (0.75f * (2.0f * r - h1) * (2.0f * r - h1)) / Max(1.0e-6f, 3.0f * r - h1);
+                const f32 c2Off = (0.75f * (2.0f * rf - h2) * (2.0f * rf - h2)) / Max(1.0e-6f, 3.0f * rf - h2);
+                const VectorSingle c1 = pos + dir * c1Off;
+                const VectorSingle c2 = fc - dir * c2Off;
+                outSubVol = v1 + v2;
+                VectorSingle weightedCob = c1 * v1 + c2 * v2;
+                ClampSubmergedVolumeAndRescaleCob(outTotalVol, outSubVol, weightedCob);
+                outCob = weightedCob / Max(1.0e-7f, outSubVol);
+                outSubArea = s_Pi * r * r * Clamp(outSubVol / Max(1.0e-7f, outTotalVol), 0.0f, 1.0f);
+                return;
+            }
+            f32 d = 0.0f;
+            VectorSingle fVel(0.0f);
+            VectorSingle localN(0.0f);
+            fv.evaluateSurfaceWithWaveBasis(pos, surfNorm, waveT1, waveT2, timeSec, true, d, fVel, localN);
+            if(d + r <= 0.0f)
+                return;
+            const f32 h = Clamp(d + r, 0.0f, 2.0f * r);
+            outSubVol = (s_Pi / 3.0f) * h * h * (3.0f * r - h);
+            const f32 cobOffset = (0.75f * (2.0f * r - h) * (2.0f * r - h)) / Max(1.0e-6f, 3.0f * r - h);
+            outCob = pos - localN * cobOffset;
+            outSubArea = s_Pi * r * r * Clamp(outSubVol / Max(1.0e-7f, outTotalVol), 0.0f, 1.0f);
+            return;
+        }
+
+        if(this.def.shapeType == CharacterShapeType::Capsule || this.def.shapeType == CharacterShapeType::Cylinder){
+            const f32 r = Max(0.05f, this.def.radius);
+            f32 hh = Max(0.01f, this.def.halfHeight);
+            f32 dome = 0.0f;
+            if(this.def.shapeType == CharacterShapeType::Capsule){
+                hh = this.def.halfHeight;
+                dome = 1.0f;
+            }
+            const VectorSingle axis = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), effRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle p0 = pos - axis * hh;
+            const VectorSingle p1 = pos + axis * hh;
+            VectorSingle weightedCob(0.0f);
+            AccumulateAxisymmetricFrustumSlices(p0, p1, r, r, dome, dome, fv, surfNorm, waveT1, waveT2, timeSec, outTotalVol, outSubVol, weightedCob, outSubArea);
+            if(outSubVol > 1.0e-7f)
+                outCob = weightedCob / outSubVol;
+            return;
+        }
+
+        VectorSingle lMin(-0.35f, -0.55f, -0.35f, 0.0f);
+        VectorSingle lMax(0.35f, 0.55f, 0.35f, 0.0f);
+        f32 faceAreaAvg = 0.5f;
+        Shape testShape;
+        b8 hasCustomWorldShape = false;
+        const VectorSingle scaleVec = ComputeValidCharacterScale(VectorSingle(this.def.customShapeScale));
+        const f32 scaleVol = Abs(VectorSingle(scaleVec.x * scaleVec.y * scaleVec.z)).x;
+
+        if(this.def.shapeType == CharacterShapeType::ConvexHull && world.isHullGeometryValid(this.def.customHullGeometryId)){
+            testShape.type = ShapeType::Hull;
+            testShape.geometryIndex = this.def.customHullGeometryId.index;
+            hasCustomWorldShape = true;
+            in HullShape hull = world.m_hullShapes[this.def.customHullGeometryId.index];
+            outTotalVol = Max(1.0e-3f, ComputeHullBuoyancyVolume(hull) * scaleVol);
+            if(this.m_hasCustomLocalBounds){
+                lMin = VectorSingle(this.m_customLocalMin);
+                lMax = VectorSingle(this.m_customLocalMax);
+            }
+        }
+        else if(this.def.shapeType == CharacterShapeType::Compound && world.isCompoundGeometryValid(this.def.customCompoundGeometryId)){
+            testShape.type = ShapeType::Compound;
+            testShape.geometryIndex = this.def.customCompoundGeometryId.index;
+            hasCustomWorldShape = true;
+            in CompoundShape comp = world.m_compoundShapes[this.def.customCompoundGeometryId.index];
+            outTotalVol = Max(1.0e-3f, ComputeCompoundGeometricVolume(comp, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_sdfShapes) * scaleVol);
+            if(this.m_hasCustomLocalBounds){
+                lMin = VectorSingle(this.m_customLocalMin);
+                lMax = VectorSingle(this.m_customLocalMax);
+            }
+        }
+        else{
+            const VectorSingle he = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
+            lMin = -he;
+            lMax = he;
+            outTotalVol = Max(1.0e-3f, 8.0f * he.x * he.y * he.z);
+        }
+
+        const VectorSingle span = Max(lMax - lMin, VectorSingle(0.02f, 0.02f, 0.02f, 0.0f));
+        faceAreaAvg = (span.x * span.z + span.x * span.y + span.y * span.z) * (1.0f / 3.0f);
+        const VectorSingle invScale(1.0f / scaleVec.x, 1.0f / scaleVec.y, 1.0f / scaleVec.z, 0.0f);
+        const VectorSingle localStep = span * (1.0f / 3.0f);
+        const VectorSingle localBase = lMin + localStep * 0.5f;
+
+        u32 insideCount = 0u;
+        u32 insideSubCount = 0u;
+        VectorSingle insideSubSum(0.0f);
+        u32 rawSubCount = 0u;
+        VectorSingle rawSubSum(0.0f);
+
+        for(u32 iz = 0u; iz < 3u; ++iz){
+            for(u32 iy = 0u; iy < 3u; ++iy){
+                for(u32 ix = 0u; ix < 3u; ++ix){
+                    const VectorSingle localPt = localBase + VectorSingle(localStep.x * cast<f32>(ix), localStep.y * cast<f32>(iy), localStep.z * cast<f32>(iz), 0.0f);
+                    const VectorSingle worldPt = TransformPointValues(pos, effRot, localPt);
+                    const b8 isSub = (fv.signedDepthWithWaveBasis(worldPt, surfNorm, waveT1, waveT2, timeSec) > 0.0f);
+                    if(isSub){
+                        ++rawSubCount;
+                        rawSubSum = rawSubSum + worldPt;
+                    }
+                    b8 inShape = true;
+                    if(hasCustomWorldShape)
+                        inShape = world.testLocalPointInShape(testShape, localPt * invScale);
+                    if(inShape){
+                        ++insideCount;
+                        if(isSub){
+                            ++insideSubCount;
+                            insideSubSum = insideSubSum + worldPt;
+                        }
+                    }
+                }
+            }
+        }
+        if(insideCount > 0u){
+            if(insideSubCount > 0u){
+                const f32 frac = cast<f32>(insideSubCount) / cast<f32>(insideCount);
+                outSubVol = outTotalVol * frac;
+                outCob = insideSubSum / cast<f32>(insideSubCount);
+                outSubArea = faceAreaAvg * frac;
+            }
+        }
+        else if(rawSubCount > 0u){
+            const f32 frac = cast<f32>(rawSubCount) / 27.0f;
+            outSubVol = outTotalVol * frac;
+            outCob = rawSubSum / cast<f32>(rawSubCount);
+            outSubArea = faceAreaAvg * frac;
+        }
     }
 
     public void applyEnvironment(in PhysicsWorld world, in PhysicsEnvironment env, in f32 dt){
         if(dt <= 0.0f)
             return;
+        this.ensureCustomLocalBounds(world);
         const VectorSingle pos = VectorSingle(this.position);
+        const VectorSingle effRot = this.effectiveProxyRotation();
         const VectorSingle grav = world.gravity();
-        const f32 r = Max(0.05f, this.horizontalExtent());
-        const f32 hh = Max(0.05f, this.footHalfHeight());
+        const f32 invDt = 1.0f / Max(1.0e-5f, dt);
+        const f32 maxExt = Max(0.05f, Max(this.horizontalExtent(), this.footHalfHeight()));
+        const f32 bodyAreaEst = Max(0.01f, s_Pi * maxExt * maxExt);
         const f32 bodyMass = Max(1.0f, this.def.mass);
-        const f32 bodyVol = Max(1.0e-3f, s_Pi * r * r * (2.0f * hh));
-        const f32 bodyArea = Max(0.01f, s_Pi * r * r);
         VectorSingle vel = VectorSingle(this.linearVelocity);
+        VectorSingle angVel = VectorSingle(this.angularVelocity);
 
         for(usize fi = 0u; fi < env.fluids.size(); ++fi){
             in FluidVolume fv = env.fluids[fi];
             if(!fv.enabled || !ShouldCollideFilters(this.def.filter, fv.filter))
                 continue;
             const VectorSingle n = fv.normalizedSurfaceNormal();
-            f32 depth = 0.0f;
-            VectorSingle flowVel(0.0f);
-            fv.evaluateSurfaceAtDepthAndFlow(pos, n, env.elapsedTimeSec, depth, flowVel);
-            const f32 subFrac = Clamp((depth + hh) / Max(0.1f, 2.0f * hh), 0.0f, 1.0f);
-            if(subFrac <= 1.0e-5f)
+            VectorSingle waveT1(0.0f);
+            VectorSingle waveT2(0.0f);
+            fv.computeSurfaceTangentBasis(n, waveT1, waveT2);
+
+            f32 totalVol = 0.0f;
+            f32 subVol = 0.0f;
+            VectorSingle cob = pos;
+            f32 subArea = 0.0f;
+            this.computeCharacterFluidSubmersion(world, fv, pos, effRot, n, waveT1, waveT2, env.elapsedTimeSec, totalVol, subVol, cob, subArea);
+            const f32 subFrac = Clamp(subVol / Max(1.0e-6f, totalVol), 0.0f, 1.0f);
+            if(subFrac <= 1.0e-5f || subVol <= 1.0e-7f)
                 continue;
-            const VectorSingle buoyAcc = -grav * ((fv.density * bodyVol * subFrac) / bodyMass);
-            const VectorSingle vRel = vel - flowVel;
-            const f32 relSpeed = Vector3Length(vRel).x;
-            const VectorSingle dragAcc = -vRel * (fv.linearDrag * subFrac) - vRel * ((0.5f * fv.density * bodyArea * fv.quadraticDrag * relSpeed) / bodyMass);
-            const f32 addedRatio = bodyMass / Max(1.0e-4f, bodyMass + Max(0.0f, fv.addedMassCoeff) * (fv.density * bodyVol * subFrac));
-            vel = vel + (buoyAcc + dragAcc) * (dt * addedRatio);
+
+            f32 cobDepth = 0.0f;
+            VectorSingle flowVel(0.0f);
+            VectorSingle localSurfNorm = n;
+            const b8 analyticNorm = !fv.hasSurfaceCallback() && !fv.hasDynamicWaveGrid() && (fv.shape == FluidVolumeShape::Sphere || fv.shape == FluidVolumeShape::BoxAabb || fv.shape == FluidVolumeShape::Obb);
+            const b8 needEvalNormal = (fv.liftCoeff != 0.0f) || !analyticNorm;
+            fv.evaluateSurfaceWithWaveBasis(cob, n, waveT1, waveT2, env.elapsedTimeSec, needEvalNormal, cobDepth, flowVel, localSurfNorm);
+
+            const f32 displacedMass = Max(0.0f, fv.density) * subVol;
+            VectorSingle totalFluidAcc = -grav * (this.def.gravityScale * (displacedMass / bodyMass));
+            const VectorSingle vRel = flowVel - vel;
+            const f32 relSpeedSq = Vector3LengthSq(vRel).x;
+            if(relSpeedSq > 1.0e-10f){
+                const f32 invRel = Rsqrt(VectorSingle(relSpeedSq)).x;
+                const f32 relSpeed = relSpeedSq * invRel;
+                const VectorSingle relDir = vRel * invRel;
+                const f32 rawDragMag = fv.linearDrag * relSpeed * subFrac * bodyMass
+                    + 0.5f * Max(0.0f, fv.density) * fv.quadraticDrag * subArea * relSpeedSq;
+                const f32 clampedDragMag = Min(rawDragMag, bodyMass * relSpeed * invDt * 0.9f);
+                totalFluidAcc = totalFluidAcc + (relDir * (clampedDragMag / bodyMass));
+
+                if(fv.liftCoeff != 0.0f){
+                    const VectorSingle liftDir = SafeNormalizeVec3(localSurfNorm - relDir * Vector3Dot(localSurfNorm, relDir).x, localSurfNorm);
+                    const f32 rawLiftMag = 0.5f * Max(0.0f, fv.density) * fv.liftCoeff * subArea * relSpeedSq;
+                    const f32 maxSafeLift = bodyMass * relSpeed * invDt * 2.0f;
+                    const f32 clampedLift = Clamp(rawLiftMag, -maxSafeLift, maxSafeLift);
+                    totalFluidAcc = totalFluidAcc + (liftDir * (clampedLift / bodyMass));
+                }
+            }
+
+            const f32 addedMass = Max(0.0f, fv.addedMassCoeff) * displacedMass;
+            if(addedMass > 1.0e-7f){
+                const f32 effRatio = bodyMass / (bodyMass + addedMass);
+                totalFluidAcc = totalFluidAcc * effRatio - (grav * this.def.gravityScale) * ((addedMass * effRatio) / bodyMass);
+            }
+            vel = vel + totalFluidAcc * dt;
+
+            const f32 angSpeedSq = Vector3LengthSq(angVel).x;
+            if(angSpeedSq > 1.0e-10f && fv.angularDrag > 0.0f){
+                const f32 angSpeed = Sqrt(VectorSingle(angSpeedSq)).x;
+                const VectorSingle angDir = angVel * (1.0f / angSpeed);
+                const f32 dampAng = Min(angSpeed, (fv.angularDrag * subFrac * Max(0.1f, maxExt) * angSpeed / Max(0.1f, bodyMass)) * dt);
+                angVel = angVel - angDir * dampAng;
+            }
         }
 
-        b8 subtractedWorldGrav = false;
+        const u32 envEpoch = env.gravOverrideEpoch();
+        b8 localGravSubtracted = false;
         for(usize ffi = 0u; ffi < env.forceFields.size(); ++ffi){
             in ForceField ff = env.forceFields[ffi];
             if(!ff.enabled || !ShouldCollideFilters(this.def.filter, ff.filter))
                 continue;
             if(ff.useBounds && !ff.containsPoint(pos))
                 continue;
-            const VectorSingle fDir = SafeNormalizeVec3(VectorSingle(ff.originOrDirection), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+
+            VectorSingle fDir = SafeNormalizeVec3(VectorSingle(ff.originOrDirection), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            if(ff.type == ForceFieldType::GlobalGravity || ff.type == ForceFieldType::LocalGravityOverride)
+                fDir = SafeNormalizeVec3(VectorSingle(ff.originOrDirection), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+            else if(ff.type == ForceFieldType::Vortex)
+                fDir = SafeNormalizeVec3(VectorSingle(ff.axis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+
+            if(ff.enableOcclusion){
+                VectorSingle rayOrig = VectorSingle(ff.originOrDirection, 0.0f);
+                b8 hasOcclRay = false;
+                if(
+                    ff.type == ForceFieldType::PointGravity
+                    || ff.type == ForceFieldType::RadialImpulse
+                    || ff.type == ForceFieldType::Attractor
+                ){
+                    hasOcclRay = true;
+                }
+                else if(ff.type == ForceFieldType::Vortex){
+                    const VectorSingle vOrig(ff.originOrDirection, 0.0f);
+                    rayOrig = vOrig + fDir * Vector3Dot(pos - vOrig, fDir).x;
+                    hasOcclRay = true;
+                }
+                else if(
+                    ff.type == ForceFieldType::BoxWind
+                    || ff.type == ForceFieldType::Directional
+                    || ff.type == ForceFieldType::GlobalGravity
+                    || ff.type == ForceFieldType::LocalGravityOverride
+                ){
+                    f32 backDist = 50.0f;
+                    if(ff.radius > 0.0f)
+                        backDist = ff.radius;
+                    rayOrig = pos - fDir * backDist;
+                    hasOcclRay = true;
+                }
+                else if(
+                    ff.type == ForceFieldType::Turbulence
+                    || ff.type == ForceFieldType::AeroDrag
+                    || ff.type == ForceFieldType::DampingZone
+                    || ff.type == ForceFieldType::VectorField
+                ){
+                    rayOrig = ff.sphereShapeCenter();
+                    hasOcclRay = true;
+                }
+                if(hasOcclRay){
+                    const VectorSingle rayTrans = pos - rayOrig;
+                    if(Vector3LengthSq(VectorSingle(rayTrans, 0.0f)).x > 1.0e-6f){
+                        RayCastInput rayIn;
+                        rayIn.origin = f32x4(rayOrig, 0.0f);
+                        rayIn.translation = f32x4(rayTrans, 0.0f);
+                        rayIn.filter = ff.filter;
+                        rayIn.ignoreBodyId = this.def.ignoreBodyId;
+                        rayIn.ignoreShapeId = this.def.ignoreShapeId;
+                        rayIn.hitSensors = false;
+                        const RayCastHit occHit = world.rayCastClosest(rayIn);
+                        if(occHit.hit && occHit.fraction < 0.985f)
+                            continue;
+                    }
+                }
+            }
+
+            b8 outsideZone = false;
+            const f32 zoneFalloff = ComputeZoneFieldFalloff(ff, pos, outsideZone);
             VectorSingle acc(0.0f);
+            VectorSingle angAcc(0.0f);
+
             if(ff.type == ForceFieldType::PointGravity || ff.type == ForceFieldType::Attractor){
                 const VectorSingle toCenter = VectorSingle(ff.originOrDirection) - pos;
                 const f32 distSq = Vector3LengthSq(toCenter).x;
                 if(distSq > 1.0e-12f && (ff.radius <= 0.0f || distSq <= ff.radius * ff.radius)){
                     const f32 invD = Rsqrt(VectorSingle(distSq)).x;
+                    const VectorSingle dir = toCenter * invD;
                     const f32 fall = ComputeForceFieldFalloff(ff, distSq, invD);
-                    acc = (toCenter * invD) * (ff.strength * fall);
+                    acc = dir * (ff.strength * fall);
+                    if(ff.type == ForceFieldType::Attractor && ff.inwardSuction > 0.0f && distSq < Max(0.05f, ff.minDistance) * Max(0.05f, ff.minDistance)){
+                        const f32 vOut = -Vector3Dot(vel, dir).x;
+                        if(vOut > 0.0f)
+                            acc = acc + dir * (vOut * ff.inwardSuction);
+                    }
                 }
             }
             else if(ff.type == ForceFieldType::RadialImpulse){
@@ -1536,53 +2876,158 @@ class CharacterController{
                     acc = rDir * (ff.strength * fall);
                 }
             }
-            else if(ff.type == ForceFieldType::BoxWind || ff.type == ForceFieldType::Directional){
-                acc = fDir * ff.strength;
-            }
-            else if(ff.type == ForceFieldType::GlobalGravity){
-                acc = VectorSingle(ff.originOrDirection) * ff.strength;
-            }
-            else if(ff.type == ForceFieldType::LocalGravityOverride){
-                const VectorSingle gDir = SafeNormalizeVec3(VectorSingle(ff.originOrDirection), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
-                acc = gDir * ff.strength;
-                if(!subtractedWorldGrav){
-                    acc = acc - grav;
-                    subtractedWorldGrav = true;
+            else if(ff.type == ForceFieldType::BoxWind){
+                if(outsideZone)
+                    continue;
+                VectorSingle windVel = fDir * ff.strength;
+                if(ff.turbulenceAmplitude > 0.0f){
+                    const f32 phase = env.elapsedTimeSec * ff.turbulenceFrequency + pos.x * 0.37f + pos.y * 0.53f + pos.z * 0.71f;
+                    VectorSingle sinTurb(0.0f);
+                    VectorSingle cosTurb(0.0f);
+                    VectorSinCos(sinTurb, cosTurb, VectorSingle(phase, phase * 1.31f, phase * 0.79f + 1.1f, 0.0f));
+                    const VectorSingle turb(sinTurb.x, cosTurb.y, sinTurb.z, 0.0f);
+                    windVel = windVel + turb * ff.turbulenceAmplitude;
+                    angAcc = VectorSingle(cosTurb.x, -sinTurb.y, cosTurb.z, 0.0f) * (ff.turbulenceAmplitude * zoneFalloff * 0.25f);
+                }
+                const VectorSingle relWind = windVel - vel;
+                const f32 relSq = Vector3LengthSq(relWind).x;
+                if(relSq > 1.0e-12f){
+                    const f32 invRel = Rsqrt(VectorSingle(relSq)).x;
+                    const f32 relSp = relSq * invRel;
+                    const f32 windCoeff = Max(0.05f, maxExt * maxExt) * 2.0f;
+                    const f32 clampedMag = Min(relSp * windCoeff, bodyMass * relSp * invDt * 0.9f);
+                    acc = relWind * ((clampedMag * invRel * zoneFalloff) / bodyMass);
                 }
             }
+            else if(ff.type == ForceFieldType::Directional){
+                f32 falloff = 1.0f;
+                if(ff.radius > 0.0f && ff.falloffMode != ForceFieldFalloffMode::None){
+                    const VectorSingle refPt = ff.sphereShapeCenter();
+                    const f32 dSq = Vector3LengthSq(VectorSingle(pos - refPt, 0.0f)).x;
+                    if(dSq > ff.radius * ff.radius && ff.falloffMode != ForceFieldFalloffMode::Exponential)
+                        continue;
+                    f32 invD = 1.0f;
+                    if(dSq > 1.0e-12f)
+                        invD = Rsqrt(VectorSingle(dSq)).x;
+                    falloff = ComputeForceFieldFalloff(ff, dSq, invD);
+                }
+                acc = fDir * (ff.strength * falloff);
+            }
+            else if(ff.type == ForceFieldType::GlobalGravity){
+                if(outsideZone)
+                    continue;
+                acc = fDir * (ff.strength * this.def.gravityScale * zoneFalloff);
+            }
+            else if(ff.type == ForceFieldType::LocalGravityOverride){
+                if(outsideZone)
+                    continue;
+                acc = fDir * (ff.strength * this.def.gravityScale * zoneFalloff);
+                b8 shouldSubtractGrav = false;
+                if(envEpoch != 0u){
+                    if(this.m_activeGravityOverrideEpoch != envEpoch){
+                        this.m_activeGravityOverrideEpoch = envEpoch;
+                        shouldSubtractGrav = true;
+                    }
+                }
+                else if(!localGravSubtracted){
+                    localGravSubtracted = true;
+                    shouldSubtractGrav = true;
+                }
+                if(shouldSubtractGrav)
+                    acc = acc - grav * (this.def.gravityScale * zoneFalloff);
+            }
             else if(ff.type == ForceFieldType::Turbulence){
+                if(outsideZone)
+                    continue;
                 const f32 freq = Max(0.05f, ff.turbulenceFrequency);
                 const f32 phase = env.elapsedTimeSec * freq + pos.x * 0.43f + pos.y * 0.67f + pos.z * 0.89f;
                 VectorSingle sV(0.0f);
                 VectorSingle cV(0.0f);
                 VectorSinCos(sV, cV, VectorSingle(phase, phase * 1.37f + 0.7f, phase * 0.83f + 1.9f, 0.0f));
-                acc = VectorSingle(sV.x - cV.z * 0.5f, sV.y - cV.x * 0.5f, sV.z - cV.y * 0.5f, 0.0f) * (ff.strength + ff.turbulenceAmplitude);
+                acc = VectorSingle(sV.x - cV.z * 0.5f, sV.y - cV.x * 0.5f, sV.z - cV.y * 0.5f, 0.0f) * ((ff.strength + ff.turbulenceAmplitude) * zoneFalloff);
             }
             else if(ff.type == ForceFieldType::DampingZone){
-                acc = -vel * Max(0.0f, ff.strength);
+                if(outsideZone)
+                    continue;
+                const f32 damp = Max(0.0f, ff.strength) * zoneFalloff;
+                const f32 speedSq = Vector3LengthSq(vel).x;
+                if(speedSq > 1.0e-12f && damp > 0.0f){
+                    const f32 invSp = Rsqrt(VectorSingle(speedSq)).x;
+                    const f32 sp = speedSq * invSp;
+                    const f32 dampMag = Min(damp * sp, sp * invDt * 0.9f);
+                    acc = (-vel) * (dampMag * invSp);
+                }
+                const f32 wSq = Vector3LengthSq(angVel).x;
+                if(wSq > 1.0e-12f && damp > 0.0f){
+                    const f32 invW = Rsqrt(VectorSingle(wSq)).x;
+                    const f32 wSp = wSq * invW;
+                    const f32 dampW = Min(damp * wSp, wSp * invDt * 0.9f);
+                    angAcc = (-angVel) * (dampW * invW);
+                }
             }
             else if(ff.type == ForceFieldType::AeroDrag){
+                if(outsideZone)
+                    continue;
+                const f32 cd = Max(0.0f, ff.strength) * zoneFalloff;
                 const VectorSingle relV = VectorSingle(ff.originOrDirection) - vel;
-                const f32 sp = Vector3Length(relV).x;
-                acc = relV * ((0.5f * Max(0.0f, ff.strength) * bodyArea * sp) / bodyMass);
+                const f32 spSq = Vector3LengthSq(relV).x;
+                if(spSq > 1.0e-12f && cd > 0.0f){
+                    const f32 invSp = Rsqrt(VectorSingle(spSq)).x;
+                    const f32 sp = spSq * invSp;
+                    const f32 dragAccMag = Min((0.5f * cd * bodyAreaEst * spSq) / bodyMass, sp * invDt * 0.9f);
+                    acc = relV * (dragAccMag * invSp);
+                }
             }
             else if(ff.type == ForceFieldType::Vortex){
-                const VectorSingle vAxis = SafeNormalizeVec3(VectorSingle(ff.axis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const VectorSingle diff = pos - VectorSingle(ff.originOrDirection);
-                const VectorSingle radialPerp = diff - vAxis * Vector3Dot(diff, vAxis).x;
+                const VectorSingle radialPerp = diff - fDir * Vector3Dot(diff, fDir).x;
                 const f32 distSq = Vector3LengthSq(radialPerp).x;
                 if(distSq > 1.0e-12f && (ff.radius <= 0.0f || distSq <= ff.radius * ff.radius)){
                     const f32 invD = Rsqrt(VectorSingle(distSq)).x;
                     const VectorSingle rDir = radialPerp * invD;
-                    const VectorSingle swirl = SafeNormalizeVec3(Cross(vAxis, rDir), VectorSingle(0.0f));
+                    const VectorSingle swirl = SafeNormalizeVec3(Cross(fDir, rDir), VectorSingle(0.0f));
                     const f32 fall = ComputeForceFieldFalloff(ff, distSq, invD);
                     acc = (swirl * ff.strength - rDir * ff.inwardSuction) * fall;
+                    if(ff.turbulenceAmplitude > 0.0f){
+                        const f32 phase = env.elapsedTimeSec * ff.turbulenceFrequency + pos.x * 0.37f + pos.y * 0.53f + pos.z * 0.71f;
+                        VectorSingle sinTurb(0.0f);
+                        VectorSingle cosTurb(0.0f);
+                        VectorSinCos(sinTurb, cosTurb, VectorSingle(phase, phase * 1.31f, phase * 0.79f + 1.1f, 0.0f));
+                        acc = acc + VectorSingle(sinTurb.x, cosTurb.y, sinTurb.z, 0.0f) * (ff.turbulenceAmplitude * fall);
+                    }
+                }
+            }
+            else if(ff.type == ForceFieldType::VectorField){
+                if(outsideZone || !ff.hasVectorFieldGrid())
+                    continue;
+                const f32 coupling = Max(0.0f, ff.strength) * zoneFalloff;
+                if(coupling <= 0.0f)
+                    continue;
+                const VectorSingle vFlow = ff.sampleVectorFieldVelocity(pos);
+                const VectorSingle relFlow = vFlow - vel;
+                const f32 relFlowSq = Vector3LengthSq(relFlow).x;
+                if(relFlowSq > 1.0e-12f){
+                    const f32 invRel = Rsqrt(VectorSingle(relFlowSq)).x;
+                    const f32 relSp = relFlowSq * invRel;
+                    const f32 vecAcc = Min(coupling * relSp, relSp * invDt * 0.9f);
+                    acc = relFlow * (vecAcc * invRel);
+                }
+                const VectorSingle curl = ff.sampleVectorFieldCurl(pos);
+                const VectorSingle relSpin = (curl * 0.5f) - angVel;
+                const f32 spinSq = Vector3LengthSq(relSpin).x;
+                if(spinSq > 1.0e-12f){
+                    const f32 invSpin = Rsqrt(VectorSingle(spinSq)).x;
+                    const f32 spinSp = spinSq * invSpin;
+                    const f32 spinAcc = Min(coupling * spinSp, spinSp * invDt * 0.9f);
+                    angAcc = relSpin * (spinAcc * invSpin);
                 }
             }
             vel = vel + acc * dt;
+            angVel = angVel + angAcc * dt;
         }
 
         this.linearVelocity = f32x4(vel, 0.0f);
+        this.angularVelocity = f32x4(angVel, 0.0f);
     }
 }
 

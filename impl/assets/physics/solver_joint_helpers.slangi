@@ -889,12 +889,13 @@ void nwbPhysicsRefreshResidentJoint(
     g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse.w = 0.0f;
 
     float3 comA = m0.xyz;
+    float4 qA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qA0;
     if(indexA != NWB_PHYSICS_INVALID_INDEX){
         const NwbPhysicsGpuBodySim simA = g_NwbPhysicsBodySimBuffers[bodySimSlot][indexA];
         const uint flagsA = asuint(g_NwbPhysicsBodyStateBuffers[bodyStateSlot][indexA].deltaPositionFlags.w);
         const float invMassScaleA = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 3u].w;
         comA = simA.positionInvMass.xyz;
-        const float4 qA = simA.rotation;
+        qA = simA.rotation;
         const float3 rA = nwbPhysicsQuatRotate(m0.xyz - simA.localCenterMinExtent.xyz, qA);
         float invMassA = 0.0f;
         if((flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u)
@@ -904,12 +905,13 @@ void nwbPhysicsRefreshResidentJoint(
     }
 
     float3 comB = m1.xyz;
+    float4 qB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qB0;
     if(indexB != NWB_PHYSICS_INVALID_INDEX){
         const NwbPhysicsGpuBodySim simB = g_NwbPhysicsBodySimBuffers[bodySimSlot][indexB];
         const uint flagsB = asuint(g_NwbPhysicsBodyStateBuffers[bodyStateSlot][indexB].deltaPositionFlags.w);
         const float invMassScaleB = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 4u].z;
         comB = simB.positionInvMass.xyz;
-        const float4 qB = simB.rotation;
+        qB = simB.rotation;
         const float3 rB = nwbPhysicsQuatRotate(m1.xyz - simB.localCenterMinExtent.xyz, qB);
         float invMassB = 0.0f;
         if((flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u)
@@ -924,6 +926,31 @@ void nwbPhysicsRefreshResidentJoint(
         const float3 m3xyz = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 3u].xyz;
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisALowerLimit.xyz = comA - m2xyz;
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisBUpperLimit.xyz = comB - m3xyz;
+    }
+
+    const uint auxSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.w);
+    if((jFlags & NWB_PHYSICS_JOINT_FLAG_HAS_AUX) != 0u && auxSlot != NWB_PHYSICS_INVALID_INDEX){
+        const uint auxOff = asuint(g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].projectionParams.z);
+        if(jType == NWB_PHYSICS_JOINT_TYPE_GEAR || jType == NWB_PHYSICS_JOINT_TYPE_RACK_AND_PINION){
+            const float4 gAux = g_NwbPhysicsFloat4Buffers[auxSlot][auxOff];
+            g_NwbPhysicsFloat4Buffers[auxSlot][auxOff].x = gAux.y;
+        }
+        else if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
+            const float4 revAux = g_NwbPhysicsFloat4Buffers[auxSlot][auxOff];
+            if(revAux.z != 0.0f){
+                const float3 localAxisA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisALowerLimit.xyz;
+                const float4 refRot = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].referenceRotation;
+                const float3 axisA = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisA, qA), float3(0.0f, 1.0f, 0.0f));
+                const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA, refRot));
+                const float4 qErr = nwbPhysicsQuatMul(qB, float4(-qTarget.xyz, qTarget.w));
+                float4 qSwing;
+                float4 qTwist;
+                nwbPhysicsDecomposeSwingTwist(qErr, axisA, qSwing, qTwist);
+                const float rawAngle = 2.0f * atan2(dot(qTwist.xyz, axisA), qTwist.w);
+                const float newBase = revAux.x + nwbPhysicsWrapAnglePi(rawAngle - revAux.y);
+                g_NwbPhysicsFloat4Buffers[auxSlot][auxOff] = float4(newBase, rawAngle, 1.0f, newBase);
+            }
+        }
     }
 }
 

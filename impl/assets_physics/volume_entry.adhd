@@ -4,6 +4,7 @@
 
 #include <impl/assets_physics/cook_components.adhd>
 #include <impl/assets_physics/cook_physics_assets.adhd>
+#include <impl/assets_physics/cook_physics_rig_assets.adhd>
 #include <impl/assets_physics/cook_subsystem_components.adhd>
 #include <impl/assets_physics/physics_subsystem.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
@@ -31,17 +32,55 @@ class PhysicsColliderDepEntry{
     public AssetRef<CompoundHullAsset> compoundHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public AssetRef<HeightfieldAsset> heightfieldAsset;
+    public AssetRef<SdfAsset> sdfAsset;
+    public AssetRef<ChainShapeAsset> chainAsset;
+    public AssetRef<CompoundShapeAsset> compoundShapeAsset;
     public Vector<AssetRef<Mesh>> extraMeshAssets;
     public Vector<AssetRef<PhysicsMaterialAsset>> extraMaterialAssets;
     public Vector<AssetRef<ConvexHullAsset>> extraConvexHullAssets;
     public Vector<AssetRef<CompoundHullAsset>> extraCompoundHullAssets;
     public Vector<AssetRef<CollisionMeshAsset>> extraCollisionMeshAssets;
     public Vector<AssetRef<HeightfieldAsset>> extraHeightfieldAssets;
+    public Vector<AssetRef<SdfAsset>> extraSdfAssets;
+    public Vector<AssetRef<ChainShapeAsset>> extraChainAssets;
+    public Vector<AssetRef<CompoundShapeAsset>> extraCompoundShapeAssets;
 }
 
 class PhysicsWorldConfigDepEntry{
     public Name virtualPath = s_NameNone;
     public AssetRef<CollisionLayerMatrixAsset> collisionLayerMatrixAsset;
+}
+
+class PhysicsVehicleDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<VehicleAsset> vehicleAsset;
+}
+
+class PhysicsRagdollDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<Skeleton> skeletonAsset;
+    public AssetRef<RagdollAsset> ragdollAsset;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+    public Vector<AssetRef<PhysicsMaterialAsset>> boneMaterialAssets;
+}
+
+class PhysicsArticulationDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<Skeleton> skeletonAsset;
+    public AssetRef<ArticulationAsset> articulationAsset;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+}
+
+class PhysicsSoftBodyDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<SoftBodyAsset> softBodyAsset;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+}
+
+class PhysicsFractureDepEntry{
+    public Name virtualPath = s_NameNone;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+    public AssetRef<FractureAsset> fractureAsset;
 }
 
 Expected<PhysicsDepCheckEntry> ParsePhysicsDepEntryWithPrefix(
@@ -79,22 +118,156 @@ b8 ExtractSimplePhysicsDepEntry(
     ).has_value();
 }
 
-b8 ReadOptionalColliderDepRef<T>(
+b8 IsPhysicsExternalSourceFieldKey(in StringView key){
+    return key == "source_mesh"
+        || key == "source_heightmap"
+        || key == "hole_mask_image"
+        || key == "source_material"
+        || key == "source_tet_mesh"
+        || key == "urdf_file"
+        || key == "mjcf_file"
+        || key == "source_skeleton"
+    ;
+}
+
+b8 CollectSourceFileDepsFromValue(
+    in Path nwbFile,
+    in StringView diagnosticPrefix,
+    in MetascriptValue value,
+    mut ICookDependencyCollector collector
+){
+    if(value.isMap()){
+        return value.forEachMapEntry(lambda[in nwbFile, in diagnosticPrefix, mut collector](in StringView key, in MetascriptValue fieldVal) -> b8{
+            if(IsPhysicsExternalSourceFieldKey(key)){
+                const Expected<StringView> srcRes = ReadPhysicsStringValue(nwbFile, fieldVal, diagnosticPrefix, key);
+                if(!srcRes.has_value())
+                    return false;
+                Path resolved;
+                ResolvePhysicsSourcePath(nwbFile, srcRes.value(), resolved);
+                if(!collector.addSourceFileDependency(resolved))
+                    return false;
+                if(key == "source_mesh" && (HasCaseInsensitiveExtensionSuffix(srcRes.value(), ".gltf") || HasCaseInsensitiveExtensionSuffix(srcRes.value(), ".glb"))){
+                    b8 collectorOk = true;
+                    const b8 gltfOk = CollectGltfExternalBufferPaths(
+                        resolved,
+                        lambda[mut collector, mut collectorOk](in StringView bufPathText) -> b8{
+                            const Path bufPath(bufPathText);
+                            if(!collector.addSourceFileDependency(bufPath)){
+                                collectorOk = false;
+                                return false;
+                            }
+                            return true;
+                        }
+                    );
+                    if(!collectorOk)
+                        return false;
+                    if(!gltfOk)
+                        return true;
+                }
+                if(key == "source_tet_mesh" && HasCaseInsensitiveExtensionSuffix(srcRes.value(), ".node") && srcRes.value().size() >= 5u){
+                    String eleRef;
+                    eleRef.assign(srcRes.value().substr(0u, srcRes.value().size() - 5u));
+                    eleRef.append(".ele");
+                    Path eleResolved;
+                    ResolvePhysicsSourcePath(nwbFile, StringView(eleRef), eleResolved);
+                    if(!collector.addSourceFileDependency(eleResolved))
+                        return false;
+                }
+                return true;
+            }
+            return CollectSourceFileDepsFromValue(nwbFile, diagnosticPrefix, fieldVal, collector);
+        });
+    }
+    if(value.isList()){
+        const Span<MetascriptValue> items = value.listView();
+        for(usize i = 0u; i < items.size(); ++i){
+            if(!CollectSourceFileDepsFromValue(nwbFile, diagnosticPrefix, items[i], collector))
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 ReadOptionalPhysicsDepRef<T>(
     in Path file,
     in MetascriptValue mapVal,
+    in StringView diagnosticPrefix,
     in StringView key,
     mut AssetRef<T> outRef
 ){
     const Optional<in MetascriptValue> fieldOpt = mapVal.borrowField(key);
     if(!fieldOpt.has_value())
         return true;
-    const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldOpt.value(), s_ColliderComponentDiagnosticPrefix, key);
-    if(!refText.has_value())
+    return ReadPhysicsAssetRefValue<T>(file, fieldOpt.value(), diagnosticPrefix, key, outRef);
+}
+
+b8 ReadOptionalPhysicsDepRefList<T>(
+    in Path file,
+    in MetascriptValue mapVal,
+    in StringView diagnosticPrefix,
+    in StringView key,
+    mut Vector<AssetRef<T>> outRefs
+){
+    const Optional<in MetascriptValue> fieldOpt = mapVal.borrowField(key);
+    if(!fieldOpt.has_value())
+        return true;
+    Vector<AssetRef<T>> parsed;
+    if(!ReadPhysicsAssetRefListValue<T>(file, fieldOpt.value(), diagnosticPrefix, key, parsed))
         return false;
-    const Expected<AssetRef<T>> parsed = ParseReservedAssetRefText<T>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-    if(!parsed.has_value())
+    for(usize i = 0u; i < parsed.size(); ++i){
+        if(parsed[i].valid())
+            outRefs.push_back(parsed[i]);
+    }
+    return true;
+}
+
+b8 CollectCompoundSubShapeDeps(
+    in Path file,
+    in MetascriptValue mapVal,
+    mut PhysicsColliderDepEntry entry
+){
+    const Optional<in MetascriptValue> subsOpt = mapVal.borrowField("compound_sub_shapes");
+    if(!subsOpt.has_value())
+        return true;
+    if(!subsOpt.value().isList()){
+        error("{} '{}': field 'compound_sub_shapes' must be a list of sub-shape maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
         return false;
-    outRef = parsed.value();
+    }
+    const Span<MetascriptValue> items = subsOpt.value().listView();
+    for(usize i = 0u; i < items.size(); ++i){
+        in MetascriptValue item = items[i];
+        if(!item.isMap()){
+            error("{} '{}': 'compound_sub_shapes[{}]' must be a map", s_ColliderComponentDiagnosticPrefix, PathToString(file), i);
+            return false;
+        }
+        AssetRef<PhysicsMaterialAsset> subMat;
+        AssetRef<ConvexHullAsset> subHull;
+        AssetRef<Mesh> subMesh;
+        AssetRef<CollisionMeshAsset> subCollisionMesh;
+        AssetRef<ChainShapeAsset> subChain;
+        AssetRef<SdfAsset> subSdf;
+        if(
+            !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "material_asset", subMat)
+            || !ReadOptionalPhysicsDepRef<ConvexHullAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "convex_hull_asset", subHull)
+            || !ReadOptionalPhysicsDepRef<Mesh>(file, item, s_ColliderComponentDiagnosticPrefix, "mesh_asset", subMesh)
+            || !ReadOptionalPhysicsDepRef<CollisionMeshAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "collision_mesh_asset", subCollisionMesh)
+            || !ReadOptionalPhysicsDepRef<ChainShapeAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "chain_asset", subChain)
+            || !ReadOptionalPhysicsDepRef<SdfAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "sdf_asset", subSdf)
+        )
+            return false;
+        if(subMat.valid())
+            entry.extraMaterialAssets.push_back(subMat);
+        if(subHull.valid())
+            entry.extraConvexHullAssets.push_back(subHull);
+        if(subMesh.valid())
+            entry.extraMeshAssets.push_back(subMesh);
+        if(subCollisionMesh.valid())
+            entry.extraCollisionMeshAssets.push_back(subCollisionMesh);
+        if(subChain.valid())
+            entry.extraChainAssets.push_back(subChain);
+        if(subSdf.valid())
+            entry.extraSdfAssets.push_back(subSdf);
+    }
     return true;
 }
 
@@ -106,12 +279,18 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
     if(!value.isMap())
         return entry;
     if(
-        !ReadOptionalColliderDepRef<Mesh>(file, value, "mesh_asset", entry.meshAsset)
-        || !ReadOptionalColliderDepRef<PhysicsMaterialAsset>(file, value, "material_asset", entry.materialAsset)
-        || !ReadOptionalColliderDepRef<ConvexHullAsset>(file, value, "convex_hull_asset", entry.convexHullAsset)
-        || !ReadOptionalColliderDepRef<CompoundHullAsset>(file, value, "compound_hull_asset", entry.compoundHullAsset)
-        || !ReadOptionalColliderDepRef<CollisionMeshAsset>(file, value, "collision_mesh_asset", entry.collisionMeshAsset)
-        || !ReadOptionalColliderDepRef<HeightfieldAsset>(file, value, "heightfield_asset", entry.heightfieldAsset)
+        !ReadOptionalPhysicsDepRef<Mesh>(file, value, s_ColliderComponentDiagnosticPrefix, "mesh_asset", entry.meshAsset)
+        || !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "material_asset", entry.materialAsset)
+        || !ReadOptionalPhysicsDepRef<ConvexHullAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "convex_hull_asset", entry.convexHullAsset)
+        || !ReadOptionalPhysicsDepRef<CompoundHullAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "compound_hull_asset", entry.compoundHullAsset)
+        || !ReadOptionalPhysicsDepRef<CollisionMeshAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "collision_mesh_asset", entry.collisionMeshAsset)
+        || !ReadOptionalPhysicsDepRef<HeightfieldAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "heightfield_asset", entry.heightfieldAsset)
+        || !ReadOptionalPhysicsDepRef<SdfAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "sdf_asset", entry.sdfAsset)
+        || !ReadOptionalPhysicsDepRef<ChainShapeAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "chain_asset", entry.chainAsset)
+        || !ReadOptionalPhysicsDepRef<CompoundShapeAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "compound_shape_asset", entry.compoundShapeAsset)
+        || !ReadOptionalPhysicsDepRefList<PhysicsMaterialAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "heightfield_material_assets", entry.extraMaterialAssets)
+        || !ReadOptionalPhysicsDepRefList<PhysicsMaterialAsset>(file, value, s_ColliderComponentDiagnosticPrefix, "chain_material_assets", entry.extraMaterialAssets)
+        || !CollectCompoundSubShapeDeps(file, value, entry)
     )
         return MakeUnexpected(Failure());
     const Optional<in MetascriptValue> extraOpt = value.borrowField("extra_shapes");
@@ -133,13 +312,22 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
             AssetRef<CompoundHullAsset> extraCompoundHull;
             AssetRef<CollisionMeshAsset> extraCollisionMesh;
             AssetRef<HeightfieldAsset> extraHeightfield;
+            AssetRef<SdfAsset> extraSdf;
+            AssetRef<ChainShapeAsset> extraChain;
+            AssetRef<CompoundShapeAsset> extraCompoundShape;
             if(
-                !ReadOptionalColliderDepRef<Mesh>(file, item, "mesh_asset", extraMesh)
-                || !ReadOptionalColliderDepRef<PhysicsMaterialAsset>(file, item, "material_asset", extraMat)
-                || !ReadOptionalColliderDepRef<ConvexHullAsset>(file, item, "convex_hull_asset", extraHull)
-                || !ReadOptionalColliderDepRef<CompoundHullAsset>(file, item, "compound_hull_asset", extraCompoundHull)
-                || !ReadOptionalColliderDepRef<CollisionMeshAsset>(file, item, "collision_mesh_asset", extraCollisionMesh)
-                || !ReadOptionalColliderDepRef<HeightfieldAsset>(file, item, "heightfield_asset", extraHeightfield)
+                !ReadOptionalPhysicsDepRef<Mesh>(file, item, s_ColliderComponentDiagnosticPrefix, "mesh_asset", extraMesh)
+                || !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "material_asset", extraMat)
+                || !ReadOptionalPhysicsDepRef<ConvexHullAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "convex_hull_asset", extraHull)
+                || !ReadOptionalPhysicsDepRef<CompoundHullAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "compound_hull_asset", extraCompoundHull)
+                || !ReadOptionalPhysicsDepRef<CollisionMeshAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "collision_mesh_asset", extraCollisionMesh)
+                || !ReadOptionalPhysicsDepRef<HeightfieldAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "heightfield_asset", extraHeightfield)
+                || !ReadOptionalPhysicsDepRef<SdfAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "sdf_asset", extraSdf)
+                || !ReadOptionalPhysicsDepRef<ChainShapeAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "chain_asset", extraChain)
+                || !ReadOptionalPhysicsDepRef<CompoundShapeAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "compound_shape_asset", extraCompoundShape)
+                || !ReadOptionalPhysicsDepRefList<PhysicsMaterialAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "heightfield_material_assets", entry.extraMaterialAssets)
+                || !ReadOptionalPhysicsDepRefList<PhysicsMaterialAsset>(file, item, s_ColliderComponentDiagnosticPrefix, "chain_material_assets", entry.extraMaterialAssets)
+                || !CollectCompoundSubShapeDeps(file, item, entry)
             )
                 return MakeUnexpected(Failure());
             if(extraMesh.valid())
@@ -154,6 +342,12 @@ Expected<PhysicsColliderDepEntry> ParseColliderDepEntry(in Name virtualPath, in 
                 entry.extraCollisionMeshAssets.push_back(extraCollisionMesh);
             if(extraHeightfield.valid())
                 entry.extraHeightfieldAssets.push_back(extraHeightfield);
+            if(extraSdf.valid())
+                entry.extraSdfAssets.push_back(extraSdf);
+            if(extraChain.valid())
+                entry.extraChainAssets.push_back(extraChain);
+            if(extraCompoundShape.valid())
+                entry.extraCompoundShapeAssets.push_back(extraCompoundShape);
         }
     }
     return entry;
@@ -166,21 +360,83 @@ Expected<PhysicsWorldConfigDepEntry> ParsePhysicsWorldConfigDepEntry(in Name vir
         return MakeUnexpected(Failure());
     if(!value.isMap())
         return entry;
-    const Optional<in MetascriptValue> fieldOpt = value.borrowField("collision_layer_matrix_asset");
-    if(fieldOpt.has_value()){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldOpt.value(), s_PhysicsWorldConfigComponentDiagnosticPrefix, "collision_layer_matrix_asset");
-        if(!refText.has_value())
-            return MakeUnexpected(Failure());
-        const Expected<AssetRef<CollisionLayerMatrixAsset>> parsed = ParseReservedAssetRefText<CollisionLayerMatrixAsset>(
-            file,
-            s_PhysicsWorldConfigComponentDiagnosticPrefix,
-            "collision_layer_matrix_asset",
-            refText.value()
-        );
-        if(!parsed.has_value())
-            return MakeUnexpected(Failure());
-        entry.collisionLayerMatrixAsset = parsed.value();
-    }
+    if(!ReadOptionalPhysicsDepRef<CollisionLayerMatrixAsset>(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "collision_layer_matrix_asset", entry.collisionLayerMatrixAsset))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<PhysicsVehicleDepEntry> ParseVehicleDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsVehicleDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_VehicleComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_VehicleComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    if(!ReadOptionalPhysicsDepRef<VehicleAsset>(file, value, s_VehicleComponentDiagnosticPrefix, "vehicle_asset", entry.vehicleAsset))
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<PhysicsRagdollDepEntry> ParseRagdollDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsRagdollDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_RagdollComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_RagdollComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    if(
+        !ReadOptionalPhysicsDepRef<Skeleton>(file, value, s_RagdollComponentDiagnosticPrefix, "skeleton_asset", entry.skeletonAsset)
+        || !ReadOptionalPhysicsDepRef<RagdollAsset>(file, value, s_RagdollComponentDiagnosticPrefix, "ragdoll_asset", entry.ragdollAsset)
+        || !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, value, s_RagdollComponentDiagnosticPrefix, "material_asset", entry.materialAsset)
+        || !ReadOptionalPhysicsDepRefList<PhysicsMaterialAsset>(file, value, s_RagdollComponentDiagnosticPrefix, "bone_material_assets", entry.boneMaterialAssets)
+    )
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<PhysicsArticulationDepEntry> ParseArticulationDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsArticulationDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_ArticulationComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_ArticulationComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    if(
+        !ReadOptionalPhysicsDepRef<Skeleton>(file, value, s_ArticulationComponentDiagnosticPrefix, "skeleton_asset", entry.skeletonAsset)
+        || !ReadOptionalPhysicsDepRef<ArticulationAsset>(file, value, s_ArticulationComponentDiagnosticPrefix, "articulation_asset", entry.articulationAsset)
+        || !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, value, s_ArticulationComponentDiagnosticPrefix, "material_asset", entry.materialAsset)
+    )
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<PhysicsSoftBodyDepEntry> ParseSoftBodyDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsSoftBodyDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_SoftBodyComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_SoftBodyComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    if(
+        !ReadOptionalPhysicsDepRef<SoftBodyAsset>(file, value, s_SoftBodyComponentDiagnosticPrefix, "soft_body_asset", entry.softBodyAsset)
+        || !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, value, s_SoftBodyComponentDiagnosticPrefix, "material_asset", entry.materialAsset)
+    )
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<PhysicsFractureDepEntry> ParseFractureDepEntry(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsFractureDepEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_FractureComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_FractureComponentDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!value.isMap())
+        return entry;
+    if(
+        !ReadOptionalPhysicsDepRef<PhysicsMaterialAsset>(file, value, s_FractureComponentDiagnosticPrefix, "material_asset", entry.materialAsset)
+        || !ReadOptionalPhysicsDepRef<FractureAsset>(file, value, s_FractureComponentDiagnosticPrefix, "fracture_asset", entry.fractureAsset)
+    )
+        return MakeUnexpected(Failure());
     return entry;
 }
 
@@ -203,6 +459,9 @@ b8 CollectColliderAssetDependencies(
     in AssetRef<CompoundHullAsset> compoundHullAsset,
     in AssetRef<CollisionMeshAsset> collisionMeshAsset,
     in AssetRef<HeightfieldAsset> heightfieldAsset,
+    in AssetRef<SdfAsset> sdfAsset,
+    in AssetRef<ChainShapeAsset> chainAsset,
+    in AssetRef<CompoundShapeAsset> compoundShapeAsset,
     mut ICookDependencyCollector collector
 ){
     if(meshAsset.valid() && !collector.addAssetDependency(meshAsset.name(), Mesh::AssetTypeName()))
@@ -217,6 +476,12 @@ b8 CollectColliderAssetDependencies(
         return false;
     if(heightfieldAsset.valid() && !collector.addAssetDependency(heightfieldAsset.name(), HeightfieldAsset::AssetTypeName()))
         return false;
+    if(sdfAsset.valid() && !collector.addAssetDependency(sdfAsset.name(), SdfAsset::AssetTypeName()))
+        return false;
+    if(chainAsset.valid() && !collector.addAssetDependency(chainAsset.name(), ChainShapeAsset::AssetTypeName()))
+        return false;
+    if(compoundShapeAsset.valid() && !collector.addAssetDependency(compoundShapeAsset.name(), CompoundShapeAsset::AssetTypeName()))
+        return false;
     return true;
 }
 
@@ -225,7 +490,7 @@ b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mu
     if(!entryRes.has_value())
         return false;
     in PhysicsColliderDepEntry dep = entryRes.value();
-    if(!CollectColliderAssetDependencies(dep.meshAsset, dep.materialAsset, dep.convexHullAsset, dep.compoundHullAsset, dep.collisionMeshAsset, dep.heightfieldAsset, collector))
+    if(!CollectColliderAssetDependencies(dep.meshAsset, dep.materialAsset, dep.convexHullAsset, dep.compoundHullAsset, dep.collisionMeshAsset, dep.heightfieldAsset, dep.sdfAsset, dep.chainAsset, dep.compoundShapeAsset, collector))
         return false;
     for(usize i = 0u; i < dep.extraMeshAssets.size(); ++i){
         if(!collector.addAssetDependency(dep.extraMeshAssets[i].name(), Mesh::AssetTypeName()))
@@ -251,7 +516,19 @@ b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mu
         if(!collector.addAssetDependency(dep.extraHeightfieldAssets[i].name(), HeightfieldAsset::AssetTypeName()))
             return false;
     }
-    return true;
+    for(usize i = 0u; i < dep.extraSdfAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraSdfAssets[i].name(), SdfAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraChainAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraChainAssets[i].name(), ChainShapeAsset::AssetTypeName()))
+            return false;
+    }
+    for(usize i = 0u; i < dep.extraCompoundShapeAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.extraCompoundShapeAssets[i].name(), CompoundShapeAsset::AssetTypeName()))
+            return false;
+    }
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_ColliderComponentDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<JointComponentAsset> CookJointComponentVolumeEntry(in JointComponentCookEntry entry){
@@ -301,7 +578,13 @@ Expected<VehicleComponentAsset> CookVehicleComponentVolumeEntry(in VehicleCompon
 }
 
 b8 ExtractVehicleComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_VehicleComponentDiagnosticPrefix, false);
+    const Expected<PhysicsVehicleDepEntry> entryRes = ReadCookDependencyEntry<PhysicsVehicleDepEntry>(context, s_VehicleComponentDiagnosticPrefix, ParseVehicleDepEntry);
+    if(!entryRes.has_value())
+        return false;
+    in PhysicsVehicleDepEntry dep = entryRes.value();
+    if(dep.vehicleAsset.valid() && !collector.addAssetDependency(dep.vehicleAsset.name(), VehicleAsset::AssetTypeName()))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_VehicleComponentDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<RagdollComponentAsset> CookRagdollComponentVolumeEntry(in RagdollComponentCookEntry entry){
@@ -309,7 +592,21 @@ Expected<RagdollComponentAsset> CookRagdollComponentVolumeEntry(in RagdollCompon
 }
 
 b8 ExtractRagdollComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_RagdollComponentDiagnosticPrefix, false);
+    const Expected<PhysicsRagdollDepEntry> entryRes = ReadCookDependencyEntry<PhysicsRagdollDepEntry>(context, s_RagdollComponentDiagnosticPrefix, ParseRagdollDepEntry);
+    if(!entryRes.has_value())
+        return false;
+    in PhysicsRagdollDepEntry dep = entryRes.value();
+    if(dep.skeletonAsset.valid() && !collector.addAssetDependency(dep.skeletonAsset.name(), Skeleton::AssetTypeName()))
+        return false;
+    if(dep.ragdollAsset.valid() && !collector.addAssetDependency(dep.ragdollAsset.name(), RagdollAsset::AssetTypeName()))
+        return false;
+    if(dep.materialAsset.valid() && !collector.addAssetDependency(dep.materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
+        return false;
+    for(usize i = 0u; i < dep.boneMaterialAssets.size(); ++i){
+        if(!collector.addAssetDependency(dep.boneMaterialAssets[i].name(), PhysicsMaterialAsset::AssetTypeName()))
+            return false;
+    }
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_RagdollComponentDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<FluidVolumeComponentAsset> CookFluidVolumeComponentVolumeEntry(in FluidVolumeComponentCookEntry entry){
@@ -333,7 +630,17 @@ Expected<ArticulationComponentAsset> CookArticulationComponentVolumeEntry(in Art
 }
 
 b8 ExtractArticulationComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_ArticulationComponentDiagnosticPrefix, false);
+    const Expected<PhysicsArticulationDepEntry> entryRes = ReadCookDependencyEntry<PhysicsArticulationDepEntry>(context, s_ArticulationComponentDiagnosticPrefix, ParseArticulationDepEntry);
+    if(!entryRes.has_value())
+        return false;
+    in PhysicsArticulationDepEntry dep = entryRes.value();
+    if(dep.skeletonAsset.valid() && !collector.addAssetDependency(dep.skeletonAsset.name(), Skeleton::AssetTypeName()))
+        return false;
+    if(dep.articulationAsset.valid() && !collector.addAssetDependency(dep.articulationAsset.name(), ArticulationAsset::AssetTypeName()))
+        return false;
+    if(dep.materialAsset.valid() && !collector.addAssetDependency(dep.materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_ArticulationComponentDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<SoftBodyComponentAsset> CookSoftBodyComponentVolumeEntry(in SoftBodyComponentCookEntry entry){
@@ -341,7 +648,31 @@ Expected<SoftBodyComponentAsset> CookSoftBodyComponentVolumeEntry(in SoftBodyCom
 }
 
 b8 ExtractSoftBodyComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_SoftBodyComponentDiagnosticPrefix, false);
+    const Expected<PhysicsSoftBodyDepEntry> entryRes = ReadCookDependencyEntry<PhysicsSoftBodyDepEntry>(context, s_SoftBodyComponentDiagnosticPrefix, ParseSoftBodyDepEntry);
+    if(!entryRes.has_value())
+        return false;
+    in PhysicsSoftBodyDepEntry dep = entryRes.value();
+    if(dep.softBodyAsset.valid() && !collector.addAssetDependency(dep.softBodyAsset.name(), SoftBodyAsset::AssetTypeName()))
+        return false;
+    if(dep.materialAsset.valid() && !collector.addAssetDependency(dep.materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_SoftBodyComponentDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<FractureComponentAsset> CookFractureComponentVolumeEntry(in FractureComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<FractureComponentAsset, FractureComponentCookEntry>(entry);
+}
+
+b8 ExtractFractureComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    const Expected<PhysicsFractureDepEntry> entryRes = ReadCookDependencyEntry<PhysicsFractureDepEntry>(context, s_FractureComponentDiagnosticPrefix, ParseFractureDepEntry);
+    if(!entryRes.has_value())
+        return false;
+    in PhysicsFractureDepEntry dep = entryRes.value();
+    if(dep.materialAsset.valid() && !collector.addAssetDependency(dep.materialAsset.name(), PhysicsMaterialAsset::AssetTypeName()))
+        return false;
+    if(dep.fractureAsset.valid() && !collector.addAssetDependency(dep.fractureAsset.name(), FractureAsset::AssetTypeName()))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_FractureComponentDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<GpuRenderTransformExportComponentAsset> CookGpuRenderTransformExportComponentVolumeEntry(in GpuRenderTransformExportComponentCookEntry entry){
@@ -373,7 +704,9 @@ Expected<ConvexHullAsset> CookConvexHullVolumeEntry(in ConvexHullCookEntry entry
 }
 
 b8 ExtractConvexHullDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_ConvexHullDiagnosticPrefix, true);
+    if(!ExtractSimplePhysicsDepEntry(context, s_ConvexHullDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_ConvexHullDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<CompoundHullAsset> CookCompoundHullVolumeEntry(in CompoundHullCookEntry entry){
@@ -381,7 +714,9 @@ Expected<CompoundHullAsset> CookCompoundHullVolumeEntry(in CompoundHullCookEntry
 }
 
 b8 ExtractCompoundHullDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_CompoundHullDiagnosticPrefix, true);
+    if(!ExtractSimplePhysicsDepEntry(context, s_CompoundHullDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_CompoundHullDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<CollisionMeshAsset> CookCollisionMeshVolumeEntry(in CollisionMeshCookEntry entry){
@@ -389,7 +724,9 @@ Expected<CollisionMeshAsset> CookCollisionMeshVolumeEntry(in CollisionMeshCookEn
 }
 
 b8 ExtractCollisionMeshDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_CollisionMeshDiagnosticPrefix, true);
+    if(!ExtractSimplePhysicsDepEntry(context, s_CollisionMeshDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_CollisionMeshDiagnosticPrefix, context.asset, collector);
 }
 
 Expected<HeightfieldAsset> CookHeightfieldVolumeEntry(in HeightfieldCookEntry entry){
@@ -397,7 +734,89 @@ Expected<HeightfieldAsset> CookHeightfieldVolumeEntry(in HeightfieldCookEntry en
 }
 
 b8 ExtractHeightfieldDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ExtractSimplePhysicsDepEntry(context, s_HeightfieldDiagnosticPrefix, true);
+    if(!ExtractSimplePhysicsDepEntry(context, s_HeightfieldDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_HeightfieldDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<SdfAsset> CookSdfVolumeEntry(in SdfCookEntry entry){
+    return BuildSdfAsset(entry);
+}
+
+b8 ExtractSdfDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_SdfDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_SdfDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<ChainShapeAsset> CookChainShapeVolumeEntry(in ChainShapeCookEntry entry){
+    return BuildChainShapeAsset(entry);
+}
+
+b8 ExtractChainShapeDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_ChainShapeDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_ChainShapeDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<CompoundShapeAsset> CookCompoundShapeVolumeEntry(in CompoundShapeCookEntry entry){
+    return BuildCompoundShapeAsset(entry);
+}
+
+b8 ExtractCompoundShapeDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_CompoundShapeDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_CompoundShapeDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<FractureAsset> CookFractureVolumeEntry(in FractureCookEntry entry){
+    return BuildFractureAsset(entry);
+}
+
+b8 ExtractFractureDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_FractureDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_FractureDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<SoftBodyAsset> CookSoftBodyVolumeEntry(in SoftBodyCookEntry entry){
+    return BuildSoftBodyAsset(entry);
+}
+
+b8 ExtractSoftBodyDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_SoftBodyDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_SoftBodyDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<RagdollAsset> CookRagdollVolumeEntry(in RagdollCookEntry entry){
+    return BuildRagdollAsset(entry);
+}
+
+b8 ExtractRagdollDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_RagdollDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_RagdollDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<ArticulationAsset> CookArticulationVolumeEntry(in ArticulationCookEntry entry){
+    return BuildArticulationAsset(entry);
+}
+
+b8 ExtractArticulationDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_ArticulationDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_ArticulationDiagnosticPrefix, context.asset, collector);
+}
+
+Expected<VehicleAsset> CookVehicleVolumeEntry(in VehicleCookEntry entry){
+    return BuildVehicleAsset(entry);
+}
+
+b8 ExtractVehicleDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    if(!ExtractSimplePhysicsDepEntry(context, s_VehicleDiagnosticPrefix, true))
+        return false;
+    return CollectSourceFileDepsFromValue(context.nwbFilePath, s_VehicleDiagnosticPrefix, context.asset, collector);
 }
 
 b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry){
@@ -413,13 +832,276 @@ b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry)
         && registry.registerType(ForceFieldComponentAsset::AssetTypeName(), ExtractForceFieldComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(ArticulationComponentAsset::AssetTypeName(), ExtractArticulationComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(SoftBodyComponentAsset::AssetTypeName(), ExtractSoftBodyComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(FractureComponentAsset::AssetTypeName(), ExtractFractureComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(GpuRenderTransformExportComponentAsset::AssetTypeName(), ExtractGpuRenderTransformExportComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(PhysicsMaterialAsset::AssetTypeName(), ExtractPhysicsMaterialDependencies)
         && registry.registerType(CollisionLayerMatrixAsset::AssetTypeName(), ExtractCollisionLayerMatrixDependencies)
         && registry.registerType(ConvexHullAsset::AssetTypeName(), ExtractConvexHullDependencies)
         && registry.registerType(CompoundHullAsset::AssetTypeName(), ExtractCompoundHullDependencies)
         && registry.registerType(CollisionMeshAsset::AssetTypeName(), ExtractCollisionMeshDependencies)
-        && registry.registerType(HeightfieldAsset::AssetTypeName(), ExtractHeightfieldDependencies);
+        && registry.registerType(HeightfieldAsset::AssetTypeName(), ExtractHeightfieldDependencies)
+        && registry.registerType(SdfAsset::AssetTypeName(), ExtractSdfDependencies)
+        && registry.registerType(ChainShapeAsset::AssetTypeName(), ExtractChainShapeDependencies)
+        && registry.registerType(CompoundShapeAsset::AssetTypeName(), ExtractCompoundShapeDependencies)
+        && registry.registerType(FractureAsset::AssetTypeName(), ExtractFractureDependencies)
+        && registry.registerType(SoftBodyAsset::AssetTypeName(), ExtractSoftBodyDependencies)
+        && registry.registerType(RagdollAsset::AssetTypeName(), ExtractRagdollDependencies)
+        && registry.registerType(ArticulationAsset::AssetTypeName(), ExtractArticulationDependencies)
+        && registry.registerType(VehicleAsset::AssetTypeName(), ExtractVehicleDependencies);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void BuildPhysicsCookEntryIndexMap<T>(in Span<T> entries, mut HashMap<Name, usize> outMap){
+    outMap.reserve(entries.size());
+    for(usize i = 0u; i < entries.size(); ++i)
+        outMap.insert_or_assign(entries[i].virtualPath, i);
+}
+
+b8 CheckScenePhysicsEntityName(
+    in Name scenePath,
+    in Name componentPath,
+    in StringView fieldName,
+    in Name targetName,
+    in HashSet<NameHash> sceneEntityNames
+){
+    if(targetName == s_NameNone)
+        return true;
+    if(sceneEntityNames.find(targetName.hash()) != sceneEntityNames.end())
+        return true;
+    error(
+        "Physics scene validation '{}': component '{}' field '{}' references unknown entity '{}'",
+        scenePath.resolvedText(),
+        componentPath.resolvedText(),
+        fieldName,
+        targetName.resolvedText()
+    );
+    return false;
+}
+
+b8 CheckScenePhysicsEntityNameList(
+    in Name scenePath,
+    in Name componentPath,
+    in StringView fieldName,
+    in Vector<Name> targetNames,
+    in HashSet<NameHash> sceneEntityNames
+){
+    b8 allValid = true;
+    for(usize i = 0u; i < targetNames.size(); ++i){
+        if(!CheckScenePhysicsEntityName(scenePath, componentPath, fieldName, targetNames[i], sceneEntityNames))
+            allValid = false;
+    }
+    return allValid;
+}
+
+b8 CheckSceneJointEntryEntityNames(
+    in Name scenePath,
+    in Name componentPath,
+    in JointEntry joint,
+    in HashSet<NameHash> sceneEntityNames
+){
+    b8 allValid = true;
+    if(!CheckScenePhysicsEntityName(scenePath, componentPath, "body_entity_a", joint.bodyEntityNameA, sceneEntityNames))
+        allValid = false;
+    if(!CheckScenePhysicsEntityName(scenePath, componentPath, "body_entity_b", joint.bodyEntityNameB, sceneEntityNames))
+        allValid = false;
+    if(!CheckScenePhysicsEntityName(scenePath, componentPath, "reference_joint_entity_a", joint.referenceJointEntityNameA, sceneEntityNames))
+        allValid = false;
+    if(!CheckScenePhysicsEntityName(scenePath, componentPath, "reference_joint_entity_b", joint.referenceJointEntityNameB, sceneEntityNames))
+        allValid = false;
+    return allValid;
+}
+
+b8 ValidateScenePhysicsEntityReferencesWithCache(
+    in Span<SceneCookEntry> scenes,
+    in Span<EntityCookEntry> entities,
+    in Span<RigidBodyComponentCookEntry> rigidBodies,
+    in Span<ColliderComponentCookEntry> colliders,
+    in Span<JointComponentCookEntry> joints,
+    in Span<PhysicsParentComponentCookEntry> parents,
+    in Span<VehicleComponentCookEntry> vehicles,
+    in Span<RagdollComponentCookEntry> ragdolls,
+    in Span<ArticulationComponentCookEntry> articulations,
+    in Span<SoftBodyComponentCookEntry> softBodies,
+    in Span<Name> cachedVirtualPaths,
+    in b8 allowPartialEntityTable
+){
+    if(scenes.empty())
+        return true;
+
+    HashMap<Name, usize> entityMap;
+    HashMap<Name, usize> rigidBodyMap;
+    HashMap<Name, usize> colliderMap;
+    HashMap<Name, usize> jointMap;
+    HashMap<Name, usize> parentMap;
+    HashMap<Name, usize> vehicleMap;
+    HashMap<Name, usize> ragdollMap;
+    HashMap<Name, usize> articulationMap;
+    HashMap<Name, usize> softBodyMap;
+
+    BuildPhysicsCookEntryIndexMap<EntityCookEntry>(entities, entityMap);
+    BuildPhysicsCookEntryIndexMap<RigidBodyComponentCookEntry>(rigidBodies, rigidBodyMap);
+    BuildPhysicsCookEntryIndexMap<ColliderComponentCookEntry>(colliders, colliderMap);
+    BuildPhysicsCookEntryIndexMap<JointComponentCookEntry>(joints, jointMap);
+    BuildPhysicsCookEntryIndexMap<PhysicsParentComponentCookEntry>(parents, parentMap);
+    BuildPhysicsCookEntryIndexMap<VehicleComponentCookEntry>(vehicles, vehicleMap);
+    BuildPhysicsCookEntryIndexMap<RagdollComponentCookEntry>(ragdolls, ragdollMap);
+    BuildPhysicsCookEntryIndexMap<ArticulationComponentCookEntry>(articulations, articulationMap);
+    BuildPhysicsCookEntryIndexMap<SoftBodyComponentCookEntry>(softBodies, softBodyMap);
+
+    HashSet<NameHash> cachedPathSet;
+    if(allowPartialEntityTable && !cachedVirtualPaths.empty()){
+        cachedPathSet.reserve(cachedVirtualPaths.size());
+        for(usize ci = 0u; ci < cachedVirtualPaths.size(); ++ci)
+            cachedPathSet.insert(cachedVirtualPaths[ci].hash());
+    }
+
+    b8 allValid = true;
+    for(usize sceneIdx = 0u; sceneIdx < scenes.size(); ++sceneIdx){
+        in SceneCookEntry scene = scenes[sceneIdx];
+        HashSet<NameHash> sceneEntityNames;
+        Vector<usize> sceneEntityIndices;
+        sceneEntityNames.reserve(scene.entities.size() * 2u);
+        sceneEntityIndices.reserve(scene.entities.size());
+        b8 skipScene = false;
+
+        for(usize entRefIdx = 0u; entRefIdx < scene.entities.size(); ++entRefIdx){
+            in EntityRef entRef = scene.entities[entRefIdx];
+            const auto entIt = entityMap.find(entRef.name());
+            if(entIt == entityMap.end()){
+                if(allowPartialEntityTable){
+                    skipScene = true;
+                    break;
+                }
+                error("Physics scene validation '{}': references unknown entity '{}'", scene.virtualPath.resolvedText(), entRef.name().resolvedText());
+                allValid = false;
+                continue;
+            }
+            const usize ei = entIt.value();
+            sceneEntityIndices.push_back(ei);
+            in EntityCookEntry ent = entities[ei];
+            if(ent.name != s_NameNone)
+                sceneEntityNames.insert(ent.name.hash());
+            for(usize ci = 0u; ci < ent.components.size(); ++ci){
+                const Name compPath = ent.components[ci].name();
+                if(allowPartialEntityTable && !cachedPathSet.empty() && cachedPathSet.find(compPath.hash()) != cachedPathSet.end()){
+                    skipScene = true;
+                    break;
+                }
+                const auto rbIt = rigidBodyMap.find(compPath);
+                if(rbIt != rigidBodyMap.end()){
+                    in RigidBodyComponent rb = rigidBodies[rbIt.value()].component;
+                    if(rb.entityTag != s_NameNone)
+                        sceneEntityNames.insert(rb.entityTag.hash());
+                }
+                const auto colIt = colliderMap.find(compPath);
+                if(colIt != colliderMap.end()){
+                    in ColliderComponent col = colliders[colIt.value()].component;
+                    if(col.entityTag != s_NameNone)
+                        sceneEntityNames.insert(col.entityTag.hash());
+                }
+            }
+            if(skipScene)
+                break;
+        }
+        if(skipScene)
+            continue;
+
+        for(usize si = 0u; si < sceneEntityIndices.size(); ++si){
+            in EntityCookEntry ent = entities[sceneEntityIndices[si]];
+            for(usize ci = 0u; ci < ent.components.size(); ++ci){
+                const Name compPath = ent.components[ci].name();
+
+                const auto jIt = jointMap.find(compPath);
+                if(jIt != jointMap.end()){
+                    in JointComponent jc = joints[jIt.value()].component;
+                    if(!CheckSceneJointEntryEntityNames(scene.virtualPath, compPath, jc.primaryJoint, sceneEntityNames))
+                        allValid = false;
+                    for(usize ji = 0u; ji < jc.extraJoints.size(); ++ji){
+                        if(!CheckSceneJointEntryEntityNames(scene.virtualPath, compPath, jc.extraJoints[ji], sceneEntityNames))
+                            allValid = false;
+                    }
+                }
+
+                const auto pIt = parentMap.find(compPath);
+                if(pIt != parentMap.end()){
+                    in PhysicsParentComponent pc = parents[pIt.value()].component;
+                    if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "parent_entity_name", pc.parentEntityName, sceneEntityNames))
+                        allValid = false;
+                }
+
+                const auto vIt = vehicleMap.find(compPath);
+                if(vIt != vehicleMap.end()){
+                    in VehicleComponent vc = vehicles[vIt.value()].component;
+                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "wheel_entity_names", vc.wheelEntityNames, sceneEntityNames))
+                        allValid = false;
+                    if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", vc.skeletonEntityName, sceneEntityNames))
+                        allValid = false;
+                    if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "trailer_entity_name", vc.trailerEntityName, sceneEntityNames))
+                        allValid = false;
+                }
+
+                const auto rIt = ragdollMap.find(compPath);
+                if(rIt != ragdollMap.end()){
+                    in RagdollComponent rc = ragdolls[rIt.value()].component;
+                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "bone_entity_names", rc.boneEntityNames, sceneEntityNames))
+                        allValid = false;
+                    if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", rc.skeletonEntityName, sceneEntityNames))
+                        allValid = false;
+                }
+
+                const auto aIt = articulationMap.find(compPath);
+                if(aIt != articulationMap.end()){
+                    in ArticulationComponent ac = articulations[aIt.value()].component;
+                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "proxy_entity_names", ac.proxyEntityNames, sceneEntityNames))
+                        allValid = false;
+                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "link_entity_names", ac.linkEntityNames, sceneEntityNames))
+                        allValid = false;
+                    if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", ac.skeletonEntityName, sceneEntityNames))
+                        allValid = false;
+                }
+
+                const auto sbIt = softBodyMap.find(compPath);
+                if(sbIt != softBodyMap.end()){
+                    in SoftBodyComponent sbc = softBodies[sbIt.value()].component;
+                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "attachment_body_entity_names", sbc.attachmentBodyEntityNames, sceneEntityNames))
+                        allValid = false;
+                }
+            }
+        }
+    }
+    return allValid;
+}
+
+b8 ValidateScenePhysicsEntityReferences(
+    in Span<SceneCookEntry> scenes,
+    in Span<EntityCookEntry> entities,
+    in Span<RigidBodyComponentCookEntry> rigidBodies,
+    in Span<ColliderComponentCookEntry> colliders,
+    in Span<JointComponentCookEntry> joints,
+    in Span<PhysicsParentComponentCookEntry> parents,
+    in Span<VehicleComponentCookEntry> vehicles,
+    in Span<RagdollComponentCookEntry> ragdolls,
+    in Span<ArticulationComponentCookEntry> articulations,
+    in Span<SoftBodyComponentCookEntry> softBodies,
+    in b8 allowPartialEntityTable
+){
+    return ValidateScenePhysicsEntityReferencesWithCache(
+        scenes,
+        entities,
+        rigidBodies,
+        colliders,
+        joints,
+        parents,
+        vehicles,
+        ragdolls,
+        articulations,
+        softBodies,
+        Span<Name>(),
+        allowPartialEntityTable
+    );
 }
 
 

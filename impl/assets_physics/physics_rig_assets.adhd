@@ -1,0 +1,165 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/physics_assets.adhd>
+#include <impl/physics/articulation.adhd>
+#include <impl/physics/fracture.adhd>
+#include <impl/physics/ragdoll.adhd>
+#include <impl/physics/soft_body.adhd>
+#include <impl/physics/vehicle.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_FractureAssetMagic = 0x50465243u;
+const u32 s_FractureAssetVersion = 1u;
+
+const u32 s_SoftBodyAssetMagic = 0x50534642u;
+const u32 s_SoftBodyAssetVersion = 1u;
+
+const u32 s_RagdollAssetMagic = 0x50524744u;
+const u32 s_RagdollAssetVersion = 1u;
+
+const u32 s_ArticulationAssetMagic = 0x50415254u;
+const u32 s_ArticulationAssetVersion = 1u;
+
+const u32 s_VehicleAssetMagic = 0x50564548u;
+const u32 s_VehicleAssetVersion = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RagdollAssetData{
+    public Vector<RagdollBoneDef> bones;
+    public RagdollMode mode = RagdollMode::Joints;
+    public b8 enableSelfCollision = true;
+    public b8 autoExcludeInitialOverlaps = false;
+    public Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs;
+    public RagdollAutoGenParams autoGenParams;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public Vector<b8> boneKinematicMask;
+    public Vector<u32> boneJointIndices;
+}
+
+class ArticulationAssetData{
+    public Vector<ArticulationLinkDef> links;
+    public b8 isFixedBase = true;
+    public u32 subSteps = 4u;
+    public u32 solverIterations = 6u;
+    public b8 enableContactCoupling = false;
+    public b8 overrideContactFriction = false;
+    public f32 contactRestitution = 0.0f;
+    public f32 contactFriction = 0.5f;
+    public Filter contactFilter;
+    public Vector<ArticulationMimicConstraint> mimicConstraints;
+    public Vector<ArticulationTendonConstraint> tendonConstraints;
+    public Vector<ArticulationSpatialTendon> spatialTendons;
+    public Vector<ArticulationLoopConstraint> loopConstraints;
+    public b8 enableSelfCollision = false;
+    public f32 selfCollisionMargin = 0.0f;
+    public b8 enableCcd = false;
+    public f32 ccdMotionThreshold = 0.25f;
+    public b8 enableSleep = false;
+    public f32 sleepLinearThreshold = 0.02f;
+    public f32 sleepAngularThreshold = 0.03f;
+    public f32 sleepTimeThreshold = 0.5f;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public Vector<u32> linkJointIndices;
+}
+
+class VehicleAssetData{
+    public VehicleEngineDef engine;
+    public Vector<VehicleWheelDef> wheels;
+    public Filter queryFilter;
+    public f32 wheelSlipEventThreshold = 0.35f;
+    public f32x4 trailerLocalHitchChassis(0.0f, 0.0f, -2.0f, 0.0f);
+    public f32x4 trailerLocalHitchTrailer(0.0f, 0.0f, 2.0f, 0.0f);
+    public f32 trailerSwingLimitRad = 1.2f;
+}
+
+[asset("physics_fracture")]
+class FractureAsset{
+    private FractureCollection m_collection;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setFractureCollection(in FractureCollection inCollection){
+        this.m_collection = inCollection;
+    }
+
+    public in FractureCollection fractureCollection()const{
+        return this.m_collection;
+    }
+}
+
+[asset("physics_soft_body")]
+class SoftBodyAsset{
+    private SoftBody m_softBody;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setSoftBody(in SoftBody inSoftBody){
+        this.m_softBody = inSoftBody;
+    }
+
+    public in SoftBody softBody()const{
+        return this.m_softBody;
+    }
+}
+
+[asset("physics_ragdoll")]
+class RagdollAsset{
+    private RagdollAssetData m_ragdoll;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setRagdoll(in RagdollAssetData inRagdoll){
+        this.m_ragdoll = inRagdoll;
+    }
+
+    public in RagdollAssetData ragdollData()const{
+        return this.m_ragdoll;
+    }
+}
+
+[asset("physics_articulation")]
+class ArticulationAsset{
+    private ArticulationAssetData m_articulation;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setArticulation(in ArticulationAssetData inArticulation){
+        this.m_articulation = inArticulation;
+    }
+
+    public in ArticulationAssetData articulationData()const{
+        return this.m_articulation;
+    }
+}
+
+[asset("physics_vehicle")]
+class VehicleAsset{
+    private VehicleAssetData m_vehicle;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setVehicle(in VehicleAssetData inVehicle){
+        this.m_vehicle = inVehicle;
+    }
+
+    public in VehicleAssetData vehicleData()const{
+        return this.m_vehicle;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

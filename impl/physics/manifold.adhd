@@ -48,16 +48,24 @@ class ManifoldPoint{
 
 class Manifold{
     public Array<ManifoldPoint, s_MaxManifoldPoints> points;
+    public Array<f32x2u, s_MaxManifoldPoints> pointFrictionImpulses;
+    public Array<f32, s_MaxManifoldPoints> postSolveTangentImpulses;
     public f32x4 normalTwist(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x3_u32 rollingImpulseMeta(0.0f, 0.0f, 0.0f, 0u);
     public u32x4 pointIds;
     public f32x2u frictionImpulse;
     public u32 materialTriangleA = s_NullIndex;
     public u32 materialTriangleB = s_NullIndex;
+    public u32 materialSubShapeA = s_NullIndex;
+    public u32 materialSubShapeB = s_NullIndex;
 
     public Manifold(){
         this.pointIds = u32x4(0u, 0u, 0u, 0u);
         this.frictionImpulse = f32x2u(0.0f, 0.0f);
+        for(usize i = 0u; i < s_MaxManifoldPoints; ++i){
+            this.pointFrictionImpulses[i] = f32x2u(0.0f, 0.0f);
+            this.postSolveTangentImpulses[i] = 0.0f;
+        }
     }
 
     public VectorSingle normal()const{
@@ -1250,11 +1258,15 @@ Manifold FlipManifoldNormalAndAnchors(in Manifold source){
     flipped.frictionImpulse = source.frictionImpulse;
     flipped.materialTriangleA = source.materialTriangleB;
     flipped.materialTriangleB = source.materialTriangleA;
+    flipped.materialSubShapeA = source.materialSubShapeB;
+    flipped.materialSubShapeB = source.materialSubShapeA;
     const u32 count = source.pointCount();
     for(u32 i = 0u; i < count; ++i){
         flipped.points[i].pointSeparation = source.points[i].pointSeparation;
         flipped.points[i].anchorANormalImpulse = f32x4(source.points[i].anchorB(), source.points[i].normalImpulse());
         flipped.points[i].anchorBTotalImpulse = f32x4(source.points[i].anchorA(), source.points[i].totalNormalImpulse());
+        flipped.pointFrictionImpulses[i] = source.pointFrictionImpulses[i];
+        flipped.postSolveTangentImpulses[i] = source.postSolveTangentImpulses[i];
     }
     return flipped;
 }
@@ -1801,17 +1813,36 @@ Manifold CollideCapsuleAndMeshFiltered(
     return m;
 }
 
-void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
+void MatchManifoldImpulsesCore(
+    in Manifold oldManifold,
+    in b8 hasExplicitBasis,
+    in VectorSingle explicitOldT1,
+    in VectorSingle explicitOldT2,
+    in VectorSingle explicitNewT1,
+    in VectorSingle explicitNewT2,
+    in b8 enableWarmStarting,
+    mut Manifold newManifold
+){
     const u32 newCount = newManifold.pointCount();
     const u32 oldCount = oldManifold.pointCount();
     if(!enableWarmStarting || newCount == 0u || oldCount == 0u)
         return;
 
     b8 anyMatched = false;
+    u32 usedMask = 0u;
+    Array<u32, s_MaxManifoldPoints> matchedOldIdx;
+    for(u32 k = 0u; k < cast<u32>(s_MaxManifoldPoints); ++k)
+        matchedOldIdx[k] = s_NullIndex;
+
     for(u32 i = 0u; i < newCount; ++i){
         const u32 newId = newManifold.pointId(i);
         for(u32 j = 0u; j < oldCount; ++j){
+            const u32 jBit = 1u << j;
+            if((usedMask & jBit) != 0u)
+                continue;
             if(oldManifold.pointId(j) == newId){
+                usedMask |= jBit;
+                matchedOldIdx[i] = j;
                 newManifold.points[i].setNormalImpulse(oldManifold.points[j].normalImpulse());
                 newManifold.points[i].setTotalNormalImpulse(oldManifold.points[j].totalNormalImpulse());
                 newManifold.setPersisted(i, true);
@@ -1824,38 +1855,73 @@ void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in
     if(!anyMatched)
         return;
 
-    const b8 hasFriction = (oldManifold.frictionImpulse.x != 0.0f || oldManifold.frictionImpulse.y != 0.0f);
     const f32 twistImp = oldManifold.twistImpulse();
     const VectorSingle rollImp = oldManifold.rollingImpulse();
     const b8 hasTwist = (twistImp != 0.0f);
     const b8 hasRoll = (rollImp.x != 0.0f || rollImp.y != 0.0f || rollImp.z != 0.0f);
-    if(!hasFriction && !hasTwist && !hasRoll)
-        return;
 
     const VectorSingle oldN = VectorSingle(oldManifold.normal(), 0.0f);
     const VectorSingle newN = VectorSingle(newManifold.normal(), 0.0f);
     const f32 nDot = Vector3Dot(oldN, newN).x;
     if(nDot > 0.9f){
-        if(hasFriction){
-            if(nDot > 0.99999f && ((Abs(VectorSingle(oldN.y)).x > 0.9f) == (Abs(VectorSingle(newN.y)).x > 0.9f))){
+        VectorSingle oldT1 = explicitOldT1;
+        VectorSingle oldT2 = explicitOldT2;
+        VectorSingle newT1 = explicitNewT1;
+        VectorSingle newT2 = explicitNewT2;
+        if(!hasExplicitBasis){
+            ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
+            ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
+        }
+
+        const b8 sameDefaultBasis = !hasExplicitBasis && nDot > 0.99999f && ((Abs(VectorSingle(oldN.y)).x > 0.9f) == (Abs(VectorSingle(newN.y)).x > 0.9f));
+        if(oldManifold.frictionImpulse.x != 0.0f || oldManifold.frictionImpulse.y != 0.0f){
+            if(sameDefaultBasis){
                 newManifold.frictionImpulse = oldManifold.frictionImpulse;
             }
             else{
-                VectorSingle oldT1(0.0f);
-                VectorSingle oldT2(0.0f);
-                ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
-                VectorSingle newT1(0.0f);
-                VectorSingle newT2(0.0f);
-                ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
                 const VectorSingle worldF = oldT1 * oldManifold.frictionImpulse.x + oldT2 * oldManifold.frictionImpulse.y;
                 newManifold.frictionImpulse = f32x2u(Vector3Dot(worldF, newT1).x, Vector3Dot(worldF, newT2).x);
             }
         }
+
+        for(u32 i = 0u; i < newCount; ++i){
+            const u32 j = matchedOldIdx[i];
+            if(j == s_NullIndex)
+                continue;
+            const f32x2u pf = oldManifold.pointFrictionImpulses[j];
+            if(pf.x != 0.0f || pf.y != 0.0f){
+                if(sameDefaultBasis){
+                    newManifold.pointFrictionImpulses[i] = pf;
+                }
+                else{
+                    const VectorSingle worldPf = oldT1 * pf.x + oldT2 * pf.y;
+                    newManifold.pointFrictionImpulses[i] = f32x2u(Vector3Dot(worldPf, newT1).x, Vector3Dot(worldPf, newT2).x);
+                }
+            }
+        }
+
         if(hasTwist)
             newManifold.setTwistImpulse(twistImp);
         if(hasRoll)
-            newManifold.setRollingImpulse(rollImp);
+            newManifold.setRollingImpulse(rollImp - newN * Vector3Dot(rollImp, newN).x);
     }
+}
+
+void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
+    const VectorSingle zeroVec(0.0f);
+    MatchManifoldImpulsesCore(oldManifold, false, zeroVec, zeroVec, zeroVec, zeroVec, enableWarmStarting, newManifold);
+}
+
+void MatchManifoldImpulsesWithBasis(
+    in Manifold oldManifold,
+    in VectorSingle oldT1,
+    in VectorSingle oldT2,
+    in VectorSingle newT1,
+    in VectorSingle newT2,
+    in b8 enableWarmStarting,
+    mut Manifold newManifold
+){
+    MatchManifoldImpulsesCore(oldManifold, true, oldT1, oldT2, newT1, newT2, enableWarmStarting, newManifold);
 }
 
 ClipVertex MakeInterpolatedClipVertex(
@@ -2225,8 +2291,15 @@ void BuildProxyPlanarPatchWorld(
 ){
     outPoly.clear();
     const VectorSingle nOut = SafeNormalizeVec3(worldNormalOutward, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    const VectorSingle localN = SafeNormalizeVec3(Vector3InverseRotate(nOut, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    const VectorSingle pad = nOut * proxy.radius;
+    const VectorSingle rotLocalN = SafeNormalizeVec3(Vector3InverseRotate(nOut, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const b8 isScaled = (proxy.scaleMinMargin.w >= 0.0f);
+    VectorSingle s(1.0f, 1.0f, 1.0f, 0.0f);
+    f32 margin = proxy.radius;
+    if(isScaled){
+        s = VectorSingle(proxy.scaleMinMargin, 0.0f);
+        margin = proxy.scaleMinMargin.w;
+    }
+    const VectorSingle localN = SafeNormalizeVec3(rotLocalN * s, rotLocalN);
 
     if(proxy.kind == ProxyKind::Cylinder){
         const VectorSingle c = VectorSingle(proxy.param0, 0.0f);
@@ -2248,9 +2321,9 @@ void BuildProxyPlanarPatchWorld(
             cosV[6u] = 0.0f; sinV[6u] = -1.0f;
             cosV[7u] = d45;  sinV[7u] = -d45;
             for(usize k = 0u; k < 8u; ++k){
-                const VectorSingle lp = c + VectorSingle(r * cosV[k], capY, r * sinV[k], 0.0f);
+                const VectorSingle lp = (c + VectorSingle(r * cosV[k], capY, r * sinV[k], 0.0f) + localN * margin) * s;
                 ClipVertex cv;
-                cv.position = f32x3u(TransformPointValues(xfPos, xfRot, lp) + pad);
+                cv.position = f32x3u(TransformPointValues(xfPos, xfRot, lp));
                 cv.id0 = cast<u8>(k);
                 outPoly.push_back(cv);
             }
@@ -2260,10 +2333,10 @@ void BuildProxyPlanarPatchWorld(
         if(Abs(VectorSingle(localN.y)).x < 0.08f){
             const VectorSingle radDir = SafeNormalizeVec3(VectorSingle(localN.x, 0.0f, localN.z, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
             ClipVertex c0;
-            c0.position = f32x3u(TransformPointValues(xfPos, xfRot, c + radDir * r - VectorSingle(0.0f, hh, 0.0f, 0.0f)) + pad);
+            c0.position = f32x3u(TransformPointValues(xfPos, xfRot, (c + radDir * r - VectorSingle(0.0f, hh, 0.0f, 0.0f) + localN * margin) * s));
             c0.id0 = 0u;
             ClipVertex c1;
-            c1.position = f32x3u(TransformPointValues(xfPos, xfRot, c + radDir * r + VectorSingle(0.0f, hh, 0.0f, 0.0f)) + pad);
+            c1.position = f32x3u(TransformPointValues(xfPos, xfRot, (c + radDir * r + VectorSingle(0.0f, hh, 0.0f, 0.0f) + localN * margin) * s));
             c1.id0 = 1u;
             outPoly.push_back(c0);
             outPoly.push_back(c1);
@@ -2271,7 +2344,7 @@ void BuildProxyPlanarPatchWorld(
         }
         u8 supIdx = 0xffu;
         ClipVertex cv;
-        cv.position = f32x3u(TransformPointValues(xfPos, xfRot, ComputeProxyViewSupport(proxy, localN, supIdx)) + pad);
+        cv.position = f32x3u(TransformPointValues(xfPos, xfRot, ComputeProxyViewSupport(proxy, rotLocalN, supIdx)) + nOut * proxy.radius);
         cv.id0 = 0u;
         outPoly.push_back(cv);
         return;
@@ -2294,9 +2367,9 @@ void BuildProxyPlanarPatchWorld(
             cosV[6u] = 0.0f; sinV[6u] = -1.0f;
             cosV[7u] = d45;  sinV[7u] = -d45;
             for(usize k = 0u; k < 8u; ++k){
-                const VectorSingle lp = c + VectorSingle(r * cosV[k], -hh, r * sinV[k], 0.0f);
+                const VectorSingle lp = (c + VectorSingle(r * cosV[k], -hh, r * sinV[k], 0.0f) + localN * margin) * s;
                 ClipVertex cv;
-                cv.position = f32x3u(TransformPointValues(xfPos, xfRot, lp) + pad);
+                cv.position = f32x3u(TransformPointValues(xfPos, xfRot, lp));
                 cv.id0 = cast<u8>(k);
                 outPoly.push_back(cv);
             }
@@ -2309,10 +2382,10 @@ void BuildProxyPlanarPatchWorld(
             const VectorSingle gen = SafeNormalizeVec3(VectorSingle(-radDir.x * r, 2.0f * hh, -radDir.z * r, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             if(Abs(Vector3Dot(localN, gen)).x < 0.08f){
                 ClipVertex c0;
-                c0.position = f32x3u(TransformPointValues(xfPos, xfRot, c + radDir * r - VectorSingle(0.0f, hh, 0.0f, 0.0f)) + pad);
+                c0.position = f32x3u(TransformPointValues(xfPos, xfRot, (c + radDir * r - VectorSingle(0.0f, hh, 0.0f, 0.0f) + localN * margin) * s));
                 c0.id0 = 0u;
                 ClipVertex c1;
-                c1.position = f32x3u(TransformPointValues(xfPos, xfRot, c + VectorSingle(0.0f, hh, 0.0f, 0.0f)) + pad);
+                c1.position = f32x3u(TransformPointValues(xfPos, xfRot, (c + VectorSingle(0.0f, hh, 0.0f, 0.0f) + localN * margin) * s));
                 c1.id0 = 1u;
                 outPoly.push_back(c0);
                 outPoly.push_back(c1);
@@ -2321,7 +2394,7 @@ void BuildProxyPlanarPatchWorld(
         }
         u8 supIdx = 0xffu;
         ClipVertex cv;
-        cv.position = f32x3u(TransformPointValues(xfPos, xfRot, ComputeProxyViewSupport(proxy, localN, supIdx)) + pad);
+        cv.position = f32x3u(TransformPointValues(xfPos, xfRot, ComputeProxyViewSupport(proxy, rotLocalN, supIdx)) + nOut * proxy.radius);
         cv.id0 = 0u;
         outPoly.push_back(cv);
         return;
@@ -2329,9 +2402,9 @@ void BuildProxyPlanarPatchWorld(
 
     if(proxy.kind == ProxyKind::TaperedCapsule){
         const VectorSingle p1 = VectorSingle(proxy.param0, 0.0f);
-        const f32 r1 = proxy.radius + proxy.param0.w;
+        const f32 r1 = margin + proxy.param0.w;
         const VectorSingle p2 = VectorSingle(proxy.param1, 0.0f);
-        const f32 r2 = proxy.radius + proxy.param1.w;
+        const f32 r2 = margin + proxy.param1.w;
         const VectorSingle dAxis = VectorSingle(p2 - p1, 0.0f);
         const f32 len = Vector3Length(dAxis).x;
         if(len > Abs(VectorSingle(r1 - r2)).x + 1.0e-4f){
@@ -2339,10 +2412,10 @@ void BuildProxyPlanarPatchWorld(
             const f32 targetDot = (r1 - r2) / len;
             if(Abs(VectorSingle(Vector3Dot(localN, u).x - targetDot)).x < 0.08f){
                 ClipVertex c0;
-                c0.position = f32x3u(TransformPointValues(xfPos, xfRot, p1 + localN * r1));
+                c0.position = f32x3u(TransformPointValues(xfPos, xfRot, (p1 + localN * r1) * s));
                 c0.id0 = 0u;
                 ClipVertex c1;
-                c1.position = f32x3u(TransformPointValues(xfPos, xfRot, p2 + localN * r2));
+                c1.position = f32x3u(TransformPointValues(xfPos, xfRot, (p2 + localN * r2) * s));
                 c1.id0 = 1u;
                 outPoly.push_back(c0);
                 outPoly.push_back(c1);
@@ -2351,7 +2424,7 @@ void BuildProxyPlanarPatchWorld(
         }
         u8 supIdx = 0xffu;
         ClipVertex cv;
-        cv.position = f32x3u(TransformPointValues(xfPos, xfRot, ComputeProxyViewSupport(proxy, localN, supIdx)) + pad);
+        cv.position = f32x3u(TransformPointValues(xfPos, xfRot, ComputeProxyViewSupport(proxy, rotLocalN, supIdx)) + nOut * proxy.radius);
         cv.id0 = 0u;
         outPoly.push_back(cv);
         return;
@@ -2362,15 +2435,16 @@ void BuildProxyPlanarPatchWorld(
 
     f32 maxDot = -s_MaxF32;
     for(usize i = 0u; i < proxy.points.size(); ++i){
-        const f32 d = Vector3Dot(VectorSingle(proxy.points[i], 0.0f), localN).x;
+        const f32 d = Vector3Dot(VectorSingle(proxy.points[i], 0.0f) * s, rotLocalN).x;
         if(d > maxDot)
             maxDot = d;
     }
+    const VectorSingle padLocalScaled = (localN * margin) * s;
     for(usize i = 0u; i < proxy.points.size(); ++i){
-        const VectorSingle lPt(proxy.points[i], 0.0f);
-        const f32 d = Vector3Dot(lPt, localN).x;
+        const VectorSingle lPtScaled = VectorSingle(proxy.points[i], 0.0f) * s;
+        const f32 d = Vector3Dot(lPtScaled, rotLocalN).x;
         if(maxDot - d <= 0.004f){
-            const VectorSingle wp = TransformPointValues(xfPos, xfRot, lPt) + nOut * (proxy.radius + maxDot - d);
+            const VectorSingle wp = TransformPointValues(xfPos, xfRot, lPtScaled + padLocalScaled) + nOut * (maxDot - d);
             b8 dup = false;
             for(usize j = 0u; j < outPoly.size(); ++j){
                 if(Vector3LengthSq(VectorSingle(wp - VectorSingle(outPoly[j].position, 0.0f), 0.0f)).x <= 1.0e-8f){
@@ -3178,12 +3252,12 @@ void PushSdfSampleCandidate(
     VectorSingle wAInSdf = sampleInSdf;
     f32 d = 0.0f;
     if(queryRadius <= 0.0f){
-        sdfB.sampleDistanceAndGradient(sampleInSdf, d, g);
+        sdfB.sampleEffectiveDistanceAndGradient(sampleInSdf, d, g);
     }
     else{
-        g = sdfB.sampleGradient(sampleInSdf);
+        g = sdfB.sampleEffectiveGradient(sampleInSdf);
         wAInSdf = sampleInSdf - g * queryRadius;
-        d = sdfB.sampleDistance(wAInSdf);
+        sdfB.sampleEffectiveDistanceAndGradient(wAInSdf, d, g);
     }
     if(d > maxDistance)
         return;
@@ -3245,19 +3319,23 @@ void CollideConvexProxyAndSdfMulti(
     VectorSingle bestG(0.0f, 1.0f, 0.0f, 0.0f);
     const f32 minSep = FindMinSdfConvexSeparation(proxyA, localPosA, localRotA, sdfB, bestW, bestG);
     if(minSep <= maxDistance){
-        const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestG, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        f32 bestWDist = 0.0f;
+        VectorSingle bestWG = bestG;
+        sdfB.sampleEffectiveDistanceAndGradient(bestW, bestWDist, bestWG);
+        const f32 usedSep = Min(minSep, bestWDist);
+        const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestWG, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle nAtoB = -worldOut;
         const VectorSingle worldPtA = TransformPointValues(posB, rotB, bestW);
-        const VectorSingle surfLocal = bestW - bestG * sdfB.sampleDistance(bestW);
+        const VectorSingle surfLocal = bestW - bestWG * bestWDist;
         const VectorSingle worldPtB = TransformPointValues(posB, rotB, surfLocal);
-        deepestSep = minSep;
+        deepestSep = usedSep;
         chosenNormal = nAtoB;
         PushMeshCandidateWithTris(
             (worldPtA + worldPtB) * 0.5f,
             worldPtA - posA,
             worldPtB - posB,
             nAtoB,
-            minSep,
+            usedSep,
             MakeFeatureId(5u, 0u, 7u, 0u),
             s_NullIndex,
             s_NullIndex,
@@ -3265,15 +3343,33 @@ void CollideConvexProxyAndSdfMulti(
         );
     }
 
-    if(proxyA.kind == ProxyKind::PointCloud && proxyA.scaleMinMargin.w < 0.0f){
-        const usize ptLim = Min(proxyA.points.size(), cast<usize>(24u));
+    if(proxyA.kind == ProxyKind::PointCloud){
+        const b8 scaledHull = (proxyA.scaleMinMargin.w >= 0.0f);
+        VectorSingle sVec(1.0f, 1.0f, 1.0f, 0.0f);
+        f32 margin = proxyA.radius;
+        if(scaledHull){
+            sVec = VectorSingle(proxyA.scaleMinMargin, 0.0f);
+            margin = proxyA.scaleMinMargin.w;
+        }
+        const usize ptLim = proxyA.points.size();
         for(usize pi = 0u; pi < ptLim; ++pi){
             const f32x3u rawPt = proxyA.points[pi];
-            const VectorSingle ptInB = TransformPointValues(localPosA, localRotA, VectorSingle(rawPt.x, rawPt.y, rawPt.z, 0.0f));
-            PushSdfSampleCandidate(ptInB, posA, posB, rotB, proxyA.radius, sdfB, maxDistance, MakeFeatureId(5u, cast<u8>(pi + 1u), 7u, 1u), deepestSep, chosenNormal, candidates);
+            const VectorSingle rawV(rawPt.x, rawPt.y, rawPt.z, 0.0f);
+            VectorSingle ptInB = TransformPointValues(localPosA, localRotA, rawV * sVec);
+            if(scaledHull){
+                if(margin > 0.0f){
+                    const VectorSingle gB = sdfB.sampleEffectiveGradient(ptInB);
+                    const VectorSingle uLocal = SafeNormalizeVec3(Vector3InverseRotate(-gB, localRotA) * sVec, VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+                    ptInB = TransformPointValues(localPosA, localRotA, (rawV + uLocal * margin) * sVec);
+                }
+                PushSdfSampleCandidate(ptInB, posA, posB, rotB, 0.0f, sdfB, maxDistance, MakeFeatureId(5u, cast<u8>((pi + 1u) & 0xffu), 7u, 1u), deepestSep, chosenNormal, candidates);
+            }
+            else{
+                PushSdfSampleCandidate(ptInB, posA, posB, rotB, proxyA.radius, sdfB, maxDistance, MakeFeatureId(5u, cast<u8>((pi + 1u) & 0xffu), 7u, 1u), deepestSep, chosenNormal, candidates);
+            }
         }
     }
-    else{
+    if(proxyA.kind != ProxyKind::PointCloud || proxyA.scaleMinMargin.w >= 0.0f){
         Array<f32x4, 14u> dirs;
         dirs[0u]  = f32x4( 1.0f,  0.0f,  0.0f, 0.0f);
         dirs[1u]  = f32x4(-1.0f,  0.0f,  0.0f, 0.0f);
@@ -3343,16 +3439,17 @@ void CollideSdfAndSdfMulti(
         for(u32 y = 0u; y < sdfA.dimY; y += strideY){
             const f32 py = sdfA.boundsMin.y + cast<f32>(y) * sdfA.cellSize.y;
             for(u32 x = 0u; x < sdfA.dimX; x += strideX){
-                const f32 dA = sdfA.atGrid(x, y, z) - sdfA.margin;
+                const VectorSingle pA(sdfA.boundsMin.x + cast<f32>(x) * sdfA.cellSize.x, py, pz, 0.0f);
+                f32 dA = 0.0f;
+                VectorSingle gA(0.0f, 1.0f, 0.0f, 0.0f);
+                sdfA.sampleEffectiveDistanceAndGradient(pA, dA, gA);
                 if(Abs(VectorSingle(dA)).x > surfBandA)
                     continue;
-                const VectorSingle pA(sdfA.boundsMin.x + cast<f32>(x) * sdfA.cellSize.x, py, pz, 0.0f);
-                const VectorSingle gA = sdfA.sampleGradient(pA);
                 const VectorSingle surfA = pA - gA * dA;
                 const VectorSingle surfInB = TransformPointValues(relPosAtoB, relRotAtoB, surfA);
                 f32 dB = 0.0f;
                 VectorSingle gB(0.0f, 1.0f, 0.0f, 0.0f);
-                sdfB.sampleDistanceAndGradient(surfInB, dB, gB);
+                sdfB.sampleEffectiveDistanceAndGradient(surfInB, dB, gB);
                 if(dB > maxDistance)
                     continue;
                 const VectorSingle nAtoB = SafeNormalizeVec3(-Vector3Rotate(gB, rotB), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
@@ -3362,7 +3459,7 @@ void CollideSdfAndSdfMulti(
                     deepestSep = dB;
                     chosenNormal = nAtoB;
                 }
-                PushMeshCandidateWithTris((worldA + worldB) * 0.5f, worldA - posA, worldB - posB, nAtoB, dB, MakeFeatureId(7u, cast<u8>(x & 0xffu), 7u, cast<u8>(y & 0xffu)), s_NullIndex, s_NullIndex, candidates);
+                PushMeshCandidateWithTris((worldA + worldB) * 0.5f, worldA - posA, worldB - posB, nAtoB, dB, MakeFeatureId(7u, cast<u8>(x & 0xffu), 7u, cast<u8>((z << 4u) ^ (y & 0xffu))), s_NullIndex, s_NullIndex, candidates);
             }
         }
     }
@@ -3438,14 +3535,16 @@ void CollideSdfAndMeshMulti(
                 for(usize si = 0u; si < 7u; ++si){
                     const VectorSingle sLocal(samples[si], 0.0f);
                     const VectorSingle ptInA = TransformPointValues(relPosBtoA, relRotBtoA, sLocal);
-                    const f32 sep = sdfA.sampleDistance(ptInA) - meshR;
+                    f32 distA = 0.0f;
+                    VectorSingle gA(0.0f, 1.0f, 0.0f, 0.0f);
+                    sdfA.sampleEffectiveDistanceAndGradient(ptInA, distA, gA);
+                    const f32 sep = distA - meshR;
                     if(sep > maxDistance)
                         continue;
-                    const VectorSingle gA = sdfA.sampleGradient(ptInA);
                     const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(gA, rotA), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
                     if(cullBackFaces && Vector3Dot(nAtoB, worldTriN).x >= 0.0f)
                         continue;
-                    const VectorSingle worldPtA = TransformPointValues(posA, rotA, ptInA - gA * (sep + meshR));
+                    const VectorSingle worldPtA = TransformPointValues(posA, rotA, ptInA - gA * distA);
                     const VectorSingle worldPtB = TransformPointValues(posB, rotB, sLocal) - nAtoB * meshR;
                     if(sep < deepestSep){
                         deepestSep = sep;

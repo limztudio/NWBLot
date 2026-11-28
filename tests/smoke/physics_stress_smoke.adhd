@@ -1202,7 +1202,7 @@ b8 RunGpuParityResidentAndExportSubtest(mut GraphicsRuntime graphics, mut Physic
     bindings[1u].bodyDestFlags = u32x4(resStatic.index, 1u, 202u, 2u);
     bindings[1u].scalePad = f32x4(0.5f, 1.25f, 3.0f, 0.0f);
     Vector<GpuPhysicsRenderTransformOut> exported;
-    if(!gpuDispatcher.exportRenderTransforms(resWorld, Span<GpuPhysicsRenderTransformBinding>(bindings.data(), 2u), exported) || exported.size() != 2u){
+    if(!gpuDispatcher.exportRenderTransforms(resWorld, Span<GpuPhysicsRenderTransformBinding>(bindings.data(), 2u), Span<GpuPhysicsBodyPose>(), exported) || exported.size() != 2u){
         error("PhysicsStressSmoke: exportRenderTransforms failed");
         return false;
     }
@@ -1632,7 +1632,7 @@ b8 RunGpuParityZeroReadbackResidentSubtest(mut PhysicsGpuDispatcher gpuDispatche
     bulBinds[0u].bodyDestFlags = u32x4(bulBody.index, 0u, 77u, 1u);
     bulBinds[0u].scalePad = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
     Vector<GpuPhysicsRenderTransformOut> bulExported;
-    if(!gpuDispatcher.exportRenderTransforms(bulletWorld, Span<GpuPhysicsRenderTransformBinding>(bulBinds.data(), 1u), bulExported) || bulExported.size() != 1u){
+    if(!gpuDispatcher.exportRenderTransforms(bulletWorld, Span<GpuPhysicsRenderTransformBinding>(bulBinds.data(), 1u), Span<GpuPhysicsBodyPose>(), bulExported) || bulExported.size() != 1u){
         error("PhysicsStressSmoke: resident bullet TOI export failed");
         return false;
     }
@@ -1672,7 +1672,7 @@ Expected<GpuTaskId> DeclareSmokePhysicsExportTask(
     singleTarget[0u].baseFloat4Offset = 0u;
     singleTarget[0u].bindingOffset = 0u;
     singleTarget[0u].bindingCount = cast<u32>(bindings.size());
-    if(!gpuDispatcher.declareBatchExportRenderTransformsTasks(graph, world, bindings, Span<PhysicsBatchExportTargetInput>(singleTarget.data(), 1u), Name("physics/smoke/export_tg"), false, false, GpuTaskId(), exportTaskId))
+    if(!gpuDispatcher.declareBatchExportRenderTransformsTasks(graph, world, bindings, Span<GpuPhysicsBodyPose>(), Span<PhysicsBatchExportTargetInput>(singleTarget.data(), 1u), Name("physics/smoke/export_tg"), false, false, GpuTaskId(), exportTaskId))
         return MakeUnexpected(Failure());
     return Expected<GpuTaskId>(exportTaskId);
 }
@@ -1845,7 +1845,7 @@ b8 RunGpuParitySubsystemsSubtest(mut PhysicsGpuDispatcher gpuDispatcher, mut Cpu
         const Optional<in PhysicsEnvironment> softEnvOpt(softEnv);
 
         for(u32 s = 0u; s < 15u; ++s){
-            cpuSb.applyForceField(windField, softWorld.gravity(), softEnv.elapsedTimeSec + dt, dt);
+            cpuSb.applyForceField(softWorld, windField, softWorld.gravity(), softEnv.elapsedTimeSec + dt, dt);
             cpuSb.step(softWorld, dt);
             Aabb3D gpuSoftAabb;
             if(!gpuDispatcher.stepSoftBodyGpu(gpuSb, softWorld, softEnvOpt, dt, true, Optional<in SoftBodyGpuDeformTarget>(), gpuSoftAabb)){

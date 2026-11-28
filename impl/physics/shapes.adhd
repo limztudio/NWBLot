@@ -2216,17 +2216,25 @@ class ScaledShape{
     public f32 cachedBuoyancyVolume = -1.0f;
 
     public b8 isValid()const{
+        const VectorSingle absS = Abs(VectorSingle(this.scale));
         return
-            this.scale.x > 0.0f
-            && this.scale.y > 0.0f
-            && this.scale.z > 0.0f
+            absS.x > 0.0f
+            && absS.y > 0.0f
+            && absS.z > 0.0f
             && IsFinite(VectorSingle(this.scale).xyz)
-            && this.childType != ShapeType::Scaled
         ;
+    }
+
+    public b8 isMirrored()const{
+        return this.scale.w < 0.0f;
     }
 
     public VectorSingle scaleVec()const{
         return VectorSingle(this.scale, 0.0f);
+    }
+
+    public VectorSingle absScaleVec()const{
+        return Abs(VectorSingle(this.scale, 0.0f));
     }
 
     public VectorSingle invScaleVec()const{
@@ -2315,7 +2323,7 @@ class ChainShape{
             if(matIdx < this.materials.size())
                 return this.materials[matIdx];
         }
-        return this.material;
+        return fallback;
     }
 }
 
@@ -2468,6 +2476,31 @@ class SdfShape{
         this.sampleDistanceAndGradient(localP, unusedDist, grad);
         return grad;
     }
+
+    public f32 sampleEffectiveDistance(in VectorSingle localP)const{
+        if(this.isClosed)
+            return this.sampleDistance(localP);
+        const f32 rawSigned = this.sampleDistance(localP) + this.margin;
+        return Abs(VectorSingle(rawSigned)).x - this.margin;
+    }
+
+    public void sampleEffectiveDistanceAndGradient(in VectorSingle localP, mut f32 outDist, mut VectorSingle outGrad)const{
+        this.sampleDistanceAndGradient(localP, outDist, outGrad);
+        if(!this.isClosed){
+            const f32 rawSigned = outDist + this.margin;
+            if(rawSigned < 0.0f){
+                outDist = -rawSigned - this.margin;
+                outGrad = -outGrad;
+            }
+        }
+    }
+
+    public VectorSingle sampleEffectiveGradient(in VectorSingle localP)const{
+        f32 unusedDist = 0.0f;
+        VectorSingle grad(0.0f, 1.0f, 0.0f, 0.0f);
+        this.sampleEffectiveDistanceAndGradient(localP, unusedDist, grad);
+        return grad;
+    }
 }
 
 b8 ComputePrimitiveChildAabbValues(
@@ -2606,124 +2639,9 @@ b8 ComputePrimitiveChildMass(
     return false;
 }
 
-Expected<CompoundShape> MakeCompoundShape(in Span<CompoundSubShape> inChildren, in Vector<HullShape> hullShapes){
-    if(inChildren.empty())
-        return MakeUnexpected(Failure());
-
-    CompoundShape compound;
-    compound.children.reserve(inChildren.size());
-    Vector<Aabb3D> childBoxes;
-    childBoxes.reserve(inChildren.size());
-    VectorSingle totalMin(s_MaxF32);
-    VectorSingle totalMax(-s_MaxF32);
-
-    for(usize i = 0u; i < inChildren.size(); ++i){
-        CompoundSubShape sub = inChildren[i];
-        const VectorSingle lPos(sub.localTransform.position);
-        const VectorSingle lRot = SafeNormalizeQuat(VectorSingle(sub.localTransform.rotation));
-        if(!IsValidPositionVec3(lPos) || !IsFinite(VectorSingle(sub.localTransform.rotation)) || !IsFinite(VectorSingle(sub.density)) || sub.density < 0.0f)
-            return MakeUnexpected(Failure());
-        if(sub.type == ShapeType::Compound || sub.type == ShapeType::Scaled || sub.type == ShapeType::Mesh || sub.type == ShapeType::Heightfield || sub.type == ShapeType::Chain || sub.type == ShapeType::Sdf)
-            return MakeUnexpected(Failure());
-        sub.localTransform.rotation = f32x4(lRot);
-        VectorSingle cMin(0.0f);
-        VectorSingle cMax(0.0f);
-        if(!ComputePrimitiveChildAabbValues(sub.type, VectorSingle(sub.geom0), VectorSingle(sub.geom1), sub.geometryIndex, lPos, lRot, hullShapes, cMin, cMax))
-            return MakeUnexpected(Failure());
-        compound.children.push_back(sub);
-        childBoxes.push_back(Aabb3D(cMin, cMax));
-        totalMin = Min(totalMin, cMin);
-        totalMax = Max(totalMax, cMax);
-    }
-
-    compound.localAabb = Aabb3D(totalMin, totalMax);
-    compound.bvhChildOrder.resize(compound.children.size());
-    for(usize i = 0u; i < compound.bvhChildOrder.size(); ++i)
-        compound.bvhChildOrder[i] = cast<u32>(i);
-    BuildAabbBvhRecursive(compound.nodes, Span<Aabb3D>(childBoxes), 2u, compound.bvhChildOrder, 0u, compound.bvhChildOrder.size(), 0u);
-    return compound;
-}
-
-
-MassData ComputeCompoundMass(in CompoundShape compound, in Vector<HullShape> hullShapes, in f32 density){
-    MassData outMass;
-    if(!IsFinite(VectorSingle(density)) || density <= 0.0f || compound.children.empty())
-        return outMass;
-
-    f32 totalMass = 0.0f;
-    VectorSingle weightedCom(0.0f);
-    VectorSingle r0(0.0f);
-    VectorSingle r1(0.0f);
-    VectorSingle r2(0.0f);
-
-    for(usize i = 0u; i < compound.children.size(); ++i){
-        in CompoundSubShape ch = compound.children[i];
-        const f32 effDensity = ch.density * density;
-        if(effDensity <= 0.0f)
-            continue;
-        MassData chMd;
-        if(!ComputePrimitiveChildMass(ch.type, VectorSingle(ch.geom0), VectorSingle(ch.geom1), ch.geometryIndex, hullShapes, effDensity, chMd))
-            continue;
-        const f32 m = chMd.mass();
-        if(m <= 0.0f)
-            continue;
-        const VectorSingle lPos(ch.localTransform.position);
-        const VectorSingle lRot = SafeNormalizeQuat(VectorSingle(ch.localTransform.rotation));
-        const VectorSingle sc = TransformPointValues(lPos, lRot, chMd.center());
-        const MatrixSingle chI = RotateSymMatrix3(
-            lRot,
-            MatrixSingle(VectorSingle(chMd.inertia.row0), VectorSingle(chMd.inertia.row1), VectorSingle(chMd.inertia.row2))
-        );
-        const f32 shiftXX = m * (sc.y * sc.y + sc.z * sc.z);
-        const f32 shiftYY = m * (sc.x * sc.x + sc.z * sc.z);
-        const f32 shiftZZ = m * (sc.x * sc.x + sc.y * sc.y);
-        const f32 shiftXY = -m * sc.x * sc.y;
-        const f32 shiftXZ = -m * sc.x * sc.z;
-        const f32 shiftYZ = -m * sc.y * sc.z;
-        totalMass += m;
-        weightedCom = weightedCom + sc * m;
-        r0 = r0 + chI[0u] + VectorSingle(shiftXX, shiftXY, shiftXZ, 0.0f);
-        r1 = r1 + chI[1u] + VectorSingle(shiftXY, shiftYY, shiftYZ, 0.0f);
-        r2 = r2 + chI[2u] + VectorSingle(shiftXZ, shiftYZ, shiftZZ, 0.0f);
-    }
-
-    if(totalMass <= 0.0f)
-        return outMass;
-    const VectorSingle com = weightedCom / totalMass;
-    const f32 cxx = r0.x - totalMass * (com.y * com.y + com.z * com.z);
-    const f32 cyy = r1.y - totalMass * (com.x * com.x + com.z * com.z);
-    const f32 czz = r2.z - totalMass * (com.x * com.x + com.y * com.y);
-    const f32 cxy = r0.y + totalMass * com.x * com.y;
-    const f32 cxz = r0.z + totalMass * com.x * com.z;
-    const f32 cyz = r1.z + totalMass * com.y * com.z;
-    const VectorSingle clampedDiag = Max(VectorSingle(cxx, cyy, czz, 0.0f), VectorSingle(1.0e-6f));
-    outMass.setCenterMass(com, totalMass);
-    outMass.inertia = Mat3(
-        VectorSingle(clampedDiag.x, cxy, cxz, 0.0f),
-        VectorSingle(cxy, clampedDiag.y, cyz, 0.0f),
-        VectorSingle(cxz, cyz, clampedDiag.z, 0.0f)
-    );
-    return outMass;
-}
-
-f32 ComputeCompoundGeometricVolume(in CompoundShape compound, in Vector<HullShape> hullShapes){
-    if(compound.children.empty())
-        return 0.0f;
-
-    f32 totalVolume = 0.0f;
-    for(usize i = 0u; i < compound.children.size(); ++i){
-        in CompoundSubShape ch = compound.children[i];
-        MassData chMd;
-        if(ComputePrimitiveChildMass(ch.type, VectorSingle(ch.geom0), VectorSingle(ch.geom1), ch.geometryIndex, hullShapes, 1.0f, chMd)){
-            if(chMd.mass() > 0.0f)
-                totalVolume += chMd.mass();
-        }
-    }
-    return totalVolume;
-}
-
 Expected<ScaledShape> MakeScaledShape(in ShapeType childType, in VectorSingle geom0, in VectorSingle geom1, in u32 childGeometryIndex, in VectorSingle rawScale){
-    if(childType == ShapeType::Scaled || !IsFinite(rawScale.xyz) || rawScale.x <= 1.0e-4f || rawScale.y <= 1.0e-4f || rawScale.z <= 1.0e-4f)
+    const VectorSingle absScale = Abs(rawScale);
+    if(!IsFinite(rawScale.xyz) || absScale.x <= 1.0e-4f || absScale.y <= 1.0e-4f || absScale.z <= 1.0e-4f)
         return MakeUnexpected(Failure());
     ScaledShape scaled;
     scaled.childType = childType;
@@ -2731,8 +2649,12 @@ Expected<ScaledShape> MakeScaledShape(in ShapeType childType, in VectorSingle ge
     scaled.geom1 = f32x4(geom1);
     scaled.childGeometryIndex = childGeometryIndex;
     const f32 det = rawScale.x * rawScale.y * rawScale.z;
+    const f32 absDet = Max(Abs(VectorSingle(det)).x, 1.0e-12f);
+    f32 invDet = 1.0f / absDet;
+    if(det < 0.0f)
+        invDet = -invDet;
     scaled.scale = f32x4(rawScale.x, rawScale.y, rawScale.z, det);
-    scaled.invScale = f32x4(1.0f / rawScale.x, 1.0f / rawScale.y, 1.0f / rawScale.z, 1.0f / Max(det, 1.0e-12f));
+    scaled.invScale = f32x4(1.0f / rawScale.x, 1.0f / rawScale.y, 1.0f / rawScale.z, invDet);
     return scaled;
 }
 
@@ -2744,8 +2666,8 @@ MassData ScaleMassDataDiagonal(in MassData childMd, in VectorSingle scale){
     const f32 sx = scale.x;
     const f32 sy = scale.y;
     const f32 sz = scale.z;
-    const f32 det = sx * sy * sz;
-    const f32 scaledM = det * m0;
+    const f32 absDet = Abs(VectorSingle(sx * sy * sz)).x;
+    const f32 scaledM = absDet * m0;
     const VectorSingle c0 = childMd.center();
     const VectorSingle scaledC(c0.x * sx, c0.y * sy, c0.z * sz, 0.0f);
     const f32 ixx = childMd.inertia.row0.x;
@@ -2757,12 +2679,12 @@ MassData ScaleMassDataDiagonal(in MassData childMd, in VectorSingle scale){
     const f32 kxx = Max(0.0f, 0.5f * (-ixx + iyy + izz));
     const f32 kyy = Max(0.0f, 0.5f * ( ixx - iyy + izz));
     const f32 kzz = Max(0.0f, 0.5f * ( ixx + iyy - izz));
-    const f32 sxx = det * (sy * sy * kyy + sz * sz * kzz);
-    const f32 syy = det * (sx * sx * kxx + sz * sz * kzz);
-    const f32 szz = det * (sx * sx * kxx + sy * sy * kyy);
-    const f32 sxy = det * sx * sy * ixy;
-    const f32 sxz = det * sx * sz * ixz;
-    const f32 syz = det * sy * sz * iyz;
+    const f32 sxx = absDet * (sy * sy * kyy + sz * sz * kzz);
+    const f32 syy = absDet * (sx * sx * kxx + sz * sz * kzz);
+    const f32 szz = absDet * (sx * sx * kxx + sy * sy * kyy);
+    const f32 sxy = absDet * sx * sy * ixy;
+    const f32 sxz = absDet * sx * sz * ixz;
+    const f32 syz = absDet * sy * sz * iyz;
     const VectorSingle clampedDiag = Max(VectorSingle(sxx, syy, szz, 0.0f), VectorSingle(1.0e-6f));
     outMass.setCenterMass(scaledC, scaledM);
     outMass.inertia = Mat3(

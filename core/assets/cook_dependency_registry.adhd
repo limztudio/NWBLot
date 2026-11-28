@@ -32,6 +32,7 @@ extern class DefaultCookEntryAssetDescriptor{
 [cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::ICookDependencyCollector")]
 extern class ICookDependencyCollector{
     b8 addAssetDependency(...);
+    b8 addSourceFileDependency(...);
 };
 
 

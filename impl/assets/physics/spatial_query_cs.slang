@@ -1690,7 +1690,7 @@ bool nwbPhysicsQueryRayHeightfield(
         }
     }
 
-    if(!finishedTraversal && !anyHit){
+    if(!finishedTraversal && (!anyHit || bestT >= curT)){
         outNeedsFallback = true;
         return false;
     }
@@ -2072,6 +2072,9 @@ float nwbPhysicsQueryPointHeightfieldDistSq(
         return 1.0e30f;
 
     outNormal = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestLocalN, shapeRot), float3(0.0f, 1.0f, 0.0f));
+    outTriIdx = bestTriIdx;
+    const float3 bwPtHf = nwbPhysicsClosestPointBaryTriangle(bestClosePt, bestTv0, bestTv1, bestTv2);
+    outBary = float3(bwPtHf.y, bwPtHf.z, bwPtHf.x);
     const float rawDist = sqrt(max(bestDistSq, 0.0f));
     if(rawDist <= hfThickness)
         return 0.0f;
@@ -2688,6 +2691,7 @@ bool nwbPhysicsQueryMeshVsQueryShape(
     const float3 rayDir,
     const float maxFrac,
     const bool isCast,
+    const uint qFlags,
     out float outT,
     out float3 outPoint,
     out float3 outNormal,
@@ -2710,6 +2714,11 @@ bool nwbPhysicsQueryMeshVsQueryShape(
         outNeedsFallback = true;
         return false;
     }
+
+    const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
+    const uint meshFlags = asuint(firstTri1.w);
+    const bool closedMesh = (meshFlags & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
+    const bool cullBackfaces = ((meshFlags & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u) || ((qFlags & NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES) != 0u);
 
     const float4 shapeRotInv = float4(-shapeRot.xyz, shapeRot.w);
     const float3 localQOrig = nwbPhysicsQuatInvRotate(qStartOrig - shapeOrig, shapeRot);
@@ -2777,6 +2786,8 @@ bool nwbPhysicsQueryMeshVsQueryShape(
                 if(!triAabbOk)
                     continue;
                 const float3 triN = nwbPhysicsSafeNormal(cross(tv1 - tv0, tv2 - tv0), float3(0.0f, 1.0f, 0.0f));
+                if(isCast && cullBackfaces && dot(localDir, triN) > 0.0f)
+                    continue;
                 float candT = bestMetric;
                 float3 candPtL = float3(0.0f, 0.0f, 0.0f);
                 float3 candNL = triN;
@@ -2849,8 +2860,11 @@ bool nwbPhysicsQueryMeshVsQueryShape(
         }
     }
 
-    if(!anyHit)
+    if(!anyHit){
+        if(closedMesh && rootHit)
+            outNeedsFallback = true;
         return false;
+    }
     outT = bestMetric;
     outPoint = shapeOrig + nwbPhysicsQuatRotate(bestPtLocal, shapeRot);
     outNormal = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestNLocal, shapeRot), float3(0.0f, 1.0f, 0.0f));
@@ -2874,6 +2888,7 @@ bool nwbPhysicsQueryHeightfieldVsQueryShape(
     const float3 rayDir,
     const float maxFrac,
     const bool isCast,
+    const uint qFlags,
     out float outT,
     out float3 outPoint,
     out float3 outNormal,
@@ -2895,6 +2910,7 @@ bool nwbPhysicsQueryHeightfieldVsQueryShape(
         return false;
     }
 
+    const bool cullBackfaces = (qFlags & NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES) != 0u;
     const float4 shapeRotInv = float4(-shapeRot.xyz, shapeRot.w);
     const float3 localQOrig = nwbPhysicsQuatInvRotate(qStartOrig - shapeOrig, shapeRot);
     const float4 localQRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(shapeRotInv, qRot));
@@ -2983,6 +2999,8 @@ bool nwbPhysicsQueryHeightfieldVsQueryShape(
                 if(!triAabbOk)
                     continue;
                 const float3 triN = nwbPhysicsHfTriNormal(tv0, tv1, tv2);
+                if(isCast && cullBackfaces && dot(localDir, triN) > 0.0f)
+                    continue;
                 float candT = bestMetric;
                 float3 candPtL = zeroVec;
                 float3 candNL = triN;
@@ -3190,13 +3208,13 @@ void nwbPhysicsTestSpatialQueryShape(
                 float3 shapeOrig = pose.originPad.xyz;
                 float4 shapeRot = pose.rotation;
                 nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
-                shapeHit = nwbPhysicsQueryHeightfieldVsQueryShape(hullVertexSlot, spProxy, shapeOrig, shapeRot, qShapeProxy, qStartOrig, qStartRot, qSkinR, rayDir, evalMaxFrac, isCastOp, hitMetric, hitPt, hitN, candTriIdx, candBary, opFallback);
+                shapeHit = nwbPhysicsQueryHeightfieldVsQueryShape(hullVertexSlot, spProxy, shapeOrig, shapeRot, qShapeProxy, qStartOrig, qStartRot, qSkinR, rayDir, evalMaxFrac, isCastOp, qFlags, hitMetric, hitPt, hitN, candTriIdx, candBary, opFallback);
             }
             else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH){
                 float3 shapeOrig = pose.originPad.xyz;
                 float4 shapeRot = pose.rotation;
                 nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
-                shapeHit = nwbPhysicsQueryMeshVsQueryShape(meshNodeSlot, meshTriSlot, hullVertexSlot, spProxy, shapeOrig, shapeRot, qShapeProxy, qStartOrig, qStartRot, qSkinR, rayDir, evalMaxFrac, isCastOp, hitMetric, hitPt, hitN, candTriIdx, candBary, opFallback, meshStack, meshStackMetric);
+                shapeHit = nwbPhysicsQueryMeshVsQueryShape(meshNodeSlot, meshTriSlot, hullVertexSlot, spProxy, shapeOrig, shapeRot, qShapeProxy, qStartOrig, qStartRot, qSkinR, rayDir, evalMaxFrac, isCastOp, qFlags, hitMetric, hitPt, hitN, candTriIdx, candBary, opFallback, meshStack, meshStackMetric);
             }
             else{
                 float3 shapeOrig = pose.originPad.xyz;

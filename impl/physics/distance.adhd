@@ -269,7 +269,9 @@ ShapeProxyView MakeShapeProxyView(in ShapeProxy p){
 
 ShapeProxyView MakeScaledProxyView(in ShapeProxyView child, in VectorSingle scale){
     ShapeProxyView v = child;
-    const VectorSingle clampedScale = Max(VectorSingle(scale, 0.0f), VectorSingle(1.0e-4f));
+    const VectorSingle sRaw = VectorSingle(scale, 0.0f);
+    const VectorSingle sMag = Max(Abs(sRaw), VectorSingle(1.0e-4f));
+    const VectorSingle clampedScale = VectorSelect(sMag, -sMag, VectorLess(sRaw, VectorSingle(0.0f)));
     if(child.scaleMinMargin.w >= 0.0f)
         v.scaleMinMargin = f32x4(VectorSingle(child.scaleMinMargin, 0.0f) * clampedScale, child.scaleMinMargin.w);
     else
@@ -384,8 +386,10 @@ void ComputeProxyViewLocalBounds(in ShapeProxyView proxy, mut VectorSingle outMi
     if(proxy.scaleMinMargin.w >= 0.0f){
         const VectorSingle pad(proxy.scaleMinMargin.w, proxy.scaleMinMargin.w, proxy.scaleMinMargin.w, 0.0f);
         const VectorSingle s(proxy.scaleMinMargin, 0.0f);
-        outMin = (bMin - pad) * s;
-        outMax = (bMax + pad) * s;
+        const VectorSingle scaledA = (bMin - pad) * s;
+        const VectorSingle scaledB = (bMax + pad) * s;
+        outMin = Min(scaledA, scaledB);
+        outMax = Max(scaledA, scaledB);
         return;
     }
     outMin = bMin;
@@ -4110,10 +4114,10 @@ LocalRayHit RayCastSdf(
     const f32 minStepFrac = Max(0.1f * minCell / Max(dirLen, 1.0e-6f), 1.0e-5f);
 
     f32 curT = tEnter;
-    const f32 dStart = sdf.sampleDistance(localOrigin + localDir * curT);
+    const f32 dStart = sdf.sampleEffectiveDistance(localOrigin + localDir * curT);
     if(dStart <= hitEps){
         const VectorSingle localHit = localOrigin + localDir * curT;
-        const VectorSingle localN = sdf.sampleGradient(localHit);
+        const VectorSingle localN = sdf.sampleEffectiveGradient(localHit);
         const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), SafeNormalizeVec3(-VectorSingle(translation, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
         hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * curT, curT);
         hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
@@ -4125,24 +4129,24 @@ LocalRayHit RayCastSdf(
 
     f32 prevT = curT;
     f32 curD = dStart;
-    for(u32 step = 0u; step < 96u; ++step){
+    for(u32 step = 0u; step < 192u; ++step){
         const f32 stepFrac = Max((curD * 0.9f) / dirLen, minStepFrac);
         prevT = curT;
         curT = Min(curT + stepFrac, tExit);
-        curD = sdf.sampleDistance(localOrigin + localDir * curT);
+        curD = sdf.sampleEffectiveDistance(localOrigin + localDir * curT);
         if(curD <= hitEps){
             f32 lo = prevT;
             f32 hi = curT;
             for(u32 bi = 0u; bi < 6u; ++bi){
                 const f32 mid = 0.5f * (lo + hi);
-                if(sdf.sampleDistance(localOrigin + localDir * mid) <= 0.0f)
+                if(sdf.sampleEffectiveDistance(localOrigin + localDir * mid) <= 0.0f)
                     hi = mid;
                 else
                     lo = mid;
             }
             const f32 bestT = 0.5f * (lo + hi);
             const VectorSingle localHit = localOrigin + localDir * bestT;
-            const VectorSingle localN = sdf.sampleGradient(localHit);
+            const VectorSingle localN = sdf.sampleEffectiveGradient(localHit);
             const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(localN, xfRot), SafeNormalizeVec3(-VectorSingle(translation, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
             hit.pointFraction = f32x4(origin + VectorSingle(translation, 0.0f) * bestT, bestT);
             hit.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
@@ -4162,11 +4166,11 @@ f32 FindMinSdfConvexSeparation(
     mut VectorSingle outWitnessLocalSdf,
     mut VectorSingle outOutwardGradLocalSdf
 ){
-    if(queryProxy.points.size() == 1u){
+    if(queryProxy.kind == ProxyKind::PointCloud && queryProxy.points.size() == 1u && queryProxy.scaleMinMargin.w < 0.0f){
         const VectorSingle x = TransformPointValues(qPosInSdf, qRotInSdf, VectorSingle(queryProxy.points[0u], 0.0f));
         f32 rawD = 0.0f;
         VectorSingle gx(0.0f, 1.0f, 0.0f, 0.0f);
-        sdf.sampleDistanceAndGradient(x, rawD, gx);
+        sdf.sampleEffectiveDistanceAndGradient(x, rawD, gx);
         outOutwardGradLocalSdf = gx;
         outWitnessLocalSdf = x - gx * queryProxy.radius;
         return rawD - queryProxy.radius;
@@ -4198,7 +4202,7 @@ f32 FindMinSdfConvexSeparation(
         );
         f32 rawFx = 0.0f;
         VectorSingle gx(0.0f, 1.0f, 0.0f, 0.0f);
-        sdf.sampleDistanceAndGradient(x, rawFx, gx);
+        sdf.sampleEffectiveDistanceAndGradient(x, rawFx, gx);
         f32 fx = rawFx - queryProxy.radius;
 
         for(u32 fwIter = 0u; fwIter < 6u; ++fwIter){
@@ -4217,7 +4221,7 @@ f32 FindMinSdfConvexSeparation(
             f32 alpha = 1.0f;
             for(u32 ls = 0u; ls < 4u; ++ls){
                 const VectorSingle candX = x + delta * alpha;
-                const f32 candF = sdf.sampleDistance(candX) - queryProxy.radius;
+                const f32 candF = sdf.sampleEffectiveDistance(candX) - queryProxy.radius;
                 if(candF < bestStepF){
                     bestStepF = candF;
                     bestStepX = candX;
@@ -4229,7 +4233,7 @@ f32 FindMinSdfConvexSeparation(
                 break;
             x = bestStepX;
             fx = bestStepF;
-            gx = sdf.sampleGradient(x);
+            gx = sdf.sampleEffectiveGradient(x);
         }
 
         if(fx < bestSep){
@@ -4287,7 +4291,7 @@ LocalRayHit ShapeCastSdfView(
     VectorSingle gLocal(0.0f, 1.0f, 0.0f, 0.0f);
     f32 curD = FindMinSdfConvexSeparation(queryProxy, localQueryPos + localTrans * curT, localQueryRot, sdf, wLocal, gLocal);
     if(curD <= hitTol){
-        const VectorSingle surfLocal = wLocal - gLocal * sdf.sampleDistance(wLocal);
+        const VectorSingle surfLocal = wLocal - gLocal * sdf.sampleEffectiveDistance(wLocal);
         const VectorSingle worldPt = TransformPointValues(sdfPos, sdfRot, surfLocal);
         const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(gLocal, sdfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         hit.pointFraction = f32x4(worldPt, curT);
@@ -4299,7 +4303,7 @@ LocalRayHit ShapeCastSdfView(
         return hit;
 
     f32 prevT = curT;
-    for(u32 step = 0u; step < 64u; ++step){
+    for(u32 step = 0u; step < 256u; ++step){
         const f32 stepFrac = Max((curD * 0.85f) / transLen, minStepFrac);
         prevT = curT;
         curT = Min(curT + stepFrac, tExit);
@@ -4324,7 +4328,8 @@ LocalRayHit ShapeCastSdfView(
                 }
             }
             const f32 bestT = 0.5f * (lo + hi);
-            const VectorSingle surfLocal = bestW - bestG * sdf.sampleDistance(bestW);
+            FindMinSdfConvexSeparation(queryProxy, localQueryPos + localTrans * bestT, localQueryRot, sdf, bestW, bestG);
+            const VectorSingle surfLocal = bestW - bestG * sdf.sampleEffectiveDistance(bestW);
             const VectorSingle worldPt = TransformPointValues(sdfPos, sdfRot, surfLocal);
             const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestG, sdfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             hit.pointFraction = f32x4(worldPt, bestT);
@@ -4348,8 +4353,8 @@ b8 ClosestPointOnSdfLocal(
     if(!sdf.isValid())
         return false;
 
-    const f32 d0 = sdf.sampleDistance(localPoint);
-    const VectorSingle g0 = sdf.sampleGradient(localPoint);
+    const f32 d0 = sdf.sampleEffectiveDistance(localPoint);
+    const VectorSingle g0 = sdf.sampleEffectiveGradient(localPoint);
     outNormal = g0;
     if(d0 <= 0.0f){
         outClosest = localPoint;
@@ -4358,14 +4363,14 @@ b8 ClosestPointOnSdfLocal(
 
     VectorSingle p = localPoint - g0 * d0;
     for(u32 iter = 0u; iter < 5u; ++iter){
-        const f32 d = sdf.sampleDistance(p);
+        const f32 d = sdf.sampleEffectiveDistance(p);
         if(Abs(VectorSingle(d)).x <= s_LinearSlop * 0.1f)
             break;
-        const VectorSingle g = sdf.sampleGradient(p);
+        const VectorSingle g = sdf.sampleEffectiveGradient(p);
         p = p - g * d;
     }
     outClosest = p;
-    outNormal = sdf.sampleGradient(p);
+    outNormal = sdf.sampleEffectiveGradient(p);
     return true;
 }
 

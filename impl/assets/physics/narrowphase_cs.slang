@@ -5072,6 +5072,8 @@ void nwbPhysicsSolveBulletToi(
         proxyA.bodyIndexTypeShape.y == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD
         || proxyA.bodyIndexTypeShape.y == NWB_PHYSICS_SHAPE_TYPE_PLANE
         || proxyA.bodyIndexTypeShape.y == NWB_PHYSICS_SHAPE_TYPE_MESH
+        || proxyA.bodyIndexTypeShape.y > NWB_PHYSICS_SHAPE_TYPE_SEGMENT
+        || proxyB.bodyIndexTypeShape.y > NWB_PHYSICS_SHAPE_TYPE_SEGMENT
     ){
         result.pairInfo.w = 2u;
         nwbPhysicsWriteBulletToiManifoldResult(manifoldSlot, pairIdx, result);
@@ -5705,6 +5707,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const bool hasM = (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH || typeB == NWB_PHYSICS_SHAPE_TYPE_MESH);
         pairMatchesProfile = !hasH && !hasM;
         if(pairMatchesProfile){
+            if(typeA > NWB_PHYSICS_SHAPE_TYPE_SEGMENT || typeB > NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+                result.pairInfo.w = NWB_PHYSICS_MANIFOLD_FLAG_CPU_FALLBACK;
+            }
+            else{
             nwbPhysicsResolveShapeWorldPose(proxyA, bodyOriginA, bodyRotA, originA, rotA);
             nwbPhysicsResolveShapeWorldPose(proxyB, bodyOriginB, bodyRotB, originB, rotB);
             if(typeA == NWB_PHYSICS_SHAPE_TYPE_PLANE || typeB == NWB_PHYSICS_SHAPE_TYPE_PLANE){
@@ -5865,23 +5871,38 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
         }
         }
+        }
 #elif NWB_PHYSICS_NP_PROFILE == 3
         {
-            nwbPhysicsResolveShapeWorldPose(proxyA, bodyOriginA, bodyRotA, originA, rotA);
-            nwbPhysicsResolveShapeWorldPose(proxyB, bodyOriginB, bodyRotB, originB, rotB);
-            nwbPhysicsCollideMeshPair(proxyA, originA, rotA, bodyOriginA, proxyB, originB, rotB, bodyOriginB, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result, secondaryResult, hasSecondary);
+            if(typeA > NWB_PHYSICS_SHAPE_TYPE_SEGMENT || typeB > NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+                result.pairInfo.w = NWB_PHYSICS_MANIFOLD_FLAG_CPU_FALLBACK;
+            }
+            else{
+                nwbPhysicsResolveShapeWorldPose(proxyA, bodyOriginA, bodyRotA, originA, rotA);
+                nwbPhysicsResolveShapeWorldPose(proxyB, bodyOriginB, bodyRotB, originB, rotB);
+                nwbPhysicsCollideMeshPair(proxyA, originA, rotA, bodyOriginA, proxyB, originB, rotB, bodyOriginB, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result, secondaryResult, hasSecondary);
+            }
         }
 #elif NWB_PHYSICS_NP_PROFILE == 4
         {
-            nwbPhysicsResolveShapeWorldPose(proxyA, bodyOriginA, bodyRotA, originA, rotA);
-            nwbPhysicsResolveShapeWorldPose(proxyB, bodyOriginB, bodyRotB, originB, rotB);
-            if(hasH)
-                nwbPhysicsCollideHeightfieldPair(proxyA, originA, rotA, bodyOriginA, proxyB, originB, rotB, bodyOriginB, hullVertexSlot, maxDist, result, secondaryResult, hasSecondary);
-            else
-                nwbPhysicsCollideMeshMeshPair(proxyA, originA, rotA, bodyOriginA, proxyB, originB, rotB, bodyOriginB, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result, secondaryResult, hasSecondary);
+            if(typeA > NWB_PHYSICS_SHAPE_TYPE_SEGMENT || typeB > NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+                result.pairInfo.w = NWB_PHYSICS_MANIFOLD_FLAG_CPU_FALLBACK;
+            }
+            else{
+                nwbPhysicsResolveShapeWorldPose(proxyA, bodyOriginA, bodyRotA, originA, rotA);
+                nwbPhysicsResolveShapeWorldPose(proxyB, bodyOriginB, bodyRotB, originB, rotB);
+                if(hasH)
+                    nwbPhysicsCollideHeightfieldPair(proxyA, originA, rotA, bodyOriginA, proxyB, originB, rotB, bodyOriginB, hullVertexSlot, maxDist, result, secondaryResult, hasSecondary);
+                else
+                    nwbPhysicsCollideMeshMeshPair(proxyA, originA, rotA, bodyOriginA, proxyB, originB, rotB, bodyOriginB, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result, secondaryResult, hasSecondary);
+            }
         }
 #else
         pairMatchesProfile = true;
+        if(typeA > NWB_PHYSICS_SHAPE_TYPE_SEGMENT || typeB > NWB_PHYSICS_SHAPE_TYPE_SEGMENT){
+            result.pairInfo.w = NWB_PHYSICS_MANIFOLD_FLAG_CPU_FALLBACK;
+        }
+        else{
     const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyA.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyB.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     if(typeA == NWB_PHYSICS_SHAPE_TYPE_SPHERE && typeB == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
@@ -6349,6 +6370,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     else{
         result.pairInfo.w = 1u;
     }
+        }
 #endif
 
         if(pairMatchesProfile){

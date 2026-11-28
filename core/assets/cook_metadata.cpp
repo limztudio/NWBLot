@@ -152,12 +152,16 @@ b8 ParseAssetMetadata(
     b8 useAssetCache = !assetCacheDirectory.empty();
     Sha256Digest producerDigest = {};
     Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
+    Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena> externalSourceCollectors(scratchArena);
     if(useAssetCache && !nwbFiles.empty()){
         AssetProducerFingerprint::Resolve(scratchArena, useAssetCache, producerDigest);
-        if(useAssetCache)
+        if(useAssetCache){
             CookMetadataDetail::CopyPairedSidecarRules(pairedSidecarRules);
+            CookMetadataDetail::CopyCookExternalSourceCollectors(externalSourceCollectors);
+        }
     }
     const Span<const AssetPairedSidecarRule> pairedSidecarRuleSpan(pairedSidecarRules.data(), pairedSidecarRules.size());
+    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectorSpan(externalSourceCollectors.data(), externalSourceCollectors.size());
 
     outMetadata.fileCacheRecords.clear();
     if(useAssetCache){
@@ -195,6 +199,7 @@ b8 ParseAssetMetadata(
                     AStringView(entry.metaText),
                     producerDigest,
                     pairedSidecarRuleSpan,
+                    externalSourceCollectorSpan,
                     workerScratch,
                     sourcePathText,
                     cacheFileName,
@@ -260,6 +265,7 @@ b8 ParseAssetMetadata(
                     metaTextView,
                     producerDigest,
                     pairedSidecarRuleSpan,
+                    externalSourceCollectorSpan,
                     fileScratchArena,
                     sourcePathText,
                     cacheFileName,

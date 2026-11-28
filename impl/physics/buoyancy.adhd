@@ -32,7 +32,8 @@ enum<u8> ForceFieldType{
     Turbulence = 8u,
     AeroDrag = 9u,
     Attractor = 10u,
-    kCount = 11u
+    VectorField = 11u,
+    kCount = 12u
 }
 
 enum<u8> ForceFieldShape{
@@ -156,7 +157,19 @@ class FluidVolume{
     public f32 sleepWrenchTolerance = 1.0e-3f;
     public Filter filter;
     public b8 enabled = true;
+    public b8 enableDynamicWaveGrid = false;
+    public u32 waveGridDimX = 32u;
+    public u32 waveGridDimZ = 32u;
+    public f32 waveGridCellSize = 0.5f;
+    public f32 waveGridSpeed = 3.0f;
+    public f32 waveDamping = 0.35f;
+    public f32 waveMaxAmplitude = 1.5f;
+    public f32 waveImpulseScale = 0.02f;
+    public f32x4 waveGridOrigin(0.0f, 0.0f, 0.0f, 0.0f);
+    public Vector<f32> waveHeights;
+    public Vector<f32> waveVelocities;
     private Optional<FluidSurfaceCallback> m_surfaceCallback;
+    private f32 m_waveGridPeakAbs = 0.0f;
     private f32x4 m_cachedNormShapeRot(0.0f, 0.0f, 0.0f, 1.0f);
     private f32x4 m_cachedNormShapeRotSrc(0.0f, 0.0f, 0.0f, 0.0f);
     private b8 m_cachedNormShapeRotValid = false;
@@ -193,6 +206,19 @@ class FluidVolume{
 
     public b8 hasSurfaceCallback()const{
         return this.m_surfaceCallback.has_value();
+    }
+
+    public f32 snapshotWaveGridPeakAbs()const{
+        return this.m_waveGridPeakAbs;
+    }
+
+    public void finalizeSnapshotRestore(in f32 waveGridPeakAbs){
+        this.invalidateStaticCaches();
+        this.m_waveGridPeakAbs = waveGridPeakAbs;
+    }
+
+    public void copySurfaceCallbackFrom(in FluidVolume src){
+        this.m_surfaceCallback = src.m_surfaceCallback;
     }
 
     public void invalidateStaticCaches(){
@@ -494,6 +520,161 @@ class FluidVolume{
         return false;
     }
 
+    public b8 hasDynamicWaveGrid()const{
+        return this.enableDynamicWaveGrid && this.waveGridDimX >= 4u && this.waveGridDimZ >= 4u && this.waveGridCellSize > 1.0e-4f;
+    }
+
+    public f32 dynamicWaveMaxAmplitudePad()const{
+        if(!this.hasDynamicWaveGrid())
+            return 0.0f;
+        return Max(this.m_waveGridPeakAbs, Max(0.0f, this.waveMaxAmplitude));
+    }
+
+    private void ensureDynamicWaveGridAllocated(){
+        const u32 nx = Max(4u, Min(this.waveGridDimX, 256u));
+        const u32 nz = Max(4u, Min(this.waveGridDimZ, 256u));
+        this.waveGridDimX = nx;
+        this.waveGridDimZ = nz;
+        const usize need = cast<usize>(nx) * cast<usize>(nz);
+        if(this.waveHeights.size() != need)
+            this.waveHeights.assign(need, 0.0f);
+        if(this.waveVelocities.size() != need)
+            this.waveVelocities.assign(need, 0.0f);
+    }
+
+    public void initDynamicWaveGrid(in VectorSingle originWorld, in u32 dimX, in u32 dimZ, in f32 cellSize){
+        this.enableDynamicWaveGrid = true;
+        this.waveGridOrigin = f32x4(originWorld, 0.0f);
+        this.waveGridDimX = Max(4u, Min(dimX, 256u));
+        this.waveGridDimZ = Max(4u, Min(dimZ, 256u));
+        this.waveGridCellSize = Max(1.0e-3f, cellSize);
+        const usize need = cast<usize>(this.waveGridDimX) * cast<usize>(this.waveGridDimZ);
+        this.waveHeights.assign(need, 0.0f);
+        this.waveVelocities.assign(need, 0.0f);
+        this.m_waveGridPeakAbs = 0.0f;
+    }
+
+    public void addWaveDisturbance(in VectorSingle worldPos, in f32 impulseVel, in f32 radius){
+        if(!this.hasDynamicWaveGrid())
+            return;
+        this.ensureDynamicWaveGridAllocated();
+        const VectorSingle surfN = this.normalizedSurfaceNormal();
+        VectorSingle t1(0.0f);
+        VectorSingle t2(0.0f);
+        ComputeTangentBasisFromUnitNormal(surfN, t1, t2);
+        const f32 safeCell = Max(1.0e-3f, this.waveGridCellSize);
+        const u32 nx = this.waveGridDimX;
+        const u32 nz = this.waveGridDimZ;
+        const VectorSingle rel = worldPos - VectorSingle(this.waveGridOrigin);
+        const f32 gx = Vector3Dot(rel, t1).x / safeCell + 0.5f * cast<f32>(nx - 1u);
+        const f32 gz = Vector3Dot(rel, t2).x / safeCell + 0.5f * cast<f32>(nz - 1u);
+        const f32 safeRad = Max(safeCell * 0.75f, radius);
+        const i32 rCells = Max(1, cast<i32>(Ceil(VectorSingle(safeRad / safeCell)).x));
+        const i32 cx = cast<i32>(Floor(VectorSingle(gx + 0.5f)).x);
+        const i32 cz = cast<i32>(Floor(VectorSingle(gz + 0.5f)).x);
+        const i32 xLo = Max(1, cx - rCells);
+        const i32 xHi = Min(cast<i32>(nx) - 2, cx + rCells);
+        const i32 zLo = Max(1, cz - rCells);
+        const i32 zHi = Min(cast<i32>(nz) - 2, cz + rCells);
+        if(xLo > xHi || zLo > zHi)
+            return;
+        const f32 invRadSq = 1.0f / (safeRad * safeRad);
+        const f32 maxVel = Max(0.1f, Max(0.25f, this.waveMaxAmplitude) * 16.0f);
+        for(i32 iz = zLo; iz <= zHi; ++iz){
+            const f32 dz = (cast<f32>(iz) - gz) * safeCell;
+            for(i32 ix = xLo; ix <= xHi; ++ix){
+                const f32 dx = (cast<f32>(ix) - gx) * safeCell;
+                const f32 d2 = (dx * dx + dz * dz) * invRadSq;
+                if(d2 >= 1.0f)
+                    continue;
+                const f32 w = (1.0f - d2) * (1.0f - d2);
+                const usize idx = cast<usize>(iz) * cast<usize>(nx) + cast<usize>(ix);
+                this.waveVelocities[idx] = Clamp(this.waveVelocities[idx] + impulseVel * w, -maxVel, maxVel);
+            }
+        }
+        this.m_waveGridPeakAbs = Max(this.m_waveGridPeakAbs, Min(Max(0.25f, this.waveMaxAmplitude), Abs(VectorSingle(impulseVel * 0.05f)).x));
+    }
+
+    public void stepDynamicWaveGrid(in f32 dt){
+        if(!this.hasDynamicWaveGrid() || dt <= 0.0f)
+            return;
+        this.ensureDynamicWaveGridAllocated();
+        const u32 nx = this.waveGridDimX;
+        const u32 nz = this.waveGridDimZ;
+        const f32 safeCell = Max(1.0e-3f, this.waveGridCellSize);
+        const f32 maxAmp = Max(0.05f, this.waveMaxAmplitude);
+        const f32 rawSteps = Ceil(VectorSingle((Max(0.0f, this.waveGridSpeed) * dt) / (0.4f * safeCell))).x;
+        const u32 subSteps = Clamp(cast<u32>(rawSteps), 1u, 16u);
+        const f32 subDt = dt / cast<f32>(subSteps);
+        const f32 maxC = (0.45f * safeCell) / Max(1.0e-5f, subDt);
+        const f32 effC = Min(Max(0.0f, this.waveGridSpeed), maxC);
+        const f32 c2InvH2 = (effC * effC) / (safeCell * safeCell);
+        const f32 damp = Max(0.0f, this.waveDamping);
+        f32 peakAbs = 0.0f;
+
+        for(u32 stepIdx = 0u; stepIdx < subSteps; ++stepIdx){
+            for(u32 iz = 1u; iz + 1u < nz; ++iz){
+                const usize row = cast<usize>(iz) * cast<usize>(nx);
+                for(u32 ix = 1u; ix + 1u < nx; ++ix){
+                    const usize idx = row + cast<usize>(ix);
+                    const f32 hC = this.waveHeights[idx];
+                    const f32 lap = this.waveHeights[idx - 1u] + this.waveHeights[idx + 1u] + this.waveHeights[idx - cast<usize>(nx)] + this.waveHeights[idx + cast<usize>(nx)] - 4.0f * hC;
+                    f32 localDamp = damp;
+                    if(ix == 1u || ix + 2u == nx || iz == 1u || iz + 2u == nz)
+                        localDamp = Max(localDamp * 3.0f, 1.5f);
+                    const f32 dampMul = Max(0.0f, 1.0f - localDamp * subDt);
+                    this.waveVelocities[idx] = (this.waveVelocities[idx] + lap * c2InvH2 * subDt) * dampMul;
+                }
+            }
+            peakAbs = 0.0f;
+            for(u32 iz = 1u; iz + 1u < nz; ++iz){
+                const usize row = cast<usize>(iz) * cast<usize>(nx);
+                for(u32 ix = 1u; ix + 1u < nx; ++ix){
+                    const usize idx = row + cast<usize>(ix);
+                    const f32 hNext = Clamp(this.waveHeights[idx] + this.waveVelocities[idx] * subDt, -maxAmp, maxAmp);
+                    this.waveHeights[idx] = hNext;
+                    peakAbs = Max(peakAbs, Abs(VectorSingle(hNext)).x);
+                }
+            }
+        }
+        this.m_waveGridPeakAbs = peakAbs;
+    }
+
+    public void sampleDynamicWaveHeightAndGrad(in VectorSingle p, in VectorSingle t1, in VectorSingle t2, mut f32 outHeight, mut f32 outDhDt1, mut f32 outDhDt2)const{
+        outHeight = 0.0f;
+        outDhDt1 = 0.0f;
+        outDhDt2 = 0.0f;
+        if(!this.hasDynamicWaveGrid())
+            return;
+        const u32 nx = this.waveGridDimX;
+        const u32 nz = this.waveGridDimZ;
+        const usize need = cast<usize>(nx) * cast<usize>(nz);
+        if(this.waveHeights.size() < need)
+            return;
+        const f32 safeCell = Max(1.0e-3f, this.waveGridCellSize);
+        const VectorSingle rel = p - VectorSingle(this.waveGridOrigin);
+        const f32 gx = Vector3Dot(rel, t1).x / safeCell + 0.5f * cast<f32>(nx - 1u);
+        const f32 gz = Vector3Dot(rel, t2).x / safeCell + 0.5f * cast<f32>(nz - 1u);
+        if(gx < 0.0f || gz < 0.0f || gx >= cast<f32>(nx - 1u) || gz >= cast<f32>(nz - 1u))
+            return;
+        const u32 i0 = Min(nx - 2u, cast<u32>(Floor(VectorSingle(gx)).x));
+        const u32 j0 = Min(nz - 2u, cast<u32>(Floor(VectorSingle(gz)).x));
+        const f32 tx = Clamp(gx - cast<f32>(i0), 0.0f, 1.0f);
+        const f32 tz = Clamp(gz - cast<f32>(j0), 0.0f, 1.0f);
+        const usize row0 = cast<usize>(j0) * cast<usize>(nx) + cast<usize>(i0);
+        const usize row1 = row0 + cast<usize>(nx);
+        const f32 h00 = this.waveHeights[row0];
+        const f32 h10 = this.waveHeights[row0 + 1u];
+        const f32 h01 = this.waveHeights[row1];
+        const f32 h11 = this.waveHeights[row1 + 1u];
+        const f32 omx = 1.0f - tx;
+        const f32 omz = 1.0f - tz;
+        outHeight = omx * omz * h00 + tx * omz * h10 + omx * tz * h01 + tx * tz * h11;
+        const f32 invCell = 1.0f / safeCell;
+        outDhDt1 = (omz * (h10 - h00) + tz * (h11 - h01)) * invCell;
+        outDhDt2 = (omx * (h01 - h00) + tx * (h11 - h10)) * invCell;
+    }
+
     public void rebuildHullPlanesFromVertices(){
         this.hullPlanes.clear();
         this.invalidateStaticCaches();
@@ -510,6 +691,8 @@ class FluidVolume{
 
     public void shiftOrigin(in VectorSingle negDelta){
         const VectorSingle d(negDelta, 0.0f);
+        if(this.enableDynamicWaveGrid || !this.waveHeights.empty())
+            this.waveGridOrigin = f32x4(VectorSingle(this.waveGridOrigin, 0.0f) + d, 0.0f);
         if(this.shape == FluidVolumeShape::HalfSpacePlane || this.shape == FluidVolumeShape::GerstnerOcean){
             const VectorSingle n = this.normalizedSurfaceNormal();
             this.surfaceNormalOffset.w += Vector3Dot(n, d).x;
@@ -581,11 +764,23 @@ class FluidVolume{
             return;
         }
 
+        const b8 hasDynWave = this.hasDynamicWaveGrid();
+
         if(this.shape == FluidVolumeShape::HalfSpacePlane){
             VectorSingle slope(0.0f);
-            const f32 surfaceOff = this.surfaceNormalOffset.w + this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, slope);
+            f32 waveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, slope);
+            if(hasDynWave){
+                f32 dynH = 0.0f;
+                f32 dh1 = 0.0f;
+                f32 dh2 = 0.0f;
+                this.sampleDynamicWaveHeightAndGrad(p, waveT1, waveT2, dynH, dh1, dh2);
+                waveOff += dynH;
+                if(wantNormal)
+                    slope = slope + waveT1 * dh1 + waveT2 * dh2;
+            }
+            const f32 surfaceOff = this.surfaceNormalOffset.w + waveOff;
             outDepth = surfaceOff - Vector3Dot(p, surfNorm).x;
-            if(wantNormal && this.waveAmplitude != 0.0f)
+            if(wantNormal && (this.waveAmplitude != 0.0f || hasDynWave))
                 outNormal = SafeNormalizeVec3(surfNorm - slope, surfNorm);
             return;
         }
@@ -667,6 +862,15 @@ class FluidVolume{
                     }
                 }
             }
+            if(hasDynWave){
+                f32 dynH = 0.0f;
+                f32 dh1 = 0.0f;
+                f32 dh2 = 0.0f;
+                this.sampleDynamicWaveHeightAndGrad(p, waveT1, waveT2, dynH, dh1, dh2);
+                waveSum += dynH;
+                if(wantNormal)
+                    slope = slope + waveT1 * dh1 + waveT2 * dh2;
+            }
             outFlowVel = outFlowVel + orbitalVel;
             outDepth = (this.surfaceNormalOffset.w + waveSum) - Vector3Dot(p, surfNorm).x;
             if(wantNormal)
@@ -701,7 +905,16 @@ class FluidVolume{
                 return;
             }
             VectorSingle slope(0.0f);
-            const f32 waveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, slope);
+            f32 waveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, slope);
+            if(hasDynWave){
+                f32 dynH = 0.0f;
+                f32 dh1 = 0.0f;
+                f32 dh2 = 0.0f;
+                this.sampleDynamicWaveHeightAndGrad(p, waveT1, waveT2, dynH, dh1, dh2);
+                waveOff += dynH;
+                if(wantNormal)
+                    slope = slope + waveT1 * dh1 + waveT2 * dh2;
+            }
             outDepth = (he.y + waveOff) - pL.y;
             if(wantNormal)
                 outNormal = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), r) - slope, surfNorm);
@@ -960,7 +1173,16 @@ class FluidVolume{
                 }
             }
             VectorSingle slope(0.0f);
-            const f32 waveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, slope);
+            f32 waveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, slope);
+            if(hasDynWave){
+                f32 dynH = 0.0f;
+                f32 dh1 = 0.0f;
+                f32 dh2 = 0.0f;
+                this.sampleDynamicWaveHeightAndGrad(p, waveT1, waveT2, dynH, dh1, dh2);
+                waveOff += dynH;
+                if(wantNormal)
+                    slope = slope + waveT1 * dh1 + waveT2 * dh2;
+            }
             const VectorSingle delta = p - bestClosest;
             const f32 hBelow = -Vector3Dot(delta, surfNorm).x;
             const VectorSingle lat = delta + surfNorm * hBelow;
@@ -1006,7 +1228,16 @@ class FluidVolume{
             return;
         }
         VectorSingle boxSlope(0.0f);
-        const f32 boxWaveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, boxSlope);
+        f32 boxWaveOff = this.computeWaveHeightOffset(p, waveT1, waveT2, timeSec, boxSlope);
+        if(hasDynWave){
+            f32 dynH = 0.0f;
+            f32 dh1 = 0.0f;
+            f32 dh2 = 0.0f;
+            this.sampleDynamicWaveHeightAndGrad(p, waveT1, waveT2, dynH, dh1, dh2);
+            boxWaveOff += dynH;
+            if(wantNormal)
+                boxSlope = boxSlope + waveT1 * dh1 + waveT2 * dh2;
+        }
         outDepth = (bMax.y + boxWaveOff) - p.y;
         if(wantNormal)
             outNormal = SafeNormalizeVec3(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f) - boxSlope, surfNorm);
@@ -1023,7 +1254,7 @@ class FluidVolume{
     public void computeSurfaceTangentBasis(in VectorSingle surfNorm, mut VectorSingle outT1, mut VectorSingle outT2)const{
         if(
             (this.shape == FluidVolumeShape::HalfSpacePlane || this.shape == FluidVolumeShape::BoxAabb || this.shape == FluidVolumeShape::Obb || this.shape == FluidVolumeShape::SplineRiver || this.shape == FluidVolumeShape::GerstnerOcean)
-            && (this.waveAmplitude != 0.0f || this.shape == FluidVolumeShape::GerstnerOcean)
+            && (this.waveAmplitude != 0.0f || this.shape == FluidVolumeShape::GerstnerOcean || this.hasDynamicWaveGrid())
         )
             ComputeTangentBasisFromUnitNormal(surfNorm, outT1, outT2);
     }
@@ -1110,10 +1341,119 @@ class ForceField{
     public Filter filter;
     public b8 enableOcclusion = false;
     public b8 enabled = true;
+    public u32 vectorFieldDimX = 0u;
+    public u32 vectorFieldDimY = 0u;
+    public u32 vectorFieldDimZ = 0u;
+    public Vector<f32x4> vectorFieldSamples;
+
+    public void initVectorFieldGrid(in Aabb3D gridBounds, in u32 dimX, in u32 dimY, in u32 dimZ){
+        this.type = ForceFieldType::VectorField;
+        this.shape = ForceFieldShape::BoxAabb;
+        this.useBounds = true;
+        this.bounds = gridBounds;
+        this.vectorFieldDimX = Max(2u, Min(dimX, 64u));
+        this.vectorFieldDimY = Max(2u, Min(dimY, 64u));
+        this.vectorFieldDimZ = Max(2u, Min(dimZ, 64u));
+        const usize need = cast<usize>(this.vectorFieldDimX) * cast<usize>(this.vectorFieldDimY) * cast<usize>(this.vectorFieldDimZ);
+        this.vectorFieldSamples.assign(need, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+    }
+
+    public void setVectorFieldSample(in u32 ix, in u32 iy, in u32 iz, in VectorSingle value){
+        if(ix >= this.vectorFieldDimX || iy >= this.vectorFieldDimY || iz >= this.vectorFieldDimZ)
+            return;
+        const usize idx = (cast<usize>(iz) * cast<usize>(this.vectorFieldDimY) + cast<usize>(iy)) * cast<usize>(this.vectorFieldDimX) + cast<usize>(ix);
+        if(idx < this.vectorFieldSamples.size())
+            this.vectorFieldSamples[idx] = f32x4(value, 0.0f);
+    }
+
+    public b8 hasVectorFieldGrid()const{
+        if(this.vectorFieldDimX < 2u || this.vectorFieldDimY < 2u || this.vectorFieldDimZ < 2u)
+            return false;
+        const usize need = cast<usize>(this.vectorFieldDimX) * cast<usize>(this.vectorFieldDimY) * cast<usize>(this.vectorFieldDimZ);
+        return this.vectorFieldSamples.size() >= need;
+    }
+
+    public VectorSingle sampleVectorFieldVelocity(in VectorSingle worldPos)const{
+        if(!this.hasVectorFieldGrid())
+            return VectorSingle(0.0f);
+        VectorSingle localPos = worldPos;
+        VectorSingle gridMin = VectorSingle(this.bounds.lowerBound);
+        VectorSingle gridMax = VectorSingle(this.bounds.upperBound);
+        if(this.shape == ForceFieldShape::Obb){
+            const VectorSingle c(this.obbCenter, 0.0f);
+            const VectorSingle r = SafeNormalizeQuat(VectorSingle(this.obbRotation));
+            const VectorSingle he = Max(VectorSingle(this.obbHalfExtents, 0.0f), VectorSingle(1.0e-3f, 1.0e-3f, 1.0e-3f, 0.0f));
+            localPos = Vector3InverseRotate(worldPos - c, r);
+            gridMin = -he;
+            gridMax = he;
+        }
+        const VectorSingle span = Max(gridMax - gridMin, VectorSingle(1.0e-4f, 1.0e-4f, 1.0e-4f, 0.0f));
+        const VectorSingle uvw = Clamp((localPos - gridMin) / span, VectorSingle(0.0f), VectorSingle(1.0f));
+        const u32 nx = this.vectorFieldDimX;
+        const u32 ny = this.vectorFieldDimY;
+        const u32 nz = this.vectorFieldDimZ;
+        const f32 fx = uvw.x * cast<f32>(nx - 1u);
+        const f32 fy = uvw.y * cast<f32>(ny - 1u);
+        const f32 fz = uvw.z * cast<f32>(nz - 1u);
+        const u32 x0 = Min(nx - 2u, cast<u32>(Floor(VectorSingle(fx)).x));
+        const u32 y0 = Min(ny - 2u, cast<u32>(Floor(VectorSingle(fy)).x));
+        const u32 z0 = Min(nz - 2u, cast<u32>(Floor(VectorSingle(fz)).x));
+        const f32 tx = fx - cast<f32>(x0);
+        const f32 ty = fy - cast<f32>(y0);
+        const f32 tz = fz - cast<f32>(z0);
+        const usize strideY = cast<usize>(nx);
+        const usize strideZ = cast<usize>(nx) * cast<usize>(ny);
+        const usize base = cast<usize>(z0) * strideZ + cast<usize>(y0) * strideY + cast<usize>(x0);
+        const VectorSingle c000(this.vectorFieldSamples[base]);
+        const VectorSingle c100(this.vectorFieldSamples[base + 1u]);
+        const VectorSingle c010(this.vectorFieldSamples[base + strideY]);
+        const VectorSingle c110(this.vectorFieldSamples[base + strideY + 1u]);
+        const VectorSingle c001(this.vectorFieldSamples[base + strideZ]);
+        const VectorSingle c101(this.vectorFieldSamples[base + strideZ + 1u]);
+        const VectorSingle c011(this.vectorFieldSamples[base + strideZ + strideY]);
+        const VectorSingle c111(this.vectorFieldSamples[base + strideZ + strideY + 1u]);
+        const VectorSingle vTx(tx);
+        const VectorSingle vTy(ty);
+        const VectorSingle vTz(tz);
+        const VectorSingle c00 = Lerp(c000, c100, vTx);
+        const VectorSingle c10 = Lerp(c010, c110, vTx);
+        const VectorSingle c01 = Lerp(c001, c101, vTx);
+        const VectorSingle c11 = Lerp(c011, c111, vTx);
+        const VectorSingle c0 = Lerp(c00, c10, vTy);
+        const VectorSingle c1 = Lerp(c01, c11, vTy);
+        const VectorSingle sampled = Lerp(c0, c1, vTz);
+        if(this.shape == ForceFieldShape::Obb)
+            return VectorSingle(Vector3Rotate(sampled, SafeNormalizeQuat(VectorSingle(this.obbRotation))), 0.0f);
+        return VectorSingle(sampled, 0.0f);
+    }
+
+    public VectorSingle sampleVectorFieldCurl(in VectorSingle worldPos)const{
+        if(!this.hasVectorFieldGrid())
+            return VectorSingle(0.0f);
+        const f32 eps = 0.05f;
+        const VectorSingle vxP = this.sampleVectorFieldVelocity(worldPos + VectorSingle(eps, 0.0f, 0.0f, 0.0f));
+        const VectorSingle vxM = this.sampleVectorFieldVelocity(worldPos - VectorSingle(eps, 0.0f, 0.0f, 0.0f));
+        const VectorSingle vyP = this.sampleVectorFieldVelocity(worldPos + VectorSingle(0.0f, eps, 0.0f, 0.0f));
+        const VectorSingle vyM = this.sampleVectorFieldVelocity(worldPos - VectorSingle(0.0f, eps, 0.0f, 0.0f));
+        const VectorSingle vzP = this.sampleVectorFieldVelocity(worldPos + VectorSingle(0.0f, 0.0f, eps, 0.0f));
+        const VectorSingle vzM = this.sampleVectorFieldVelocity(worldPos - VectorSingle(0.0f, 0.0f, eps, 0.0f));
+        const f32 inv2Eps = 1.0f / (2.0f * eps);
+        const f32 dVzDy = (vyP.z - vyM.z) * inv2Eps;
+        const f32 dVyDz = (vzP.y - vzM.y) * inv2Eps;
+        const f32 dVxDz = (vzP.x - vzM.x) * inv2Eps;
+        const f32 dVzDx = (vxP.z - vxM.z) * inv2Eps;
+        const f32 dVyDx = (vxP.y - vxM.y) * inv2Eps;
+        const f32 dVxDy = (vyP.x - vyM.x) * inv2Eps;
+        return VectorSingle(dVzDy - dVyDz, dVxDz - dVzDx, dVyDx - dVxDy, 0.0f);
+    }
+
+    public void setSphereCenter(in VectorSingle centerWorld){
+        this.obbCenter = f32x4(centerWorld, 1.0f);
+    }
 
     public void shiftOrigin(in VectorSingle negDelta){
         const VectorSingle d(negDelta, 0.0f);
-        if(this.useBounds){
+        if(this.useBounds || (this.type == ForceFieldType::VectorField && !this.vectorFieldSamples.empty())){
             this.bounds.lowerBound = f32x4(VectorSingle(this.bounds.lowerBound) + d, 0.0f);
             this.bounds.upperBound = f32x4(VectorSingle(this.bounds.upperBound) + d, 0.0f);
         }
@@ -1130,7 +1470,7 @@ class ForceField{
     }
 
     public VectorSingle sphereShapeCenter()const{
-        if(Vector3LengthSq(VectorSingle(this.obbCenter, 0.0f)).x > 0.0f)
+        if(this.obbCenter.w != 0.0f || Vector3LengthSq(VectorSingle(this.obbCenter, 0.0f)).x > 0.0f)
             return VectorSingle(this.obbCenter, 0.0f);
         if(
             this.type == ForceFieldType::PointGravity
@@ -1326,7 +1666,7 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
         if(comp.cachedBuoyancyVolume >= 0.0f)
             shapeVol = comp.cachedBuoyancyVolume;
         else
-            shapeVol = ComputeCompoundGeometricVolume(comp, world.m_hullShapes);
+            shapeVol = ComputeCompoundGeometricVolume(comp, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_sdfShapes);
     }
     else if(shape.type == ShapeType::Scaled && shape.geometryIndex < world.m_scaledShapes.size()){
         in ScaledShape sc = world.m_scaledShapes[shape.geometryIndex];
@@ -1505,7 +1845,7 @@ void AccumulateAxisymmetricFrustumSlices(
     const VectorSingle axisVec = p1 - p0;
     const f32 segLen = Vector3Length(VectorSingle(axisVec, 0.0f)).x;
     const VectorSingle axisDir = SafeNormalizeVec3(axisVec, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    const b8 useCallbackNormal = fluid.hasSurfaceCallback();
+    const b8 useCallbackNormal = fluid.hasSurfaceCallback() || fluid.hasDynamicWaveGrid();
     const b8 isSphereFluid = (!useCallbackNormal && fluid.shape == FluidVolumeShape::Sphere);
     const VectorSingle sphereCenter(fluid.surfaceNormalOffset, 0.0f);
     const f32 constCosTilt = Abs(Vector3Dot(axisDir, surfNorm)).x;
@@ -1960,6 +2300,287 @@ b8 TryComputeExactPlaneSubmersionForShape(
     return false;
 }
 
+b8 TryComputeExactBoxSubmersionForShape(
+    in PhysicsWorld world,
+    in Shape shape,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
+    in VectorSingle parentScale,
+    in f32 shapeVol,
+    in f32 faceAreaAvg,
+    in FluidVolume fluid,
+    mut f32 outVol,
+    mut VectorSingle outWeightedCob,
+    mut f32 outArea
+){
+    outVol = 0.0f;
+    outWeightedCob = VectorSingle(0.0f);
+    outArea = 0.0f;
+    if(shape.type != ShapeType::Hull || shape.geometryIndex >= world.m_hullShapes.size() || shapeVol <= 1.0e-7f)
+        return false;
+    if(fluid.hasSurfaceCallback() || fluid.hasDynamicWaveGrid() || fluid.waveAmplitude != 0.0f)
+        return false;
+    if(fluid.shape != FluidVolumeShape::BoxAabb && fluid.shape != FluidVolumeShape::Obb)
+        return false;
+
+    VectorSingle boxCenter(0.0f);
+    VectorSingle boxHalf(0.0f);
+    VectorSingle boxRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(fluid.shape == FluidVolumeShape::BoxAabb){
+        const VectorSingle lo = VectorSingle(fluid.bounds.lowerBound);
+        const VectorSingle hi = VectorSingle(fluid.bounds.upperBound);
+        boxCenter = (lo + hi) * 0.5f - xfPos;
+        boxHalf = Max((hi - lo) * 0.5f, VectorSingle(1.0e-4f, 1.0e-4f, 1.0e-4f, 0.0f));
+    }
+    else{
+        boxCenter = VectorSingle(fluid.obbCenter, 0.0f) - xfPos;
+        boxHalf = Max(VectorSingle(fluid.obbHalfExtents, 0.0f), VectorSingle(1.0e-4f, 1.0e-4f, 1.0e-4f, 0.0f));
+        boxRot = fluid.normalizedObbRotation();
+    }
+
+    in HullShape hull = world.m_hullShapes[shape.geometryIndex];
+    const usize fCount = hull.faceTopologies.size();
+    if(fCount < 4u || hull.vertices.empty() || hull.halfEdges.empty())
+        return false;
+
+    const VectorSingle hullCent = Vector3Rotate(hull.centroid() * parentScale, xfRot);
+    Vector<f32x4> vertsA;
+    Vector<u32> startsA;
+    Vector<u32> countsA;
+    vertsA.reserve(hull.halfEdges.size());
+    startsA.reserve(fCount + 6u);
+    countsA.reserve(fCount + 6u);
+
+    for(usize fi = 0u; fi < fCount; ++fi){
+        in HullFaceTopology topo = hull.faceTopologies[fi];
+        const u32 vCnt = cast<u32>(topo.vertexCount);
+        if(vCnt < 3u)
+            continue;
+        const u32 startOff = cast<u32>(vertsA.size());
+        u32 e = cast<u32>(topo.edge);
+        for(u32 vi = 0u; vi < vCnt; ++vi){
+            if(cast<usize>(e) >= hull.halfEdges.size())
+                return false;
+            const usize vIdx = cast<usize>(hull.halfEdges[e].tail);
+            if(vIdx >= hull.vertices.size())
+                return false;
+            const VectorSingle vp = Vector3Rotate(VectorSingle(hull.vertices[vIdx], 0.0f) * parentScale, xfRot);
+            vertsA.push_back(f32x4(vp, 0.0f));
+            e = cast<u32>(hull.halfEdges[e].next);
+        }
+        const VectorSingle p0(vertsA[startOff]);
+        const VectorSingle p1(vertsA[startOff + 1u]);
+        const VectorSingle p2(vertsA[startOff + 2u]);
+        if(Vector3Dot(Cross(p1 - p0, p2 - p0), p0 - hullCent).x < 0.0f){
+            for(u32 vi = 0u; vi < vCnt / 2u; ++vi){
+                const u32 opp = vCnt - 1u - vi;
+                const f32x4 tmp = vertsA[startOff + vi];
+                vertsA[startOff + vi] = vertsA[startOff + opp];
+                vertsA[startOff + opp] = tmp;
+            }
+        }
+        startsA.push_back(startOff);
+        countsA.push_back(vCnt);
+    }
+
+    Array<f32x4, 6u> clipPlanes;
+    Array<f32x4, 3u> axes;
+    axes[0u] = f32x4(Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), boxRot), 0.0f);
+    axes[1u] = f32x4(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), boxRot), 0.0f);
+    axes[2u] = f32x4(Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), boxRot), 0.0f);
+    for(usize ai = 0u; ai < 3u; ++ai){
+        const VectorSingle ax(axes[ai]);
+        f32 ext = boxHalf.x;
+        if(ai == 1u)
+            ext = boxHalf.y;
+        else if(ai == 2u)
+            ext = boxHalf.z;
+        const VectorSingle pMin = boxCenter - ax * ext;
+        const VectorSingle pMax = boxCenter + ax * ext;
+        clipPlanes[ai * 2u + 0u] = f32x4(ax, Vector3Dot(ax, pMin).x);
+        clipPlanes[ai * 2u + 1u] = f32x4(-ax, Vector3Dot(-ax, pMax).x);
+    }
+
+    Vector<f32x4> vertsB;
+    Vector<u32> startsB;
+    Vector<u32> countsB;
+    Vector<f32x4> clippedPoly;
+    Vector<f32x4> capPts;
+    Vector<f32x4> onPlanePts;
+    const f32 eps = 1.0e-5f;
+
+    for(usize pi = 0u; pi < 6u; ++pi){
+        if(startsA.empty())
+            return true;
+        const VectorSingle nIn(clipPlanes[pi].x, clipPlanes[pi].y, clipPlanes[pi].z, 0.0f);
+        const f32 pOff = clipPlanes[pi].w;
+        vertsB.clear();
+        startsB.clear();
+        countsB.clear();
+        capPts.clear();
+        onPlanePts.clear();
+        b8 anyStrictlyOutside = false;
+        b8 anyStrictlyInside = false;
+
+        for(usize fi = 0u; fi < startsA.size(); ++fi){
+            const u32 fStart = startsA[fi];
+            const u32 fCnt = countsA[fi];
+            if(fCnt < 3u)
+                continue;
+            clippedPoly.clear();
+            for(u32 vi = 0u; vi < fCnt; ++vi){
+                const u32 ni = (vi + 1u) % fCnt;
+                const VectorSingle a(vertsA[fStart + vi]);
+                const VectorSingle b(vertsA[fStart + ni]);
+                const f32 da = Vector3Dot(nIn, a).x - pOff;
+                const f32 db = Vector3Dot(nIn, b).x - pOff;
+                if(da < -eps)
+                    anyStrictlyOutside = true;
+                else if(da > eps)
+                    anyStrictlyInside = true;
+                else{
+                    b8 dupOn = false;
+                    for(usize oi = 0u; oi < onPlanePts.size(); ++oi){
+                        if(Vector3LengthSq(VectorSingle(a - VectorSingle(onPlanePts[oi]), 0.0f)).x <= 1.0e-10f){
+                            dupOn = true;
+                            break;
+                        }
+                    }
+                    if(!dupOn)
+                        onPlanePts.push_back(f32x4(a, 0.0f));
+                }
+                if(da >= -eps)
+                    clippedPoly.push_back(f32x4(a, 0.0f));
+                if((da > eps && db < -eps) || (da < -eps && db > eps)){
+                    const f32 t = Clamp(da / (da - db), 0.0f, 1.0f);
+                    const VectorSingle inter = Lerp(a, b, VectorSingle(t));
+                    clippedPoly.push_back(f32x4(inter, 0.0f));
+                    b8 dupCap = false;
+                    for(usize ci = 0u; ci < capPts.size(); ++ci){
+                        if(Vector3LengthSq(VectorSingle(inter - VectorSingle(capPts[ci]), 0.0f)).x <= 1.0e-10f){
+                            dupCap = true;
+                            break;
+                        }
+                    }
+                    if(!dupCap)
+                        capPts.push_back(f32x4(inter, 0.0f));
+                }
+            }
+            if(clippedPoly.size() >= 3u){
+                const u32 outStart = cast<u32>(vertsB.size());
+                for(usize vi = 0u; vi < clippedPoly.size(); ++vi)
+                    vertsB.push_back(clippedPoly[vi]);
+                startsB.push_back(outStart);
+                countsB.push_back(cast<u32>(clippedPoly.size()));
+            }
+        }
+
+        if(!anyStrictlyOutside || !anyStrictlyInside){
+            capPts.clear();
+        }
+        else{
+            for(usize oi = 0u; oi < onPlanePts.size(); ++oi){
+                const VectorSingle op(onPlanePts[oi]);
+                b8 dupCap = false;
+                for(usize ci = 0u; ci < capPts.size(); ++ci){
+                    if(Vector3LengthSq(VectorSingle(op - VectorSingle(capPts[ci]), 0.0f)).x <= 1.0e-10f){
+                        dupCap = true;
+                        break;
+                    }
+                }
+                if(!dupCap)
+                    capPts.push_back(onPlanePts[oi]);
+            }
+        }
+
+        if(capPts.size() >= 3u){
+            VectorSingle capCenter(0.0f);
+            for(usize ci = 0u; ci < capPts.size(); ++ci)
+                capCenter = capCenter + VectorSingle(capPts[ci]);
+            capCenter = capCenter / cast<f32>(capPts.size());
+            const VectorSingle outCapN = -nIn;
+            VectorSingle refAxis(1.0f, 0.0f, 0.0f, 0.0f);
+            if(Abs(VectorSingle(outCapN.x)).x > 0.9f)
+                refAxis = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+            const VectorSingle tU = SafeNormalizeVec3(Cross(outCapN, refAxis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle tV = SafeNormalizeVec3(Cross(outCapN, tU), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+            for(usize i = 1u; i < capPts.size(); ++i){
+                const f32x4 key = capPts[i];
+                const VectorSingle relK = VectorSingle(key) - capCenter;
+                const f32 uK = Vector3Dot(relK, tU).x;
+                const f32 vK = Vector3Dot(relK, tV).x;
+                const b8 upK = (vK > 0.0f) || (vK == 0.0f && uK >= 0.0f);
+                usize j = i;
+                while(j > 0u){
+                    const VectorSingle relJ = VectorSingle(capPts[j - 1u]) - capCenter;
+                    const f32 uJ = Vector3Dot(relJ, tU).x;
+                    const f32 vJ = Vector3Dot(relJ, tV).x;
+                    const b8 upJ = (vJ > 0.0f) || (vJ == 0.0f && uJ >= 0.0f);
+                    b8 kBeforeJ = false;
+                    if(upK != upJ)
+                        kBeforeJ = upK;
+                    else
+                        kBeforeJ = (uK * vJ - vK * uJ) > 0.0f;
+                    if(!kBeforeJ)
+                        break;
+                    capPts[j] = capPts[j - 1u];
+                    --j;
+                }
+                capPts[j] = key;
+            }
+            const u32 capStart = cast<u32>(vertsB.size());
+            for(usize ci = 0u; ci < capPts.size(); ++ci)
+                vertsB.push_back(capPts[ci]);
+            startsB.push_back(capStart);
+            countsB.push_back(cast<u32>(capPts.size()));
+        }
+
+        vertsA = vertsB;
+        startsA = startsB;
+        countsA = countsB;
+    }
+
+    if(startsA.empty())
+        return true;
+
+    VectorSingle refPt(0.0f);
+    f32 refCount = 0.0f;
+    for(usize vi = 0u; vi < vertsA.size(); ++vi){
+        refPt = refPt + VectorSingle(vertsA[vi]);
+        refCount += 1.0f;
+    }
+    refPt = refPt / Max(1.0f, refCount);
+
+    f32 vol6 = 0.0f;
+    VectorSingle weightedSum(0.0f);
+    for(usize fi = 0u; fi < startsA.size(); ++fi){
+        const u32 fStart = startsA[fi];
+        const u32 fCnt = countsA[fi];
+        if(fCnt < 3u)
+            continue;
+        const VectorSingle v0 = VectorSingle(vertsA[fStart]) - refPt;
+        for(u32 ti = 1u; ti + 1u < fCnt; ++ti){
+            const VectorSingle v1 = VectorSingle(vertsA[fStart + ti]) - refPt;
+            const VectorSingle v2 = VectorSingle(vertsA[fStart + ti + 1u]) - refPt;
+            const f32 tet6 = Vector3Dot(v0, Cross(v1, v2)).x;
+            vol6 += tet6;
+            const VectorSingle tetCent = refPt + (v0 + v1 + v2) * 0.25f;
+            weightedSum = weightedSum + tetCent * tet6;
+        }
+    }
+
+    if(Abs(VectorSingle(vol6)).x <= 1.0e-9f)
+        return true;
+
+    const VectorSingle localCob = weightedSum / vol6;
+    f32 subVol = Abs(VectorSingle(vol6 / 6.0f)).x;
+    subVol = Min(subVol, shapeVol);
+    outVol = subVol;
+    outWeightedCob = (xfPos + localCob) * subVol;
+    outArea = faceAreaAvg * Clamp(subVol / shapeVol, 0.0f, 1.0f);
+    return true;
+}
+
 void AccumulateShapeSubmersion(
     in PhysicsWorld world,
     in Shape shape,
@@ -2016,18 +2637,42 @@ void AccumulateShapeSubmersion(
             childShape.localTransform.position = f32x4(VectorSingle(sub.localTransform.position) * parentScale, 0.0f);
             childShape.localTransform.rotation = sub.localTransform.rotation;
             childShape.filter = shape.filter;
-            VectorSingle cMin(0.0f);
-            VectorSingle cMax(0.0f);
-            VectorSingle childPos(0.0f);
-            VectorSingle childRot(0.0f, 0.0f, 0.0f, 1.0f);
-            childShape.worldTransformValues(xfPos, xfRot, childPos, childRot);
-            if(!ComputePrimitiveChildAabbValues(sub.type, VectorSingle(sub.geom0), VectorSingle(sub.geom1), sub.geometryIndex, childPos, childRot, world.m_hullShapes, cMin, cMax)){
-                cMin = childPos - VectorSingle(0.25f, 0.25f, 0.25f, 0.0f);
-                cMax = childPos + VectorSingle(0.25f, 0.25f, 0.25f, 0.0f);
+
+            Shape unscaledChild = childShape;
+            unscaledChild.localTransform.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            VectorSingle lMin(0.0f);
+            VectorSingle lMax(0.0f);
+            ComputeShapeWorldAabbValues(
+                unscaledChild,
+                VectorSingle(0.0f),
+                QuaternionIdentity(),
+                world.m_hullShapes,
+                world.m_meshShapes,
+                world.m_heightfieldShapes,
+                world.m_compoundShapes,
+                world.m_scaledShapes,
+                world.m_chainShapes,
+                world.m_sdfShapes,
+                lMin,
+                lMax
+            );
+            const VectorSingle scaledOffset = VectorSingle(sub.localTransform.position) * parentScale;
+            const VectorSingle scMin = lMin * parentScale + scaledOffset;
+            const VectorSingle scMax = lMax * parentScale + scaledOffset;
+            VectorSingle cMin(s_MaxF32);
+            VectorSingle cMax(-s_MaxF32);
+            for(u32 mask = 0u; mask < 8u; ++mask){
+                f32 cx = scMin.x;
+                f32 cy = scMin.y;
+                f32 cz = scMin.z;
+                if((mask & 1u) != 0u) cx = scMax.x;
+                if((mask & 2u) != 0u) cy = scMax.y;
+                if((mask & 4u) != 0u) cz = scMax.z;
+                const VectorSingle wp = TransformPointValues(xfPos, xfRot, VectorSingle(cx, cy, cz, 0.0f));
+                cMin = Min(cMin, wp);
+                cMax = Max(cMax, wp);
             }
-            const VectorSingle cMid = (cMin + cMax) * 0.5f;
-            const VectorSingle cHalf = (cMax - cMin) * 0.5f * parentScale;
-            const Aabb3D cAabb(cMid - cHalf, cMid + cHalf);
+            const Aabb3D cAabb(cMin, cMax);
             AccumulateShapeSubmersion(world, childShape, xfPos, xfRot, parentScale, cAabb, fluid, surfNorm, waveT1, waveT2, timeSec, depth + 1u, inOutTotalVol, inOutSubVol, inOutWeightedCob, inOutArea);
         }
         return;
@@ -2040,7 +2685,7 @@ void AccumulateShapeSubmersion(
         const VectorSingle wc = TransformPointValues(xfPos, xfRot, s.center() * parentScale);
         inOutTotalVol += v;
 
-        if(fluid.shape == FluidVolumeShape::Sphere){
+        if(fluid.shape == FluidVolumeShape::Sphere && !fluid.hasSurfaceCallback() && !fluid.hasDynamicWaveGrid()){
             const VectorSingle fc = VectorSingle(fluid.surfaceNormalOffset, 0.0f);
             const f32 rf = Max(1.0e-4f, fluid.surfaceNormalOffset.w);
             const VectorSingle delta = fc - wc;
@@ -2163,13 +2808,34 @@ void AccumulateShapeSubmersion(
     const f32 faceAreaAvg = (span.x * span.z + span.x * span.y + span.y * span.z) * (1.0f / 3.0f);
 
     if(
-        (fluid.shape == FluidVolumeShape::HalfSpacePlane || fluid.shape == FluidVolumeShape::GerstnerOcean)
+        !fluid.hasSurfaceCallback()
+        && !fluid.hasDynamicWaveGrid()
+        && (fluid.shape == FluidVolumeShape::HalfSpacePlane || fluid.shape == FluidVolumeShape::GerstnerOcean)
         && (shape.type == ShapeType::Hull || shape.type == ShapeType::Mesh || shape.type == ShapeType::Heightfield)
     ){
         f32 exactVol = 0.0f;
         VectorSingle exactCob(0.0f);
         f32 exactArea = 0.0f;
         if(TryComputeExactPlaneSubmersionForShape(world, shape, xfPos, xfRot, parentScale, bMin, bMax, shapeVol, fluid, surfNorm, waveT1, waveT2, timeSec, exactVol, exactCob, exactArea)){
+            if(exactVol > 1.0e-7f){
+                inOutSubVol += exactVol;
+                inOutWeightedCob = inOutWeightedCob + exactCob;
+                inOutArea += exactArea;
+            }
+            return;
+        }
+    }
+    else if(
+        !fluid.hasSurfaceCallback()
+        && !fluid.hasDynamicWaveGrid()
+        && fluid.waveAmplitude == 0.0f
+        && (fluid.shape == FluidVolumeShape::BoxAabb || fluid.shape == FluidVolumeShape::Obb)
+        && shape.type == ShapeType::Hull
+    ){
+        f32 exactVol = 0.0f;
+        VectorSingle exactCob(0.0f);
+        f32 exactArea = 0.0f;
+        if(TryComputeExactBoxSubmersionForShape(world, shape, xfPos, xfRot, parentScale, shapeVol, faceAreaAvg, fluid, exactVol, exactCob, exactArea)){
             if(exactVol > 1.0e-7f){
                 inOutSubVol += exactVol;
                 inOutWeightedCob = inOutWeightedCob + exactCob;
@@ -2274,6 +2940,7 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
         for(usize gi = 0u; gi < fluid.gerstnerWaves.size(); ++gi)
             gerstnerMaxAmp += Abs(VectorSingle(fluid.gerstnerWaves[gi].amplitude)).x;
     }
+    const f32 dynWavePad = fluid.dynamicWaveMaxAmplitudePad();
 
     u32 shapeIdx = body.headShapeId;
     while(shapeIdx != s_NullIndex){
@@ -2295,7 +2962,7 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
         b8 fullSub = false;
         if(!fluid.hasSurfaceCallback()){
             if(fluid.shape == FluidVolumeShape::BoxAabb){
-                const f32 wp = Max(0.0f, fluid.waveAmplitude);
+                const f32 wp = Max(0.0f, fluid.waveAmplitude) + dynWavePad;
                 const VectorSingle fMin = VectorSingle(fluid.bounds.lowerBound);
                 const VectorSingle fMax = VectorSingle(fluid.bounds.upperBound) + VectorSingle(0.0f, wp, 0.0f, 0.0f);
                 if(!AabbOverlapsValues(bMin, bMax, fMin, fMax))
@@ -2307,7 +2974,7 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
                 )
                     fullSub = true;
             }
-            else if(fluid.shape == FluidVolumeShape::Sphere){
+            else if(fluid.shape == FluidVolumeShape::Sphere && dynWavePad <= 0.0f){
                 const VectorSingle sCenter = VectorSingle(fluid.surfaceNormalOffset, 0.0f);
                 const f32 sRadius = Max(0.0f, fluid.surfaceNormalOffset.w);
                 const VectorSingle nearPt = Clamp(sCenter, bMin, bMax);
@@ -2325,9 +2992,10 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
                 const VectorSingle maxCorner = VectorSelect(bMin, bMax, negMask);
                 const VectorSingle minCorner = VectorSelect(bMax, bMin, negMask);
                 const f32 surfOff = fluid.surfaceNormalOffset.w;
-                if((surfOff + gerstnerMaxAmp) - Vector3Dot(maxCorner, surfNorm).x <= 0.0f)
+                const f32 totalAmp = gerstnerMaxAmp + dynWavePad;
+                if((surfOff + totalAmp) - Vector3Dot(maxCorner, surfNorm).x <= 0.0f)
                     dry = true;
-                else if((surfOff - gerstnerMaxAmp) - Vector3Dot(minCorner, surfNorm).x > 0.0f)
+                else if((surfOff - totalAmp) - Vector3Dot(minCorner, surfNorm).x > 0.0f)
                     fullSub = true;
             }
         }
@@ -2420,7 +3088,8 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
 void GatherDynamicEnvironmentCandidateBodyIds(
     mut PhysicsWorld world,
     in Aabb3D queryBox,
-    in u32 queryMask,
+    in u64 queryMask,
+    in u32 queryLayerMask,
     in u8 reqNodeFlags
 ){
     world.ensureCpuBroadphaseSynced();
@@ -2442,6 +3111,7 @@ void GatherDynamicEnvironmentCandidateBodyIds(
     world.m_broadPhase.trees[s_TreeDynamic].queryAabbFiltered(
         queryBox,
         queryMask,
+        queryLayerMask,
         reqNodeFlags,
         lambda[in worldRef, in epoch, mut visitStamps, mut candBodyIds](in u32 proxyId, in u32 shapeIdx) -> b8{
             if(shapeIdx >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdx].alive())
@@ -2474,6 +3144,7 @@ b8 TryBuildFluidQueryAabb(in FluidVolume fluid, in VectorSingle surfNorm, mut Aa
         for(usize gi = 0u; gi < fluid.gerstnerWaves.size(); ++gi)
             wavePad += Abs(VectorSingle(fluid.gerstnerWaves[gi].amplitude)).x;
     }
+    wavePad += fluid.dynamicWaveMaxAmplitudePad();
 
     if(fluid.shape == FluidVolumeShape::BoxAabb){
         outQueryBox = Aabb3D(
@@ -2676,7 +3347,7 @@ b8 ComputeFluidBodyWrenchWithSubmersion(
     VectorSingle waveT1(0.0f);
     VectorSingle waveT2(0.0f);
     fluid.computeSurfaceTangentBasis(surfNorm, waveT1, waveT2);
-    const b8 analyticSplashNormal = (fluid.shape == FluidVolumeShape::Sphere || fluid.shape == FluidVolumeShape::BoxAabb || fluid.shape == FluidVolumeShape::Obb);
+    const b8 analyticSplashNormal = !fluid.hasSurfaceCallback() && !fluid.hasDynamicWaveGrid() && (fluid.shape == FluidVolumeShape::Sphere || fluid.shape == FluidVolumeShape::BoxAabb || fluid.shape == FluidVolumeShape::Obb);
     const b8 needEvalNormal = (fluid.liftCoeff != 0.0f) || !analyticSplashNormal;
     fluid.evaluateSurfaceWithWaveBasis(cob, surfNorm, waveT1, waveT2, timeSec, needEvalNormal, cobDepth, localFlowVel, localSurfNorm);
     if(!analyticSplashNormal){
@@ -2747,6 +3418,28 @@ b8 ComputeFluidBodyWrenchWithSubmersion(
     return IsFinite(totalForce.xyz) && IsFinite(totalTorque.xyz);
 }
 
+f32 ComputeZoneFieldFalloff(in ForceField field, in VectorSingle pos, mut b8 outOutside){
+    outOutside = false;
+    if(field.radius <= 0.0f)
+        return 1.0f;
+    if(
+        field.falloffMode != ForceFieldFalloffMode::Linear
+        && field.falloffMode != ForceFieldFalloffMode::Exponential
+        && field.falloffMode != ForceFieldFalloffMode::Smoothstep
+    )
+        return 1.0f;
+    const VectorSingle refPt = field.sphereShapeCenter();
+    const f32 distSq = Vector3LengthSq(VectorSingle(pos - refPt, 0.0f)).x;
+    if(distSq > field.radius * field.radius && field.falloffMode != ForceFieldFalloffMode::Exponential){
+        outOutside = true;
+        return 0.0f;
+    }
+    f32 invDist = 1.0f;
+    if(distSq > 1.0e-12f)
+        invDist = Rsqrt(VectorSingle(distSq)).x;
+    return ComputeForceFieldFalloff(field, distSq, invDist);
+}
+
 b8 ComputeForceFieldBodyForceDirectWithGravFlag(
     in PhysicsWorld world,
     in BodySim sim,
@@ -2788,11 +3481,25 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
             rayOrig = vOrigin + hoistedDir * Vector3Dot(pos - vOrigin, hoistedDir).x;
             hasOcclRay = true;
         }
-        else if(field.type == ForceFieldType::BoxWind || field.type == ForceFieldType::Directional){
+        else if(
+            field.type == ForceFieldType::BoxWind
+            || field.type == ForceFieldType::Directional
+            || field.type == ForceFieldType::GlobalGravity
+            || field.type == ForceFieldType::LocalGravityOverride
+        ){
             f32 backDist = 50.0f;
             if(field.radius > 0.0f)
                 backDist = field.radius;
             rayOrig = pos - hoistedDir * backDist;
+            hasOcclRay = true;
+        }
+        else if(
+            field.type == ForceFieldType::Turbulence
+            || field.type == ForceFieldType::AeroDrag
+            || field.type == ForceFieldType::DampingZone
+            || field.type == ForceFieldType::VectorField
+        ){
+            rayOrig = field.sphereShapeCenter();
             hasOcclRay = true;
         }
         if(hasOcclRay){
@@ -2814,8 +3521,13 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
     const f32 bodyMass = 1.0f / sim.invMass();
     VectorSingle appliedForce(0.0f);
     VectorSingle appliedTorque(0.0f);
+    b8 outsideZone = false;
+    const f32 zoneFalloff = ComputeZoneFieldFalloff(field, pos, outsideZone);
+
     if(field.type == ForceFieldType::GlobalGravity){
-        appliedForce = hoistedDir * (field.strength * bodyMass * sim.gravityScale);
+        if(outsideZone)
+            return false;
+        appliedForce = hoistedDir * (field.strength * bodyMass * sim.gravityScale * zoneFalloff);
     }
     else if(field.type == ForceFieldType::PointGravity){
         const VectorSingle diff = VectorSingle(field.originOrDirection, 0.0f) - pos;
@@ -2861,6 +3573,8 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
         appliedForce = dir * (field.strength * bodyMass * falloff);
     }
     else if(field.type == ForceFieldType::BoxWind){
+        if(outsideZone)
+            return false;
         VectorSingle windVel = hoistedDir * field.strength;
         VectorSingle windCurl(0.0f);
         if(field.turbulenceAmplitude > 0.0f){
@@ -2879,17 +3593,17 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
             const f32 relSp = relSq * invRel;
             const f32 windCoeff = Max(0.05f, sim.maxExtent() * sim.maxExtent()) * 2.0f;
             const f32 clampedMag = Min(relSp * windCoeff, bodyMass * relSp * invDt * 0.9f);
-            appliedForce = relWind * (clampedMag * invRel);
+            appliedForce = relWind * (clampedMag * invRel * zoneFalloff);
         }
         if(Vector3LengthSq(windCurl).x > 1.0e-12f)
-            appliedTorque = windCurl * Max(0.1f, sim.maxExtent());
+            appliedTorque = windCurl * (Max(0.1f, sim.maxExtent()) * zoneFalloff);
     }
     else if(field.type == ForceFieldType::Directional){
         f32 falloff = 1.0f;
         if(field.radius > 0.0f && field.falloffMode != ForceFieldFalloffMode::None){
             const VectorSingle refPt = field.sphereShapeCenter();
             const f32 dSq = Vector3LengthSq(VectorSingle(pos - refPt, 0.0f)).x;
-            if(dSq > field.radius * field.radius)
+            if(dSq > field.radius * field.radius && field.falloffMode != ForceFieldFalloffMode::Exponential)
                 return false;
             f32 invD = 1.0f;
             if(dSq > 1.0e-12f)
@@ -2899,18 +3613,22 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
         appliedForce = hoistedDir * (field.strength * bodyMass * falloff);
     }
     else if(field.type == ForceFieldType::Turbulence){
+        if(outsideZone)
+            return false;
         const f32 freq = Max(0.05f, field.turbulenceFrequency);
         const f32 phase = timeSec * freq + pos.x * 0.43f + pos.y * 0.67f + pos.z * 0.89f;
         VectorSingle sV(0.0f);
         VectorSingle cV(0.0f);
         VectorSinCos(sV, cV, VectorSingle(phase, phase * 1.37f + 0.7f, phase * 0.83f + 1.9f, 0.0f));
         const VectorSingle turbDir(sV.x - cV.z * 0.5f, sV.y - cV.x * 0.5f, sV.z - cV.y * 0.5f, 0.0f);
-        const f32 amp = field.strength + field.turbulenceAmplitude;
+        const f32 amp = (field.strength + field.turbulenceAmplitude) * zoneFalloff;
         appliedForce = turbDir * (amp * bodyMass);
         appliedTorque = VectorSingle(cV.x, sV.y, cV.z, 0.0f) * (amp * Max(0.1f, sim.maxExtent()) * bodyMass * 0.25f);
     }
     else if(field.type == ForceFieldType::AeroDrag){
-        const f32 cd = Max(0.0f, field.strength);
+        if(outsideZone)
+            return false;
+        const f32 cd = Max(0.0f, field.strength) * zoneFalloff;
         const VectorSingle relV = VectorSingle(field.originOrDirection, 0.0f) - VectorSingle(state.linearVelocity);
         const f32 relSq = Vector3LengthSq(VectorSingle(relV, 0.0f)).x;
         b8 anyAero = false;
@@ -2961,11 +3679,13 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
             VectorSinCos(sinTurb, cosTurb, VectorSingle(phase, phase * 1.31f, phase * 0.79f + 1.1f, 0.0f));
             const VectorSingle turb(sinTurb.x, cosTurb.y, sinTurb.z, 0.0f);
             appliedForce = appliedForce + turb * (field.turbulenceAmplitude * bodyMass * falloff);
-            appliedTorque = hoistedDir * (field.turbulenceAmplitude * Max(0.1f, sim.maxExtent()) * bodyMass * 0.1f);
+            appliedTorque = hoistedDir * (field.turbulenceAmplitude * Max(0.1f, sim.maxExtent()) * bodyMass * 0.1f * falloff);
         }
     }
     else if(field.type == ForceFieldType::DampingZone){
-        const f32 damp = Max(0.0f, field.strength);
+        if(outsideZone)
+            return false;
+        const f32 damp = Max(0.0f, field.strength) * zoneFalloff;
         const VectorSingle linV = VectorSingle(state.linearVelocity);
         const f32 speedSq = Vector3LengthSq(VectorSingle(linV, 0.0f)).x;
         b8 anyDamp = false;
@@ -2994,10 +3714,47 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
             return false;
     }
     else if(field.type == ForceFieldType::LocalGravityOverride){
+        if(outsideZone)
+            return false;
         if(applyWorldGravOverrideSub)
-            appliedForce = (hoistedDir * field.strength - world.gravity()) * (bodyMass * sim.gravityScale);
+            appliedForce = (hoistedDir * field.strength - world.gravity()) * (bodyMass * sim.gravityScale * zoneFalloff);
         else
-            appliedForce = (hoistedDir * field.strength) * (bodyMass * sim.gravityScale);
+            appliedForce = (hoistedDir * field.strength) * (bodyMass * sim.gravityScale * zoneFalloff);
+    }
+    else if(field.type == ForceFieldType::VectorField){
+        if(outsideZone || !field.hasVectorFieldGrid())
+            return false;
+        const f32 coupling = Max(0.0f, field.strength) * zoneFalloff;
+        if(coupling <= 0.0f)
+            return false;
+        const VectorSingle vFlow = field.sampleVectorFieldVelocity(pos);
+        const VectorSingle relFlow = vFlow - VectorSingle(state.linearVelocity);
+        const f32 relFlowSq = Vector3LengthSq(VectorSingle(relFlow, 0.0f)).x;
+        b8 anyVec = false;
+        if(relFlowSq > 1.0e-12f){
+            const f32 invRel = Rsqrt(VectorSingle(relFlowSq)).x;
+            const f32 relSp = relFlowSq * invRel;
+            const f32 vecMag = Min(coupling * bodyMass * relSp, bodyMass * relSp * invDt * 0.9f);
+            appliedForce = relFlow * (vecMag * invRel);
+            anyVec = true;
+        }
+        const VectorSingle curl = field.sampleVectorFieldCurl(pos);
+        const VectorSingle relSpin = (curl * 0.5f) - VectorSingle(state.angularVelocity);
+        const f32 spinSq = Vector3LengthSq(VectorSingle(relSpin, 0.0f)).x;
+        if(spinSq > 1.0e-12f){
+            const f32 invSpin = Rsqrt(VectorSingle(spinSq)).x;
+            const f32 spinSp = spinSq * invSpin;
+            const VectorSingle spinDir = relSpin * invSpin;
+            const f32 kInvI = Vector3Dot(spinDir, Matrix3MulVec(Matrix3FromSymMat3(sim.invInertiaWorld), spinDir)).x;
+            if(kInvI > 1.0e-10f){
+                const f32 effI = 1.0f / kInvI;
+                const f32 angMag = Min(coupling * effI * spinSp, effI * spinSp * invDt * 0.9f);
+                appliedTorque = spinDir * angMag;
+                anyVec = true;
+            }
+        }
+        if(!anyVec)
+            return false;
     }
 
     outForce = VectorSingle(appliedForce, 0.0f);
@@ -3032,8 +3789,71 @@ class FluidReconcileScratch{
     public Vector<HashMap<u64, u64>> settledSleepBodyPoses;
 }
 
+VectorSingle ComputeClosestBoxFaceNormal(in VectorSingle pL, in VectorSingle bMin, in VectorSingle bMax){
+    const f32 dNegX = Abs(VectorSingle(pL.x - bMin.x)).x;
+    const f32 dPosX = Abs(VectorSingle(bMax.x - pL.x)).x;
+    const f32 dNegY = Abs(VectorSingle(pL.y - bMin.y)).x;
+    const f32 dPosY = Abs(VectorSingle(bMax.y - pL.y)).x;
+    const f32 dNegZ = Abs(VectorSingle(pL.z - bMin.z)).x;
+    const f32 dPosZ = Abs(VectorSingle(bMax.z - pL.z)).x;
+    f32 minD = dPosY;
+    VectorSingle best(0.0f, 1.0f, 0.0f, 0.0f);
+    if(dNegY < minD){
+        minD = dNegY;
+        best = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+    }
+    if(dPosX < minD){
+        minD = dPosX;
+        best = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+    }
+    if(dNegX < minD){
+        minD = dNegX;
+        best = VectorSingle(-1.0f, 0.0f, 0.0f, 0.0f);
+    }
+    if(dPosZ < minD){
+        minD = dPosZ;
+        best = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+    }
+    if(dNegZ < minD)
+        best = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
+    return best;
+}
+
+VectorSingle ComputeFluidSplashNormal(in FluidVolume fluid, in VectorSingle surfNorm, in VectorSingle point, in f32 timeSec){
+    if(fluid.hasSurfaceCallback() || fluid.hasDynamicWaveGrid())
+        return fluid.surfaceNormalAt(point, surfNorm, timeSec);
+    if(fluid.shape == FluidVolumeShape::Sphere)
+        return SafeNormalizeVec3(VectorSingle(point - VectorSingle(fluid.surfaceNormalOffset, 0.0f), 0.0f), surfNorm);
+    if(fluid.shape == FluidVolumeShape::BoxAabb){
+        const VectorSingle bMin = VectorSingle(fluid.bounds.lowerBound);
+        const VectorSingle bMax = VectorSingle(fluid.bounds.upperBound);
+        if(point.x >= bMin.x && point.x <= bMax.x && point.y >= bMin.y && point.y <= bMax.y && point.z >= bMin.z && point.z <= bMax.z)
+            return ComputeClosestBoxFaceNormal(point, bMin, bMax);
+        return SafeNormalizeVec3(point - Clamp(point, bMin, bMax), surfNorm);
+    }
+    if(fluid.shape == FluidVolumeShape::Obb){
+        const VectorSingle c = VectorSingle(fluid.obbCenter, 0.0f);
+        const VectorSingle r = SafeNormalizeQuat(VectorSingle(fluid.obbRotation));
+        const VectorSingle he = Max(VectorSingle(fluid.obbHalfExtents, 0.0f), VectorSingle(1.0e-3f, 1.0e-3f, 1.0e-3f, 0.0f));
+        const VectorSingle pL = Vector3InverseRotate(point - c, r);
+        VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
+        if(pL.x >= -he.x && pL.x <= he.x && pL.y >= -he.y && pL.y <= he.y && pL.z >= -he.z && pL.z <= he.z)
+            localN = ComputeClosestBoxFaceNormal(pL, -he, he);
+        else
+            localN = SafeNormalizeVec3(pL - Clamp(pL, -he, he), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        return SafeNormalizeVec3(Vector3Rotate(localN, r), surfNorm);
+    }
+    return fluid.surfaceNormalAt(point, surfNorm, timeSec);
+}
+
+VectorSingle ResolveFluidSampleImpactNormal(in FluidVolume fluid, in VectorSingle surfNorm, in FluidSubmersionResult sub, in f32 timeSec){
+    if(sub.hasSurfaceNormal)
+        return SafeNormalizeVec3(VectorSingle(sub.surfaceNormal), surfNorm);
+    return ComputeFluidSplashNormal(fluid, surfNorm, VectorSingle(sub.centerOfBuoyancy), timeSec);
+}
+
 u64 ComputeFluidStaticEnvSignature(in FluidVolume fluid, in VectorSingle grav){
-    if(!fluid.enabled || fluid.hasSurfaceCallback() || fluid.shape == FluidVolumeShape::GerstnerOcean || fluid.waveAmplitude != 0.0f)
+    if(!fluid.enabled || fluid.hasSurfaceCallback() || fluid.hasDynamicWaveGrid() || fluid.shape == FluidVolumeShape::GerstnerOcean || fluid.waveAmplitude != 0.0f)
         return 0u;
     u64 h = FluidHashMixU64(cast<u64>(0x243f6a8885a308d3u), cast<u64>(fluid.shape) + 1u);
     h = FluidHashVec4(h, VectorSingle(fluid.surfaceNormalOffset));
@@ -3125,14 +3945,15 @@ void TryWakeFluidSleepingBody(
         wakeForces.push_back(f32x4(wf, 0.0f));
         wakeTorques.push_back(f32x4(wt, 0.0f));
         if(collectWokenSamples){
+            const VectorSingle impactNorm = ResolveFluidSampleImpactNormal(fluid, surfNorm, wSub, timeSec);
             FluidCandidateSample ws;
             ws.bodyId = world.makeBodyId(bIdx);
             ws.submergedFraction = wSub.submergedFraction;
-            ws.impactSpeed = Max(0.0f, -Vector3Dot(VectorSingle(sSt.linearVelocity), surfNorm).x);
+            ws.impactSpeed = Max(0.0f, -Vector3Dot(VectorSingle(sSt.linearVelocity), impactNorm).x);
             ws.impactImpulse = bodyMass * ws.impactSpeed;
             ws.cob = wSub.centerOfBuoyancy;
-            ws.localSurfNorm = wSub.surfaceNormal;
-            ws.hasLocalSurfNorm = wSub.hasSurfaceNormal;
+            ws.localSurfNorm = f32x4(impactNorm, 0.0f);
+            ws.hasLocalSurfNorm = true;
             outWokenSamples.push_back(ws);
         }
         return;
@@ -3189,10 +4010,11 @@ void PrepareFluidEnvironmentCandidatesInternal(
     }
 
     if(useBroadphase){
-        const u32 queryMask = world.broadPhaseQueryMask(fluid.filter);
-        if(queryMask == 0u)
+        const u64 queryMask = world.broadPhaseQueryMask(fluid.filter);
+        const u32 queryLayerMask = world.broadPhaseQueryLayerMask(fluid.filter);
+        if(queryMask == 0u || queryLayerMask == 0u)
             return;
-        GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, s_TreeNodeHasNonSensor);
+        GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, queryLayerMask, s_TreeNodeHasNonSensor);
         const usize candCount = world.m_cpuScratch.envCandidateBodies.size();
         usize preAwakeCount = 0u;
         for(usize ci = 0u; ci < candCount; ++ci){
@@ -3299,10 +4121,11 @@ void PrepareForceFieldEnvironmentCandidatesWithGravStamps(
         gravStamps.resize(bodyCount, 0u);
 
     if(useBroadphase){
-        const u32 queryMask = world.broadPhaseQueryMask(field.filter);
-        if(queryMask == 0u)
+        const u64 queryMask = world.broadPhaseQueryMask(field.filter);
+        const u32 queryLayerMask = world.broadPhaseQueryLayerMask(field.filter);
+        if(queryMask == 0u || queryLayerMask == 0u)
             return;
-        GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, 0u);
+        GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, queryLayerMask, 0u);
         const usize candCount = world.m_cpuScratch.envCandidateBodies.size();
         usize preAwakeCount = 0u;
         for(usize ci = 0u; ci < candCount; ++ci){
@@ -3365,59 +4188,22 @@ void PrepareForceFieldEnvironmentCandidatesWithGravStamps(
     outWorkCount = origAwakeCount;
 }
 
-VectorSingle ComputeClosestBoxFaceNormal(in VectorSingle pL, in VectorSingle bMin, in VectorSingle bMax){
-    const f32 dNegX = Abs(VectorSingle(pL.x - bMin.x)).x;
-    const f32 dPosX = Abs(VectorSingle(bMax.x - pL.x)).x;
-    const f32 dNegY = Abs(VectorSingle(pL.y - bMin.y)).x;
-    const f32 dPosY = Abs(VectorSingle(bMax.y - pL.y)).x;
-    const f32 dNegZ = Abs(VectorSingle(pL.z - bMin.z)).x;
-    const f32 dPosZ = Abs(VectorSingle(bMax.z - pL.z)).x;
-    f32 minD = dPosY;
-    VectorSingle best(0.0f, 1.0f, 0.0f, 0.0f);
-    if(dNegY < minD){
-        minD = dNegY;
-        best = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+void StepFluidDynamicWaveGridFromSamples(mut FluidVolume fluid, in Span<FluidCandidateSample> samples, in f32 dt){
+    if(!fluid.hasDynamicWaveGrid() || dt <= 0.0f)
+        return;
+    const f32 impScale = Max(0.0f, fluid.waveImpulseScale);
+    if(impScale > 0.0f){
+        const f32 maxDelta = Max(0.25f, fluid.waveMaxAmplitude) * 8.0f;
+        for(usize si = 0u; si < samples.size(); ++si){
+            in FluidCandidateSample s = samples[si];
+            if(!s.bodyId.valid() || s.submergedFraction <= 1.0e-5f || s.impactSpeed <= 0.05f)
+                continue;
+            const f32 radius = Max(fluid.waveGridCellSize * 1.25f, 0.35f + s.submergedFraction * 0.65f);
+            const f32 impulseVel = -Min(maxDelta, s.impactImpulse * impScale);
+            fluid.addWaveDisturbance(VectorSingle(s.cob), impulseVel, radius);
+        }
     }
-    if(dPosX < minD){
-        minD = dPosX;
-        best = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
-    }
-    if(dNegX < minD){
-        minD = dNegX;
-        best = VectorSingle(-1.0f, 0.0f, 0.0f, 0.0f);
-    }
-    if(dPosZ < minD){
-        minD = dPosZ;
-        best = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
-    }
-    if(dNegZ < minD)
-        best = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
-    return best;
-}
-
-VectorSingle ComputeFluidSplashNormal(in FluidVolume fluid, in VectorSingle surfNorm, in VectorSingle point, in f32 timeSec){
-    if(fluid.shape == FluidVolumeShape::Sphere)
-        return SafeNormalizeVec3(VectorSingle(point - VectorSingle(fluid.surfaceNormalOffset, 0.0f), 0.0f), surfNorm);
-    if(fluid.shape == FluidVolumeShape::BoxAabb){
-        const VectorSingle bMin = VectorSingle(fluid.bounds.lowerBound);
-        const VectorSingle bMax = VectorSingle(fluid.bounds.upperBound);
-        if(point.x >= bMin.x && point.x <= bMax.x && point.y >= bMin.y && point.y <= bMax.y && point.z >= bMin.z && point.z <= bMax.z)
-            return ComputeClosestBoxFaceNormal(point, bMin, bMax);
-        return SafeNormalizeVec3(point - Clamp(point, bMin, bMax), surfNorm);
-    }
-    if(fluid.shape == FluidVolumeShape::Obb){
-        const VectorSingle c = VectorSingle(fluid.obbCenter, 0.0f);
-        const VectorSingle r = SafeNormalizeQuat(VectorSingle(fluid.obbRotation));
-        const VectorSingle he = Max(VectorSingle(fluid.obbHalfExtents, 0.0f), VectorSingle(1.0e-3f, 1.0e-3f, 1.0e-3f, 0.0f));
-        const VectorSingle pL = Vector3InverseRotate(point - c, r);
-        VectorSingle localN(0.0f, 1.0f, 0.0f, 0.0f);
-        if(pL.x >= -he.x && pL.x <= he.x && pL.y >= -he.y && pL.y <= he.y && pL.z >= -he.z && pL.z <= he.z)
-            localN = ComputeClosestBoxFaceNormal(pL, -he, he);
-        else
-            localN = SafeNormalizeVec3(pL - Clamp(pL, -he, he), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        return SafeNormalizeVec3(Vector3Rotate(localN, r), surfNorm);
-    }
-    return fluid.surfaceNormalAt(point, surfNorm, timeSec);
+    fluid.stepDynamicWaveGrid(dt);
 }
 
 void ReconcileFluidImmersionRecords(
@@ -3562,14 +4348,15 @@ void ApplyFluidVolumeAndSampleRange(
             sim.setForce(sim.force() + f);
             sim.setTorque(sim.torque() + t);
             const f32 bodyMass = 1.0f / Max(1.0e-6f, sim.invMass());
+            const VectorSingle impactNorm = ResolveFluidSampleImpactNormal(fluid, surfNorm, sub, timeSec);
             mut FluidCandidateSample cs = outSamples[k];
             cs.bodyId = world.makeBodyId(sim.bodyId);
             cs.submergedFraction = sub.submergedFraction;
-            cs.impactSpeed = Max(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), surfNorm).x);
+            cs.impactSpeed = Max(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), impactNorm).x);
             cs.impactImpulse = bodyMass * cs.impactSpeed;
             cs.cob = sub.centerOfBuoyancy;
-            cs.localSurfNorm = sub.surfaceNormal;
-            cs.hasLocalSurfNorm = sub.hasSurfaceNormal;
+            cs.localSurfNorm = f32x4(impactNorm, 0.0f);
+            cs.hasLocalSurfNorm = true;
         }
     }
 }
@@ -3581,7 +4368,7 @@ void AppendPrecomputedWokenSamples(in Vector<FluidCandidateSample> wokenSamples,
 
 void StepFluidVolumeWithEvents(
     mut PhysicsWorld world,
-    in FluidVolume fluid,
+    mut FluidVolume fluid,
     in u32 fluidIndex,
     in f32 timeSec,
     in f32 dt,
@@ -3627,11 +4414,12 @@ void StepFluidVolumeWithEvents(
         outEvents,
         reconcileScratch
     );
+    StepFluidDynamicWaveGridFromSamples(fluid, Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()), dt);
 }
 
 void StepFluidVolumeWithEventsWithScheduler(
     mut PhysicsWorld world,
-    in FluidVolume fluid,
+    mut FluidVolume fluid,
     in u32 fluidIndex,
     in f32 timeSec,
     in f32 dt,
@@ -3674,6 +4462,7 @@ void StepFluidVolumeWithEventsWithScheduler(
             outEvents,
             reconcileScratch
         );
+        StepFluidDynamicWaveGridFromSamples(fluid, Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()), dt);
         return;
     }
 
@@ -3702,14 +4491,15 @@ void StepFluidVolumeWithEventsWithScheduler(
                 sim.setForce(sim.force() + f);
                 sim.setTorque(sim.torque() + t);
                 const f32 bodyMass = 1.0f / Max(1.0e-6f, sim.invMass());
+                const VectorSingle impactNorm = ResolveFluidSampleImpactNormal(fluidRef, surfNorm, sub, timeSec);
                 mut FluidCandidateSample cs = samplesMut[k];
                 cs.bodyId = worldRef.makeBodyId(sim.bodyId);
                 cs.submergedFraction = sub.submergedFraction;
-                cs.impactSpeed = Max(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), surfNorm).x);
+                cs.impactSpeed = Max(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), impactNorm).x);
                 cs.impactImpulse = bodyMass * cs.impactSpeed;
                 cs.cob = sub.centerOfBuoyancy;
-                cs.localSurfNorm = sub.surfaceNormal;
-                cs.hasLocalSurfNorm = sub.hasSurfaceNormal;
+                cs.localSurfNorm = f32x4(impactNorm, 0.0f);
+                cs.hasLocalSurfNorm = true;
             }
         },
         CpuTaskOptions()
@@ -3729,6 +4519,18 @@ void StepFluidVolumeWithEventsWithScheduler(
         outEvents,
         reconcileScratch
     );
+    StepFluidDynamicWaveGridFromSamples(fluid, Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()), dt);
+}
+
+Aabb3D ComputeForceFieldObbAabb(in ForceField field){
+    const VectorSingle c = VectorSingle(field.obbCenter, 0.0f);
+    const VectorSingle r = SafeNormalizeQuat(VectorSingle(field.obbRotation));
+    const VectorSingle he = Max(VectorSingle(field.obbHalfExtents, 0.0f), VectorSingle(1.0e-3f, 1.0e-3f, 1.0e-3f, 0.0f));
+    const VectorSingle ax = Abs(Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), r)) * he.x;
+    const VectorSingle ay = Abs(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), r)) * he.y;
+    const VectorSingle az = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), r)) * he.z;
+    const VectorSingle wHe = ax + ay + az;
+    return Aabb3D(c - wHe, c + wHe);
 }
 
 b8 ResolveForceFieldDirectionAndQueryBox(in ForceField field, mut VectorSingle outHoistedDir, mut Aabb3D outQueryBox){
@@ -3742,14 +4544,7 @@ b8 ResolveForceFieldDirectionAndQueryBox(in ForceField field, mut VectorSingle o
 
     if(field.useBounds){
         if(field.shape == ForceFieldShape::Obb){
-            const VectorSingle c = VectorSingle(field.obbCenter, 0.0f);
-            const VectorSingle r = SafeNormalizeQuat(VectorSingle(field.obbRotation));
-            const VectorSingle he = Max(VectorSingle(field.obbHalfExtents, 0.0f), VectorSingle(1.0e-3f, 1.0e-3f, 1.0e-3f, 0.0f));
-            const VectorSingle ax = Abs(Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), r)) * he.x;
-            const VectorSingle ay = Abs(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), r)) * he.y;
-            const VectorSingle az = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), r)) * he.z;
-            const VectorSingle wHe = ax + ay + az;
-            outQueryBox = Aabb3D(c - wHe, c + wHe);
+            outQueryBox = ComputeForceFieldObbAabb(field);
             return true;
         }
         if(field.shape == ForceFieldShape::Sphere){
@@ -3770,6 +4565,14 @@ b8 ResolveForceFieldDirectionAndQueryBox(in ForceField field, mut VectorSingle o
             return true;
         }
         outQueryBox = field.bounds;
+        return true;
+    }
+
+    if(field.type == ForceFieldType::VectorField && field.hasVectorFieldGrid()){
+        if(field.shape == ForceFieldShape::Obb)
+            outQueryBox = ComputeForceFieldObbAabb(field);
+        else
+            outQueryBox = field.bounds;
         return true;
     }
 
@@ -3881,6 +4684,17 @@ u32 BumpEnvSingleFieldGravEpoch(mut PhysicsWorld world){
     return world.m_cpuScratch.envSingleFieldGravEpoch;
 }
 
+u32 ResetWorldForceFieldGravityOverrideEpoch(mut PhysicsWorld world){
+    return BumpEnvSingleFieldGravEpoch(world);
+}
+
+void ApplyForceFieldWithEpoch(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt, in u32 gravEpoch){
+    u32 effEpoch = 0u;
+    if(field.type == ForceFieldType::LocalGravityOverride)
+        effEpoch = gravEpoch;
+    ApplyForceFieldInternal(world, field, timeSec, dt, world.m_cpuScratch.envSingleFieldGravStamps, effEpoch);
+}
+
 void ApplyForceField(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt){
     u32 epoch = 0u;
     if(field.type == ForceFieldType::LocalGravityOverride)
@@ -3955,6 +4769,13 @@ void ApplyForceFieldWithSchedulerInternal(
     ApplyForceFieldRangeWithGravStamps(field, hoistedDir, timeSec, invDt, useBroadphase, workCount, world, gravStamps, gravEpoch);
 }
 
+void ApplyForceFieldWithSchedulerEpoch(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt, mut CpuTaskScheduler cpuScheduler, in u32 gravEpoch){
+    u32 effEpoch = 0u;
+    if(field.type == ForceFieldType::LocalGravityOverride)
+        effEpoch = gravEpoch;
+    ApplyForceFieldWithSchedulerInternal(world, field, timeSec, dt, cpuScheduler, world.m_cpuScratch.envSingleFieldGravStamps, effEpoch);
+}
+
 void ApplyForceFieldWithScheduler(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt, mut CpuTaskScheduler cpuScheduler){
     u32 epoch = 0u;
     if(field.type == ForceFieldType::LocalGravityOverride)
@@ -4000,14 +4821,21 @@ void ApplyFluidVolumeToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in F
     }
 }
 
-void ApplyForceFieldToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in ForceField field, in f32 timeSec, in f32 dt){
+b8 ApplyForceFieldToSingleBodyWithGravFlag(
+    mut PhysicsWorld world,
+    in BodyId bodyId,
+    in ForceField field,
+    in f32 timeSec,
+    in f32 dt,
+    in b8 applyWorldGravOverrideSub
+){
     if(!field.enabled || dt <= 0.0f || !world.isValidBody(bodyId))
-        return;
+        return false;
     world.flushDirtyBodyMasses();
     const u32 bIdx = bodyId.index;
     in Body b = world.m_bodies[bIdx];
     if(!b.alive || b.type != BodyType::Dynamic || b.setIndex >= world.m_solverSets.size())
-        return;
+        return false;
 
     VectorSingle hoistedDir(0.0f);
     Aabb3D unusedBox;
@@ -4017,8 +4845,8 @@ void ApplyForceFieldToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in Fo
     in BodyState sSt = world.m_solverSets[b.setIndex].states[b.localIndex];
     VectorSingle f(0.0f);
     VectorSingle t(0.0f);
-    if(!ComputeForceFieldBodyForceDirectWithGravFlag(world, sSim, sSt, field, hoistedDir, timeSec, invDt, true, f, t))
-        return;
+    if(!ComputeForceFieldBodyForceDirectWithGravFlag(world, sSim, sSt, field, hoistedDir, timeSec, invDt, applyWorldGravOverrideSub, f, t))
+        return false;
 
     if(b.setIndex != s_AwakeSetIndex)
         world.wakeBody(bodyId);
@@ -4029,6 +4857,11 @@ void ApplyForceFieldToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in Fo
         aSim.setForce(aSim.force() + f);
         aSim.setTorque(aSim.torque() + t);
     }
+    return true;
+}
+
+void ApplyForceFieldToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in ForceField field, in f32 timeSec, in f32 dt){
+    ApplyForceFieldToSingleBodyWithGravFlag(world, bodyId, field, timeSec, dt, true);
 }
 
 class PhysicsEnvironment{
@@ -4051,11 +4884,31 @@ class PhysicsEnvironment{
         this.m_reconcileScratch.lastStaticFluidSigs.clear();
         this.m_reconcileScratch.lastStaticFluidWorldGeomStamps.clear();
         this.m_reconcileScratch.settledSleepBodyPoses.clear();
+        this.m_gravOverrideStamps.clear();
+        this.m_gravOverrideEpoch = 0u;
         this.stepSplashEvents.clear();
     }
 
     public Span<FluidImmersionRecord> activeImmersions()const{
         return this.m_immersionState;
+    }
+
+    public u32 gravOverrideEpoch()const{
+        return this.m_gravOverrideEpoch;
+    }
+
+    public void finalizeSnapshotRestore(in Span<FluidImmersionRecord> immersions){
+        this.resetTracking();
+        this.m_immersionState.reserve(immersions.size());
+        for(usize i = 0u; i < immersions.size(); ++i)
+            this.m_immersionState.push_back(immersions[i]);
+    }
+
+    public void remapWorldIndex(in u16 targetWorldIndex){
+        for(usize i = 0u; i < this.m_immersionState.size(); ++i){
+            if(this.m_immersionState[i].bodyId.valid())
+                this.m_immersionState[i].bodyId.worldIndex = targetWorldIndex;
+        }
     }
 
     public void shiftOrigin(in VectorSingle negDelta){

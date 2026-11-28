@@ -92,18 +92,44 @@ bool nwbPhysicsSubsysForceFieldContains(const NwbPhysicsGpuForceField f, const u
     return all(pos >= f.boundsMinMeta.xyz) && all(pos <= f.boundsMaxSuction.xyz);
 }
 
+float nwbPhysicsSubsysZoneFieldFalloff(
+    const NwbPhysicsGpuForceField f,
+    const uint fieldShape,
+    const uint falloffMode,
+    const float3 pos,
+    out bool outOutside
+){
+    outOutside = false;
+    const float radius = f.axisRadius.w;
+    if(radius <= 0.0f)
+        return 1.0f;
+    if(falloffMode != 2u && falloffMode != 3u && falloffMode != 4u)
+        return 1.0f;
+    const float3 refPt = (fieldShape == 3u) ? f.shapeHalfExtentsExtra.xyz : f.shapeCenterOrCapA.xyz;
+    const float3 diff = pos - refPt;
+    const float distSq = dot(diff, diff);
+    if(distSq > radius * radius && falloffMode != 3u){
+        outOutside = true;
+        return 0.0f;
+    }
+    const float invDist = (distSq > 1.0e-12f) ? rsqrt(distSq) : 1.0f;
+    return nwbPhysicsSubsysFieldFalloff(falloffMode, distSq, invDist, f.minDistFalloffTurb.x, f.minDistFalloffTurb.y, radius);
+}
+
 float3 nwbPhysicsSubsysEvalForceField(
     const NwbPhysicsGpuForceField f,
     const float3 pos,
     const float3 linVel,
     const float bodyMass,
     const float maxExtent,
+    const float softParticleRadius,
     const bool hasInertia,
     const float timeSec,
     const float invDt,
     const float3 worldGrav,
     const float gravScale,
-    inout float3 inoutTorque
+    inout float3 inoutTorque,
+    inout bool inoutLocalGravSubApplied
 ){
     const uint packedMeta = asuint(f.boundsMinMeta.w);
     const uint fieldType = packedMeta & 0xffu;
@@ -132,8 +158,14 @@ float3 nwbPhysicsSubsysEvalForceField(
     else
         hoistedDir = nwbPhysicsSafeNormal(f.axisRadius.xyz, float3(0.0f, 1.0f, 0.0f));
 
-    if(fieldType == 0u)
-        return hoistedDir * (strength * bodyMass * gravScale);
+    bool outsideZone = false;
+    const float zoneFalloff = nwbPhysicsSubsysZoneFieldFalloff(f, fieldShape, falloffMode, pos, outsideZone);
+
+    if(fieldType == 0u){
+        if(outsideZone)
+            return float3(0.0f, 0.0f, 0.0f);
+        return hoistedDir * (strength * bodyMass * gravScale * zoneFalloff);
+    }
 
     if(fieldType == 1u || fieldType == 10u){
         const float3 diff = f.originOrDirStrength.xyz - pos;
@@ -170,6 +202,8 @@ float3 nwbPhysicsSubsysEvalForceField(
     }
 
     if(fieldType == 2u){
+        if(outsideZone)
+            return float3(0.0f, 0.0f, 0.0f);
         float3 windV = hoistedDir * strength;
         float3 windCurl = float3(0.0f, 0.0f, 0.0f);
         if(turbAmp > 0.0f){
@@ -178,10 +212,10 @@ float3 nwbPhysicsSubsysEvalForceField(
             float3 cV;
             sincos(float3(ph, ph * 1.31f, ph * 0.79f + 1.1f), sV, cV);
             windV += float3(sV.x, cV.y, sV.z) * turbAmp;
-            windCurl = float3(cV.x, -sV.y, cV.z) * (turbAmp * safeExt * 0.5f);
+            windCurl = float3(cV.x, -sV.y, cV.z) * (turbAmp * safeExt * (hasInertia ? 0.5f : 0.0f));
         }
-        if(dot(windCurl, windCurl) > 1.0e-12f)
-            inoutTorque += windCurl * safeExt;
+        if(hasInertia && dot(windCurl, windCurl) > 1.0e-12f)
+            inoutTorque += windCurl * (safeExt * zoneFalloff);
         const float3 relWind = windV - linVel;
         const float relSq = dot(relWind, relWind);
         if(relSq <= 1.0e-12f)
@@ -190,15 +224,16 @@ float3 nwbPhysicsSubsysEvalForceField(
         const float relSp = relSq * invRel;
         const float windCoeff = hasInertia ? (max(0.05f, maxExtent * maxExtent) * 2.0f) : maxExtent;
         const float clampedMag = min(relSp * windCoeff, bodyMass * relSp * invDt * 0.9f);
-        return relWind * (clampedMag * invRel);
+        return relWind * (clampedMag * invRel * zoneFalloff);
     }
 
     if(fieldType == 7u){
         float fall = 1.0f;
         if(radius > 0.0f && falloffMode != 0u){
-            const float3 diff = pos - f.shapeCenterOrCapA.xyz;
+            const float3 refPt = (fieldShape == 3u) ? f.shapeHalfExtentsExtra.xyz : f.shapeCenterOrCapA.xyz;
+            const float3 diff = pos - refPt;
             const float dSq = dot(diff, diff);
-            if(dSq > radius * radius)
+            if(dSq > radius * radius && falloffMode != 3u)
                 return float3(0.0f, 0.0f, 0.0f);
             const float invD = (dSq > 1.0e-12f) ? rsqrt(dSq) : 1.0f;
             fall = nwbPhysicsSubsysFieldFalloff(falloffMode, dSq, invD, minDist, falloffPow, radius);
@@ -207,26 +242,31 @@ float3 nwbPhysicsSubsysEvalForceField(
     }
 
     if(fieldType == 8u){
+        if(outsideZone)
+            return float3(0.0f, 0.0f, 0.0f);
         const float freq = max(0.05f, turbFreq);
         const float ph = timeSec * freq + pos.x * 0.43f + pos.y * 0.67f + pos.z * 0.89f;
         float3 sV;
         float3 cV;
         sincos(float3(ph, ph * 1.37f + 0.7f, ph * 0.83f + 1.9f), sV, cV);
         const float3 turbDir = float3(sV.x - cV.z * 0.5f, sV.y - cV.x * 0.5f, sV.z - cV.y * 0.5f);
-        const float amp = strength + turbAmp;
-        inoutTorque += float3(cV.x, sV.y, cV.z) * (amp * safeExt * bodyMass * 0.25f);
+        const float amp = (strength + turbAmp) * zoneFalloff;
+        if(hasInertia)
+            inoutTorque += float3(cV.x, sV.y, cV.z) * (amp * safeExt * bodyMass * 0.25f);
         return turbDir * (amp * bodyMass);
     }
 
     if(fieldType == 9u){
-        const float cd = max(0.0f, strength);
+        if(outsideZone)
+            return float3(0.0f, 0.0f, 0.0f);
+        const float cd = max(0.0f, strength) * zoneFalloff;
         const float3 relV = f.originOrDirStrength.xyz - linVel;
         const float relSq = dot(relV, relV);
         float3 res = float3(0.0f, 0.0f, 0.0f);
         if(relSq > 1.0e-12f && cd > 0.0f){
             const float invRel = rsqrt(relSq);
             const float relSp = relSq * invRel;
-            const float area = max(0.05f, maxExtent * maxExtent);
+            const float area = hasInertia ? max(0.05f, maxExtent * maxExtent) : max(1.0e-3f, 3.1415926535897932f * softParticleRadius * softParticleRadius);
             const float dragMag = min(0.5f * cd * area * relSq, bodyMass * relSp * invDt * 0.9f);
             res = relV * (dragMag * invRel);
         }
@@ -252,13 +292,16 @@ float3 nwbPhysicsSubsysEvalForceField(
             float3 cV;
             sincos(float3(ph, ph * 1.31f, ph * 0.79f + 1.1f), sV, cV);
             res += float3(sV.x, cV.y, sV.z) * (turbAmp * bodyMass * fall);
-            inoutTorque += hoistedDir * (turbAmp * safeExt * bodyMass * 0.1f);
+            if(hasInertia)
+                inoutTorque += hoistedDir * (turbAmp * safeExt * bodyMass * 0.1f * fall);
         }
         return res;
     }
 
     if(fieldType == 4u){
-        const float damp = max(strength, 0.0f);
+        if(outsideZone)
+            return float3(0.0f, 0.0f, 0.0f);
+        const float damp = max(strength, 0.0f) * zoneFalloff;
         const float speedSq = dot(linVel, linVel);
         if(speedSq > 1.0e-12f && damp > 0.0f){
             const float invSp = rsqrt(speedSq);
@@ -269,14 +312,21 @@ float3 nwbPhysicsSubsysEvalForceField(
         return float3(0.0f, 0.0f, 0.0f);
     }
 
-    if(fieldType == 5u)
-        return (hoistedDir * strength - worldGrav) * (bodyMass * gravScale);
+    if(fieldType == 5u){
+        if(outsideZone)
+            return float3(0.0f, 0.0f, 0.0f);
+        const bool subWorldGrav = !inoutLocalGravSubApplied;
+        inoutLocalGravSubApplied = true;
+        const float3 effAcc = subWorldGrav ? (hoistedDir * strength - worldGrav) : (hoistedDir * strength);
+        return effAcc * (bodyMass * gravScale * zoneFalloff);
+    }
 
     return float3(0.0f, 0.0f, 0.0f);
 }
 
 void nwbPhysicsSubsysApplyForceFieldAngular(
     const NwbPhysicsGpuForceField f,
+    const float3 pos,
     const float3 angVel,
     const float maxExtent,
     const float4 invI0,
@@ -286,9 +336,18 @@ void nwbPhysicsSubsysApplyForceFieldAngular(
 ){
     const uint packedMeta = asuint(f.boundsMinMeta.w);
     const uint fieldType = packedMeta & 0xffu;
-    const float strength = f.originOrDirStrength.w;
-    if(fieldType != 4u && fieldType != 9u)
+    const uint fieldShape = (packedMeta >> 8u) & 0xffu;
+    const uint falloffMode = (packedMeta >> 16u) & 0xffu;
+    const uint enabledBounds = (packedMeta >> 24u) & 0xffu;
+    if((enabledBounds & 1u) == 0u || (fieldType != 4u && fieldType != 9u))
         return;
+    if((enabledBounds & 2u) != 0u && !nwbPhysicsSubsysForceFieldContains(f, fieldShape, pos))
+        return;
+    bool outsideZone = false;
+    const float zoneFalloff = nwbPhysicsSubsysZoneFieldFalloff(f, fieldShape, falloffMode, pos, outsideZone);
+    if(outsideZone)
+        return;
+    const float strength = max(0.0f, f.originOrDirStrength.w) * zoneFalloff;
     const float wSq = dot(angVel, angVel);
     if(wSq <= 1.0e-12f || strength <= 0.0f)
         return;
@@ -447,6 +506,211 @@ void nwbPhysicsSubsysFluidEvalSurface(
     outSurfNormal = nwbPhysicsSafeNormal(float3(0.0f, 1.0f, 0.0f) - boxSlope, surfN);
 }
 
+void nwbPhysicsSubsysGjkReduceTriangle(
+    const float3 a,
+    const float3 b,
+    const float3 c,
+    out float3 outS0,
+    out float3 outS1,
+    out float3 outS2,
+    out uint outN,
+    out float3 outV
+){
+    outS0 = a;
+    outS1 = b;
+    outS2 = c;
+    const float3 ab = b - a;
+    const float3 ac = c - a;
+    const float d1 = dot(ab, -a);
+    const float d2 = dot(ac, -a);
+    if(d1 <= 0.0f && d2 <= 0.0f){
+        outN = 1u;
+        outV = a;
+        return;
+    }
+
+    const float d3 = dot(ab, -b);
+    const float d4 = dot(ac, -b);
+    if(d3 >= 0.0f && d4 <= d3){
+        outS0 = b;
+        outN = 1u;
+        outV = b;
+        return;
+    }
+
+    const float vc = d1 * d4 - d3 * d2;
+    if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f){
+        outN = 2u;
+        outV = a + ab * (d1 / (d1 - d3));
+        return;
+    }
+
+    const float d5 = dot(ab, -c);
+    const float d6 = dot(ac, -c);
+    if(d6 >= 0.0f && d5 <= d6){
+        outS0 = c;
+        outN = 1u;
+        outV = c;
+        return;
+    }
+
+    const float vb = d5 * d2 - d1 * d6;
+    if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f){
+        outS1 = c;
+        outN = 2u;
+        outV = a + ac * (d2 / (d2 - d6));
+        return;
+    }
+
+    const float va = d3 * d6 - d5 * d4;
+    if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f){
+        outS0 = b;
+        outS1 = c;
+        outN = 2u;
+        outV = b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+        return;
+    }
+
+    outN = 3u;
+    const float denom = 1.0f / max(va + vb + vc, 1.0e-12f);
+    outV = a + ab * (vb * denom) + ac * (vc * denom);
+}
+
+float3 nwbPhysicsSubsysClosestPointOnHull(
+    const uint hullSlot,
+    const uint vOffset,
+    const uint vCount,
+    const float3 lp
+){
+    float3 s[4];
+    s[0] = g_NwbPhysicsFloat4Buffers[hullSlot][vOffset].xyz - lp;
+    s[1] = float3(0.0f, 0.0f, 0.0f);
+    s[2] = float3(0.0f, 0.0f, 0.0f);
+    s[3] = float3(0.0f, 0.0f, 0.0f);
+    uint n = 1u;
+    float3 v = s[0];
+
+    [loop] for(uint iter = 0u; iter < 12u; ++iter){
+        const float3 dir = -v;
+        const float vSq = dot(v, v);
+        if(vSq <= 1.0e-16f)
+            break;
+
+        float3 bestVert = g_NwbPhysicsFloat4Buffers[hullSlot][vOffset].xyz;
+        float bestDot = dot(bestVert, dir);
+        [loop] for(uint vi = 1u; vi < vCount; ++vi){
+            const float3 vert = g_NwbPhysicsFloat4Buffers[hullSlot][vOffset + vi].xyz;
+            const float d = dot(vert, dir);
+            if(d > bestDot){
+                bestDot = d;
+                bestVert = vert;
+            }
+        }
+
+        const float3 w = bestVert - lp;
+        if(vSq - dot(v, w) <= 1.0e-6f * (1.0f + vSq))
+            break;
+
+        bool duplicate = false;
+        [loop] for(uint ki = 0u; ki < n; ++ki){
+            const float3 dw = w - s[ki];
+            if(dot(dw, dw) <= 1.0e-12f){
+                duplicate = true;
+                break;
+            }
+        }
+        if(duplicate)
+            break;
+
+        s[n++] = w;
+        if(n == 2u){
+            float segT = 0.0f;
+            const float3 p = nwbPhysicsClosestPointOnSegment(float3(0.0f, 0.0f, 0.0f), s[0], s[1], segT);
+            if(segT <= 0.0f){
+                n = 1u;
+                v = s[0];
+            }
+            else if(segT >= 1.0f){
+                s[0] = s[1];
+                n = 1u;
+                v = s[0];
+            }
+            else{
+                v = p;
+            }
+        }
+        else if(n == 3u){
+            float3 r0;
+            float3 r1;
+            float3 r2;
+            uint rN = 0u;
+            float3 rV;
+            nwbPhysicsSubsysGjkReduceTriangle(s[0], s[1], s[2], r0, r1, r2, rN, rV);
+            s[0] = r0;
+            s[1] = r1;
+            s[2] = r2;
+            n = rN;
+            v = rV;
+        }
+        else{
+            const float3 a = s[0];
+            const float3 b = s[1];
+            const float3 c = s[2];
+            const float3 d = s[3];
+            const bool degTet = abs(dot(d - a, cross(b - a, c - a))) <= 1.0e-12f;
+
+            float bestFaceSq = 1.0e30f;
+            float3 bestR0 = a;
+            float3 bestR1 = b;
+            float3 bestR2 = c;
+            uint bestRN = 3u;
+            float3 bestRV = float3(0.0f, 0.0f, 0.0f);
+            bool anyOutside = false;
+
+            const float3 faces0[4] = { a, b, c, a };
+            const float3 faces1[4] = { b, c, a, c };
+            const float3 faces2[4] = { d, d, d, b };
+            const float3 facesOpp[4] = { c, a, b, d };
+            [loop] for(uint fi = 0u; fi < 4u; ++fi){
+                const float3 f0 = faces0[fi];
+                const float3 f1 = faces1[fi];
+                const float3 f2 = faces2[fi];
+                const float3 fN = cross(f1 - f0, f2 - f0);
+                const float sOrigin = dot(-f0, fN);
+                const float sOpp = dot(facesOpp[fi] - f0, fN);
+                if(degTet || (sOrigin * sOpp < 0.0f)){
+                    float3 r0;
+                    float3 r1;
+                    float3 r2;
+                    uint rN = 0u;
+                    float3 rV;
+                    nwbPhysicsSubsysGjkReduceTriangle(f0, f1, f2, r0, r1, r2, rN, rV);
+                    const float sq = dot(rV, rV);
+                    if(!anyOutside || sq < bestFaceSq){
+                        anyOutside = true;
+                        bestFaceSq = sq;
+                        bestR0 = r0;
+                        bestR1 = r1;
+                        bestR2 = r2;
+                        bestRN = rN;
+                        bestRV = rV;
+                    }
+                }
+            }
+            if(!anyOutside){
+                v = float3(0.0f, 0.0f, 0.0f);
+                break;
+            }
+            s[0] = bestR0;
+            s[1] = bestR1;
+            s[2] = bestR2;
+            n = bestRN;
+            v = bestRV;
+        }
+    }
+    return lp + v;
+}
+
 bool nwbPhysicsSubsysCollideParticleShape(
     const NwbPhysicsGpuShapeProxy sp,
     const float3 sOrig,
@@ -545,6 +809,8 @@ bool nwbPhysicsSubsysCollideParticleShape(
         const uint meta = asuint(sp.localRotationOrMeta.x);
         const uint vCnt = min(meta & 0xffu, NWB_PHYSICS_MAX_HULL_VERTICES);
         const uint fCnt = min((meta >> 8u) & 0xffu, NWB_PHYSICS_MAX_HULL_FACES);
+        if(vCnt == 0u || fCnt == 0u)
+            return false;
         const uint fBase = sp.filterData.w + vCnt;
         float maxD = -1.0e20f;
         float3 bestN = float3(0.0f, 1.0f, 0.0f);
@@ -558,9 +824,23 @@ bool nwbPhysicsSubsysCollideParticleShape(
         }
         if(maxD >= sumR)
             return false;
-        outNormal = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestN, sRot), float3(0.0f, 1.0f, 0.0f));
-        outPen = sumR - maxD;
-        return outPen > 1.0e-5f;
+        if(maxD <= 0.0f){
+            outNormal = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(bestN, sRot), float3(0.0f, 1.0f, 0.0f));
+            outPen = sumR - maxD;
+            return outPen > 1.0e-5f;
+        }
+        const float3 q = nwbPhysicsSubsysClosestPointOnHull(hullSlot, sp.filterData.w, vCnt, lp);
+        const float3 diff = lp - q;
+        const float dSq = dot(diff, diff);
+        if(dSq >= sumR * sumR)
+            return false;
+        const float dist = sqrt(dSq);
+        outPen = sumR - dist;
+        if(outPen <= 1.0e-5f)
+            return false;
+        const float3 localN = (dist > 1.0e-6f) ? (diff / dist) : bestN;
+        outNormal = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localN, sRot), float3(0.0f, 1.0f, 0.0f));
+        return true;
     }
 
     if(sType == NWB_PHYSICS_SHAPE_TYPE_CYLINDER){
@@ -693,8 +973,8 @@ bool nwbPhysicsSubsysCollideParticleShape(
     ){
         const uint nodeBase = asuint(sp.localRotationOrMeta.x);
         const uint triBase = sp.filterData.w;
-        const float rSqLimit = pRadius * pRadius;
-        const float3 rVec = float3(pRadius, pRadius, pRadius);
+        const float rSqLimit = sumR * sumR;
+        const float3 rVec = float3(sumR, sumR, sumR);
         const float3 qMin = lp - rVec;
         const float3 qMax = lp + rVec;
 
@@ -741,7 +1021,7 @@ bool nwbPhysicsSubsysCollideParticleShape(
         if(!found)
             return false;
         const float dist = sqrt(bestDistSq);
-        outPen = pRadius - dist;
+        outPen = sumR - dist;
         if(outPen <= 1.0e-5f)
             return false;
         const float3 localN = (dist > 1.0e-6f) ? (bestDiff / dist) : nwbPhysicsSafeNormal(bestFaceCross, float3(0.0f, 1.0f, 0.0f));
@@ -1120,14 +1400,25 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             g_NwbPhysicsUintBuffers[headSlot][tid] = NWB_PHYSICS_INVALID_INDEX;
             return;
         }
+        const uint pOutSlot = g_NwbPhysicsPushConstants.slots1.w;
+        if(flags == 3u){
+            if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+                g_NwbPhysicsFloat4Buffers[pSlot][tid] = g_NwbPhysicsFloat4Buffers[pOutSlot][tid];
+            return;
+        }
         const uint nextSlot = g_NwbPhysicsPushConstants.slots1.x;
         const uint tableMask = g_NwbPhysicsPushConstants.slots1.y;
+        const uint stateSlot = g_NwbPhysicsPushConstants.slots1.z;
         const float minDist = g_NwbPhysicsPushConstants.deltaTime;
         const float invCell = (minDist > 1.0e-5f) ? (1.0f / minDist) : 1.0f;
         const float4 posSelf = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        const uint writePSlot = (pOutSlot != NWB_PHYSICS_INVALID_INDEX) ? pOutSlot : pSlot;
         const float3 selfPos = posSelf.xyz;
-        if(!nwbFiniteFloat3(selfPos))
+        if(!nwbFiniteFloat3(selfPos)){
+            if(flags == 1u && pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+                g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posSelf;
             return;
+        }
         const int3 selfCell = int3(floor(selfPos * invCell));
 
         if(flags == 0u){
@@ -1138,8 +1429,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
+        if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+            g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posSelf;
+
         const float wSelf = max(posSelf.w, 0.0f);
         const float stiff = clamp(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f, 1.0f);
+        const float selfFric = clamp(g_NwbPhysicsPushConstants.maxLinearVelocity, 0.0f, 1.0f);
         if(wSelf <= 0.0f || minDist <= 1.0e-5f || stiff <= 0.0f)
             return;
 
@@ -1150,6 +1445,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             adjCount = g_NwbPhysicsUintBuffers[adjRangeSlot][tid * 2u + 1u];
         }
 
+        const float3 selfPrev = (stateSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags.xyz
+            : selfPos;
         const float minDistSq = minDist * minDist;
         float3 accumCorr = float3(0.0f, 0.0f, 0.0f);
         uint visitedBuckets[27];
@@ -1190,7 +1488,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                                     const float d = dSq * invD;
                                     const float wOther = max(posOther.w, 0.0f);
                                     const float massRatio = wSelf / max(wSelf + wOther, 1.0e-12f);
-                                    accumCorr += diff * (invD * (minDist - d) * stiff * massRatio);
+                                    const float pen = (minDist - d) * stiff;
+                                    const float3 nrm = diff * invD;
+                                    accumCorr += nrm * (pen * massRatio);
+                                    if(selfFric > 0.0f && stateSlot != NWB_PHYSICS_INVALID_INDEX){
+                                        const float3 pOtherPrev = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][otherIdx].prevPosFlags.xyz;
+                                        const float3 relDisp = (selfPos - selfPrev) - (posOther.xyz - pOtherPrev);
+                                        const float3 relTan = relDisp - nrm * dot(relDisp, nrm);
+                                        const float tanSq = dot(relTan, relTan);
+                                        if(tanSq > 1.0e-12f){
+                                            const float invTan = rsqrt(tanSq);
+                                            const float tanLen = tanSq * invTan;
+                                            const float maxSlide = min(tanLen, selfFric * pen);
+                                            accumCorr -= relTan * (invTan * maxSlide * massRatio);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1202,7 +1514,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
 
         if(dot(accumCorr, accumCorr) > 0.0f)
-            g_NwbPhysicsFloat4Buffers[pSlot][tid].xyz = selfPos + accumCorr;
+            g_NwbPhysicsFloat4Buffers[writePSlot][tid].xyz = selfPos + accumCorr;
         return;
     }
 
@@ -1546,6 +1858,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float dragCoeff = g_NwbPhysicsPushConstants.maxLinearVelocity;
         const float timeSec = g_NwbPhysicsPushConstants.linearSlop;
         const float3 grav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+        const float rawParticleRadius = g_NwbPhysicsPushConstants.gravitySpeculative.w;
         const float invH = (h > 1.0e-5f) ? (1.0f / h) : 1.0e5f;
 
         float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
@@ -1563,12 +1876,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float3 totalF = st.extForcePad.xyz;
         const float dragK = clamp(dragCoeff * 4.0f, 0.05f, 4.0f) * mass;
         float3 dummyTrq = float3(0.0f, 0.0f, 0.0f);
+        bool localGravSubApplied = false;
         if(fieldSlot != NWB_PHYSICS_INVALID_INDEX && fieldCount > 0u){
             [loop] for(uint fi = 0u; fi < fieldCount; ++fi)
-                totalF += nwbPhysicsSubsysEvalForceField(g_NwbPhysicsForceFieldBuffers[fieldSlot][fi], posInvMass.xyz, st.velPad.xyz, mass, dragK, false, timeSec, invH, grav, 1.0f, dummyTrq);
+                totalF += nwbPhysicsSubsysEvalForceField(g_NwbPhysicsForceFieldBuffers[fieldSlot][fi], posInvMass.xyz, st.velPad.xyz, mass, dragK, rawParticleRadius, false, timeSec, invH, grav, 1.0f, dummyTrq, localGravSubApplied);
         }
         if(fluidSlot != NWB_PHYSICS_INVALID_INDEX && fluidCount > 0u){
-            const float pRad = max(g_NwbPhysicsPushConstants.gravitySpeculative.w, 1.0e-2f);
+            const float pRad = max(rawParticleRadius, 1.0e-2f);
             const float pVol = (4.0f / 3.0f) * 3.1415926535897932f * pRad * pRad * pRad;
             [loop] for(uint fli = 0u; fli < fluidCount; ++fli){
                 const NwbPhysicsGpuFluidVolume fl = g_NwbPhysicsFluidVolumeBuffers[fluidSlot][fli];
@@ -1584,14 +1898,30 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const float vCap = (3.1415926535897932f / 3.0f) * hCap * hCap * (3.0f * pRad - hCap);
                     const float frac = clamp(vCap / max(pVol, 1.0e-7f), 0.0f, 1.0f);
                     const float dispM = fl.boundsMaxDensity.w * vCap;
-                    totalF += (-grav) * dispM;
+                    float3 flForce = (-grav) * dispM;
                     const float3 relV = flowVel - st.velPad.xyz;
-                    const float sp = length(relV);
-                    if(sp > 1.0e-5f){
+                    const float spSq = dot(relV, relV);
+                    if(spSq > 1.0e-10f){
+                        const float invSp = rsqrt(spSq);
+                        const float sp = spSq * invSp;
+                        const float3 relDir = relV * invSp;
+                        const float pArea = 3.1415926535897932f * pRad * pRad * frac;
                         const float linD = fl.flowVelLinDrag.w * sp * frac * mass;
+                        const float quadD = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * pArea * spSq;
                         const float maxF = (mass * sp) * invH * 0.9f;
-                        totalF += (relV / sp) * min(linD, maxF);
+                        flForce += relDir * min(linD + quadD, maxF);
+                        if(fl.dragLiftWaveAmpFreq.x != 0.0f){
+                            const float3 liftDir = nwbPhysicsSafeNormal(localSurfN - relDir * dot(localSurfN, relDir), localSurfN);
+                            const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * pArea * spSq;
+                            flForce += liftDir * clamp(rawLift, -maxF * 2.0f, maxF * 2.0f);
+                        }
                     }
+                    const float addedM = max(0.0f, fl.waveSpeedAngAddedFlags.z) * dispM;
+                    if(addedM > 1.0e-7f){
+                        const float effRatio = mass / (mass + addedM);
+                        flForce = flForce * effRatio - grav * (addedM * effRatio);
+                    }
+                    totalF += flForce;
                 }
             }
         }
@@ -1600,7 +1930,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float3 newVel = (st.velPad.xyz + acc * h) * dampScale;
         st.velPad.xyz = newVel;
         posInvMass.xyz += newVel * h;
-        st.extForcePad.xyz = float3(0.0f, 0.0f, 0.0f);
         g_NwbPhysicsFloat4Buffers[pSlot][tid] = posInvMass;
         g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid] = st;
         return;
@@ -1812,12 +2141,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint triIdxListSlot = g_NwbPhysicsPushConstants.slots0.z;
         const uint surfTriSlot = g_NwbPhysicsPushConstants.slots0.w;
         const uint stateSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint pOutSlot = g_NwbPhysicsPushConstants.slots1.y;
         const float h = g_NwbPhysicsPushConstants.deltaTime;
         const float dragC = max(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f);
         const float liftC = g_NwbPhysicsPushConstants.maxLinearVelocity;
         const float3 windVel = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
 
         const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+            g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posInvMass;
         if(posInvMass.w <= 0.0f)
             return;
         const uint triStart = g_NwbPhysicsUintBuffers[triRangeSlot][tid * 2u + 0u];
@@ -1836,7 +2168,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float3 x2 = g_NwbPhysicsFloat4Buffers[pSlot][tri.z].xyz;
             const float3 c = cross(x1 - x0, x2 - x0);
             const float areaSq = dot(c, c);
-            if(areaSq <= 1.0e-12f)
+            if(areaSq <= 1.0e-14f)
                 continue;
             const float invDoubleA = rsqrt(areaSq);
             const float doubleArea = areaSq * invDoubleA;
@@ -1845,16 +2177,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float3 v1 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.y].velPad.xyz;
             const float3 v2 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.z].velPad.xyz;
             const float3 avgVel = (v0 + v1 + v2) * (1.0f / 3.0f);
-            const float3 vRel = windVel - avgVel;
+            const float3 vRel = avgVel - windVel;
+            const float3 vAir = -vRel;
             const float vn = dot(vRel, triN);
-            const float baseCoeff = doubleArea * (dragC * h * h) * (1.0f / 6.0f);
+            const float3 vAirTan = vAir + triN * vn;
+            const float3 dragPush = (triN * (-vn) + vAirTan * 0.1f) * h;
+            const float baseCoeff = doubleArea * (dragC * h / 6.0f);
             if(hasDrag)
-                totalDisp += triN * (vn * clamp(baseCoeff * posInvMass.w, 0.0f, 0.9f));
+                totalDisp += dragPush * clamp(baseCoeff * posInvMass.w, 0.0f, 0.9f);
             if(hasLift){
                 const float vRelSq = dot(vRel, vRel);
                 if(vRelSq > 1.0e-10f){
                     const float3 nEff = (vn > 0.0f) ? (-triN) : triN;
-                    const float3 liftVec = cross(cross(vRel, nEff), vRel);
+                    const float3 liftVec = cross(cross(vAir, nEff), vAir);
                     const float liftLenSq = dot(liftVec, liftVec);
                     if(liftLenSq > 1.0e-14f){
                         const float3 liftDir = liftVec * rsqrt(liftLenSq);
@@ -1864,7 +2199,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 }
             }
         }
-        g_NwbPhysicsFloat4Buffers[pSlot][tid].xyz = posInvMass.xyz + totalDisp;
+        const uint writePSlot = (pOutSlot != NWB_PHYSICS_INVALID_INDEX) ? pOutSlot : pSlot;
+        g_NwbPhysicsFloat4Buffers[writePSlot][tid].xyz = posInvMass.xyz + totalDisp;
         return;
     }
 
@@ -1881,6 +2217,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(cagePartSlot != NWB_PHYSICS_INVALID_INDEX && cageBarySlot != NWB_PHYSICS_INVALID_INDEX){
                 const uint4 cp = asuint(g_NwbPhysicsFloat4Buffers[cagePartSlot][tid]);
                 const float4 bw = g_NwbPhysicsFloat4Buffers[cageBarySlot][tid];
+                if(bw.x == 0.0f && bw.y == 0.0f && bw.z == 0.0f && bw.w == 0.0f)
+                    return;
                 worldP =
                     g_NwbPhysicsFloat4Buffers[pSlot][cp.x].xyz * bw.x
                     + g_NwbPhysicsFloat4Buffers[pSlot][cp.y].xyz * bw.y
@@ -1988,6 +2326,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].velPad.xyz = float3(0.0f, 0.0f, 0.0f);
         else
             g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].velPad.xyz = (posInvMass.xyz - prevPosFlags.xyz) * invH;
+        if(flags != 0u)
+            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].extForcePad.xyz = float3(0.0f, 0.0f, 0.0f);
         return;
     }
 
@@ -1996,7 +2336,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
         const uint fieldSlot = g_NwbPhysicsPushConstants.slots0.z;
         const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint eventRingSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint prepCounterSlot = g_NwbPhysicsPushConstants.slots1.y;
+        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots1.z;
         const uint fieldCount = g_NwbPhysicsPushConstants.itemOffset;
+        const uint maxEvents = flags;
         const float timeSec = g_NwbPhysicsPushConstants.deltaTime;
         const float invDt = g_NwbPhysicsPushConstants.invDeltaTime;
         const float3 worldGrav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
@@ -2008,9 +2352,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
 
         const float bodyMass = 1.0f / sim.positionInvMass.w;
-        const float maxExt = max(sim.localCenterMinExtent.w, 0.05f);
+        const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
+            : max(sim.localCenterMinExtent.w, 0.05f);
         float3 addForce = float3(0.0f, 0.0f, 0.0f);
         float3 addTorque = float3(0.0f, 0.0f, 0.0f);
+        bool localGravSubApplied = false;
         [loop] for(uint fi = 0u; fi < fieldCount; ++fi){
             const NwbPhysicsGpuForceField fld = g_NwbPhysicsForceFieldBuffers[fieldSlot][fi];
             if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, fld.filterData))
@@ -2022,15 +2369,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 st.linearVelocityPad.xyz,
                 bodyMass,
                 maxExt,
+                0.0f,
                 true,
                 timeSec,
                 invDt,
                 worldGrav,
                 sim.invInertiaWorld1.z,
-                fTorque
+                fTorque,
+                localGravSubApplied
             );
             nwbPhysicsSubsysApplyForceFieldAngular(
                 fld,
+                sim.positionInvMass.xyz,
                 st.angularVelocityPad.xyz,
                 maxExt,
                 sim.invInertiaWorld0,
@@ -2048,6 +2398,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
                 nwbPhysicsWriteBodyFlags(bodyStateSlot, tid, bFlags);
                 g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, tid, 0u, 0u, float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), uint4(tid, 0u, 0u, 0u));
             }
         }
         return;
@@ -2077,10 +2428,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float bodyMass = 1.0f / sim.positionInvMass.w;
         const float effR = max(sim.localCenterMinExtent.w, 0.05f);
         const float4 volInfo = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
-            ? g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid]
+            ? g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 0u]
             : float4((4.0f / 3.0f) * 3.1415926535897932f * effR * effR * effR, effR, effR, effR);
+        const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
+            : effR;
         const float bodyVol = max(volInfo.x, 1.0e-6f);
-        const float testR = max(max(volInfo.y, volInfo.z), volInfo.w);
+        const float3 localH = max(volInfo.yzw, float3(0.025f, 0.025f, 0.025f));
+        const float areaEst = 2.0f * (localH.x * localH.z + localH.x * localH.y + localH.y * localH.z);
 
         float3 addForce = float3(0.0f, 0.0f, 0.0f);
         float3 addTorque = float3(0.0f, 0.0f, 0.0f);
@@ -2091,32 +2446,61 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, fl.filterData))
                 continue;
             const float3 surfN = nwbPhysicsSafeNormal(fl.surfaceNormalOffset.xyz, float3(0.0f, 1.0f, 0.0f));
-            float d = 0.0f;
-            float3 flowVel = float3(0.0f, 0.0f, 0.0f);
-            float3 localSurfN = surfN;
-            nwbPhysicsSubsysFluidEvalSurface(fl, gerstnerSlot, sim.positionInvMass.xyz, surfN, timeSec, d, flowVel, localSurfN);
-            if(d + testR <= 0.0f)
+            float sumFrac = 0.0f;
+            float3 cobAccum = float3(0.0f, 0.0f, 0.0f);
+            float3 flowAccum = float3(0.0f, 0.0f, 0.0f);
+            float3 normAccum = float3(0.0f, 0.0f, 0.0f);
+            [loop] for(uint oi = 0u; oi < 8u; ++oi){
+                const float3 octSign = float3(
+                    ((oi & 1u) != 0u) ? 0.5f : -0.5f,
+                    ((oi & 2u) != 0u) ? 0.5f : -0.5f,
+                    ((oi & 4u) != 0u) ? 0.5f : -0.5f
+                );
+                const float3 sampleP = sim.positionInvMass.xyz + nwbPhysicsQuatRotate(octSign * localH, sim.rotation);
+                float sampleD = 0.0f;
+                float3 sampleFlow = float3(0.0f, 0.0f, 0.0f);
+                float3 sampleNorm = surfN;
+                nwbPhysicsSubsysFluidEvalSurface(fl, gerstnerSlot, sampleP, surfN, timeSec, sampleD, sampleFlow, sampleNorm);
+                const float sampleHalfH = max(0.5f * dot(abs(nwbPhysicsQuatInvRotate(sampleNorm, sim.rotation)), localH), 1.0e-4f);
+                const float sampleFrac = clamp((sampleD + sampleHalfH) / (2.0f * sampleHalfH), 0.0f, 1.0f);
+                sumFrac += sampleFrac;
+                cobAccum += sampleP * sampleFrac;
+                flowAccum += sampleFlow * sampleFrac;
+                normAccum += sampleNorm * sampleFrac;
+            }
+            if(sumFrac <= 1.0e-5f)
                 continue;
-            const float subFrac = clamp((d + testR) / (2.0f * max(testR, 1.0e-4f)), 0.0f, 1.0f);
+            const float subFrac = clamp(sumFrac * 0.125f, 0.0f, 1.0f);
+            const float3 cob = cobAccum / sumFrac;
+            const float3 localFlowVel = flowAccum / sumFrac;
+            const float3 localSurfN = nwbPhysicsSafeNormal(normAccum, surfN);
+            const float3 relCob = cob - sim.positionInvMass.xyz;
+
             const float subVol = bodyVol * subFrac;
             const float dispMass = fl.boundsMaxDensity.w * subVol;
-            float3 fluidForce = (-grav) * (dispMass * sim.invInertiaWorld1.z);
+            const float3 buoyancyForce = (-grav) * (dispMass * sim.invInertiaWorld1.z);
+            float3 fluidForce = buoyancyForce;
+            float3 forceAtCob = buoyancyForce;
 
-            const float3 relV = flowVel - st.linearVelocityPad.xyz;
+            const float3 relV = localFlowVel - (st.linearVelocityPad.xyz + cross(st.angularVelocityPad.xyz, relCob));
             const float spSq = dot(relV, relV);
-            const float areaEst = 2.0f * (volInfo.y * volInfo.w + volInfo.y * volInfo.z + volInfo.z * volInfo.w) * subFrac;
+            const float subArea = areaEst * subFrac;
             if(spSq > 1.0e-10f){
                 const float invSp = rsqrt(spSq);
                 const float sp = spSq * invSp;
                 const float3 relDir = relV * invSp;
                 const float linMag = fl.flowVelLinDrag.w * sp * subFrac * bodyMass
-                    + 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * areaEst * spSq;
-                fluidForce += relDir * min(linMag, bodyMass * sp * invDt * 0.9f);
+                    + 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * subArea * spSq;
+                const float3 dragF = relDir * min(linMag, bodyMass * sp * invDt * 0.9f);
+                fluidForce += dragF;
+                forceAtCob += dragF;
                 if(fl.dragLiftWaveAmpFreq.x != 0.0f){
                     const float3 liftDir = nwbPhysicsSafeNormal(localSurfN - relDir * dot(localSurfN, relDir), localSurfN);
-                    const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * areaEst * spSq;
+                    const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * subArea * spSq;
                     const float maxLift = bodyMass * sp * invDt * 2.0f;
-                    fluidForce += liftDir * clamp(rawLift, -maxLift, maxLift);
+                    const float3 liftF = liftDir * clamp(rawLift, -maxLift, maxLift);
+                    fluidForce += liftF;
+                    forceAtCob += liftF;
                 }
             }
 
@@ -2126,6 +2510,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 fluidForce = fluidForce * effRatio - (grav * sim.invInertiaWorld1.z) * (addedMass * effRatio);
             }
             addForce += fluidForce;
+            addTorque += cross(relCob, forceAtCob);
 
             const float3 angV = st.angularVelocityPad.xyz;
             const float wSq = dot(angV, angV);
@@ -2133,17 +2518,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const float invW = rsqrt(wSq);
                 const float wSp = wSq * invW;
                 const float3 wDir = angV * invW;
-                const float rawT = fl.waveSpeedAngAddedFlags.y * subFrac * max(0.1f, testR) * wSp;
+                const float rawT = fl.waveSpeedAngAddedFlags.y * subFrac * max(0.1f, maxExt) * wSp;
                 const float kInvI = dot(wDir, nwbPhysicsMulSymmetric3(sim.invInertiaWorld0, sim.invInertiaWorld1, wDir));
                 const float maxT = (kInvI > 1.0e-10f) ? ((1.0f / kInvI) * wSp * invDt * 0.9f) : rawT;
                 addTorque -= wDir * min(rawT, maxT);
             }
 
-            const float impactSpeed = max(0.0f, -dot(st.linearVelocityPad.xyz, surfN));
+            const float impactSpeed = max(0.0f, -dot(st.linearVelocityPad.xyz, localSurfN));
             const float impactImpulse = bodyMass * impactSpeed;
-            const float splashThr = fl.obbCenterSplash.w;
-            if(splashThr > 0.0f && subFrac > 0.01f && impactImpulse >= splashThr)
-                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH, tid, fl.filterData.w, 1u, float4(sim.positionInvMass.xyz, subFrac), float4(localSurfN, impactSpeed), uint4(tid, fl.filterData.w, asuint(impactImpulse), 0u));
+            if(maxEvents > 0u && eventRingSlot != NWB_PHYSICS_INVALID_INDEX && prepCounterSlot != NWB_PHYSICS_INVALID_INDEX && subFrac > 1.0e-5f)
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH, tid, fl.filterData.w, 0u, float4(cob, subFrac), float4(localSurfN, impactSpeed), uint4(tid, fl.filterData.w, asuint(impactImpulse), 0u));
         }
         if(any(addForce != float3(0.0f, 0.0f, 0.0f)) || any(addTorque != float3(0.0f, 0.0f, 0.0f))){
             g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].forceLinearDamping.xyz = sim.forceLinearDamping.xyz + addForce;
@@ -2152,6 +2536,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
                 nwbPhysicsWriteBodyFlags(bodyStateSlot, tid, bFlags);
                 g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, tid, 0u, 0u, float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), uint4(tid, 0u, 0u, 0u));
             }
         }
         return;
@@ -2163,28 +2548,53 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint bodyOutSlot = g_NwbPhysicsPushConstants.slots0.z;
         const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots0.w;
         const uint4 expFilter = uint4(g_NwbPhysicsPushConstants.slots1.xyz, 0u);
-        const float impulseMag = g_NwbPhysicsPushConstants.deltaTime;
+        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots1.w;
+        const float impulseParam = g_NwbPhysicsPushConstants.deltaTime;
         const float upwardBias = g_NwbPhysicsPushConstants.invDeltaTime;
-        const float radius = g_NwbPhysicsPushConstants.maxLinearVelocity;
-        const float falloffPow = max(g_NwbPhysicsPushConstants.linearSlop, 0.0f);
+        const float radiusParam = g_NwbPhysicsPushConstants.maxLinearVelocity;
+        const float falloffParam = max(g_NwbPhysicsPushConstants.linearSlop, 0.0f);
         const float3 origin = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
 
         const NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
         NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
         uint bFlags = asuint(st.deltaPositionFlags.w);
-        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f || radius <= 0.0f)
+        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
             return;
         if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, expFilter))
             return;
 
         const float3 diff = sim.positionInvMass.xyz - origin;
         const float dist = length(diff);
-        if(dist >= radius)
-            return;
-        const float atten = pow(clamp(1.0f - dist / radius, 0.0f, 1.0f), falloffPow);
         const float3 radDir = nwbPhysicsSafeNormal(diff, float3(0.0f, 1.0f, 0.0f));
-        const float3 blastDir = nwbPhysicsSafeNormal(radDir + float3(0.0f, upwardBias, 0.0f), float3(0.0f, 1.0f, 0.0f));
-        const float3 newVel = st.linearVelocityPad.xyz + blastDir * (impulseMag * atten * sim.positionInvMass.w);
+        float3 deltaV = float3(0.0f, 0.0f, 0.0f);
+        if(flags == 1u){
+            const float innerRadius = max(radiusParam, 0.0f);
+            const float maxR = innerRadius + falloffParam;
+            if(maxR <= 0.0f || impulseParam == 0.0f)
+                return;
+            const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+                ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
+                : max(sim.localCenterMinExtent.w, 0.05f);
+            const float surfDist = max(0.0f, dist - maxExt);
+            if(surfDist >= maxR)
+                return;
+            float falloffScale = 1.0f;
+            if(surfDist > innerRadius)
+                falloffScale = (falloffParam > 0.0f) ? clamp(1.0f - (surfDist - innerRadius) / falloffParam, 0.0f, 1.0f) : 0.0f;
+            if(falloffScale <= 0.0f)
+                return;
+            const float charLen = max(0.1f, maxExt * 2.0f);
+            deltaV = nwbPhysicsApplyLinearLocks(radDir * (impulseParam * falloffScale * charLen * sim.positionInvMass.w), bFlags);
+        }
+        else{
+            if(radiusParam <= 0.0f || dist >= radiusParam)
+                return;
+            const float atten = pow(clamp(1.0f - dist / radiusParam, 0.0f, 1.0f), falloffParam);
+            const float3 blastDir = nwbPhysicsSafeNormal(radDir + float3(0.0f, upwardBias, 0.0f), float3(0.0f, 1.0f, 0.0f));
+            deltaV = nwbPhysicsApplyLinearLocks(blastDir * (impulseParam * atten * sim.positionInvMass.w), bFlags);
+        }
+
+        const float3 newVel = st.linearVelocityPad.xyz + deltaV;
         bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
         g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid].linearVelocityPad = float4(newVel, asfloat(bFlags));
         g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid].deltaPositionFlags.w = asfloat(bFlags);

@@ -317,6 +317,14 @@ struct AssetPairedSidecarRule{
     AStringView sidecarExtension;
 };
 
+using CookExternalSourceCollectorFunction = b8 (*)(
+    const DiscoveredNwbFile& discoveredNwbFile,
+    AStringView metaText,
+    ScratchArena& scratchArena,
+    Vector<::Path<ScratchArena>, ScratchArena>& outPaths,
+    b8& outCanUseCache
+);
+
 class NonStandaloneAssetTypeAutoRegistrar final{
 public:
     explicit NonStandaloneAssetTypeAutoRegistrar(const Name& assetType, AStringView tokenText = {});
@@ -340,6 +348,11 @@ public:
     explicit AssetPairedSidecarRuleAutoRegistrar(const AssetPairedSidecarRule& rule);
 };
 
+class CookExternalSourceCollectorAutoRegistrar final{
+public:
+    explicit CookExternalSourceCollectorAutoRegistrar(CookExternalSourceCollectorFunction function);
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -351,6 +364,7 @@ void RegisterNonStandaloneFirstTokenSuffix(AStringView tokenSuffix);
 [[nodiscard]] b8 IsNonStandaloneAssetType(const Name& assetType);
 [[nodiscard]] b8 IsLikelyNonStandaloneFirstToken(AStringView firstToken);
 void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
+void RegisterCookExternalSourceCollector(CookExternalSourceCollectorFunction function);
 [[nodiscard]] b8 AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);

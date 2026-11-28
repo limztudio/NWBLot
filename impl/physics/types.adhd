@@ -366,9 +366,10 @@ class Softness{
 }
 
 class Filter{
-    public u32 categoryBits = 0x00000001u;
-    public u32 maskBits = u32.max;
+    public u64 categoryBits = 1u;
+    public u64 maskBits = u64.max;
     public i32 groupIndex = 0;
+    public u8 broadPhaseLayer = 0u;
 }
 
 class SurfaceMaterial{
@@ -438,6 +439,16 @@ class WorldDef{
     public b8 useGpuLbvhBroadphase = false;
     public b8 enableBlockSolver = false;
     public b8 enableShockPropagation = false;
+    public b8 deterministicMode = false;
+    public b8 enableGlobalCcd = false;
+    public b8 enablePerPointFriction = false;
+    public b8 enableDoublePrecisionPositions = false;
+    public Array<u32, 32u> broadPhaseLayerMasks;
+
+    public WorldDef(){
+        for(usize i = 0u; i < 32u; ++i)
+            this.broadPhaseLayerMasks[i] = u32.max;
+    }
 }
 
 class BodyDef{
@@ -563,6 +574,8 @@ class JointSettings{
 class JointDef{
     public BodyId bodyIdA;
     public BodyId bodyIdB;
+    public JointId referenceJointA;
+    public JointId referenceJointB;
     public JointSettings settings;
     public Vector<f32x4> pathPoints;
     public u64 userData = 0u;
@@ -659,6 +672,7 @@ type CustomFilterCallback = Func<64u, b8(in ShapeId, in ShapeId)>;
 type PreSolveCallback = Func<64u, b8(mut PreSolveContext)>;
 type PostSolveCallback = Func<64u, void(in PostSolveContext)>;
 type TriangleFilterCallback = Func<64u, b8(in ShapeId, in u32)>;
+type SubShapeFilterCallback = Func<64u, b8(in ShapeId, in u32, in u32)>;
 type MaterialCombineCallback = Func<64u, b8(in ShapeId, in ShapeId, in SurfaceMaterial, in SurfaceMaterial, mut MaterialCombineResult)>;
 type ShapeQueryFilterCallback = Func<64u, b8(in ShapeId)>;
 type RayCastCollectorCallback = Func<64u, f32(in RayCastHit)>;
@@ -694,6 +708,8 @@ class RayCastHit{
     public f32x2u barycentrics;
     public f32 fraction = 1.0f;
     public u32 triangleIndex = s_NullIndex;
+    public u32 subShapeIndex = s_NullIndex;
+    public u32 segmentIndex = s_NullIndex;
     public b8 hit = false;
 
     public RayCastHit(){
@@ -719,6 +735,8 @@ class RayCastDoubleHit{
     public f32x2u barycentrics = f32x2u(0.0f, 0.0f);
     public f32 fraction = 1.0f;
     public u32 triangleIndex = s_NullIndex;
+    public u32 subShapeIndex = s_NullIndex;
+    public u32 segmentIndex = s_NullIndex;
     public b8 hit = false;
 }
 
@@ -742,6 +760,8 @@ class ShapeCastHit{
     public f32x2u barycentrics;
     public f32 fraction = 1.0f;
     public u32 triangleIndex = s_NullIndex;
+    public u32 subShapeIndex = s_NullIndex;
+    public u32 segmentIndex = s_NullIndex;
     public b8 hit = false;
 
     public ShapeCastHit(){
@@ -769,6 +789,8 @@ class ShapeCastDoubleHit{
     public f32x2u barycentrics = f32x2u(0.0f, 0.0f);
     public f32 fraction = 1.0f;
     public u32 triangleIndex = s_NullIndex;
+    public u32 subShapeIndex = s_NullIndex;
+    public u32 segmentIndex = s_NullIndex;
     public b8 hit = false;
 }
 
@@ -779,6 +801,8 @@ class ShapeOverlapHit{
     public f32x4 pointB(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 penetrationDepth = 0.0f;
     public u32 triangleIndex = s_NullIndex;
+    public u32 subShapeIndex = s_NullIndex;
+    public u32 segmentIndex = s_NullIndex;
 }
 
 class ClosestPointHit{
@@ -787,6 +811,8 @@ class ClosestPointHit{
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
     public f32 distance = s_MaxF32;
     public u32 triangleIndex = s_NullIndex;
+    public u32 subShapeIndex = s_NullIndex;
+    public u32 segmentIndex = s_NullIndex;
     public b8 hit = false;
 }
 

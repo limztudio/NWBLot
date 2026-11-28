@@ -419,6 +419,9 @@ extern const u32 s_GpuResidentModeFinalizeToiIndirect;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_FUSED_COLORS")]
 extern const u32 s_GpuSolverFlagFusedColors;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_BLOCK_SOLVER")]
+extern const u32 s_GpuSolverFlagBlockSolver;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_WIDE_COLOR_COUNT")]
 extern const u32 s_GpuResWideColorCount;
 
@@ -851,14 +854,19 @@ class PhysicsBatchSpatialQueryPending{
     public Vector<GpuPhysicsSpatialQueryAux> queryAux;
     public Vector<ShapeProxy> cpuQueryShapes;
     public Vector<Transform3D> cpuQueryTransforms;
+    public Vector<f32x4> cpuQueryEndRotations;
+    public Vector<u8> cpuQueryHasRotation;
     public u32 queryCount = 0u;
     public u32 maxHitsPerQuery = 0u;
     public u32 residentSyncCount = 0u;
     public b8 hasAux = false;
     public b8 useMultiHit = false;
     public b8 residentDirtyActive = false;
+    public b8 forceCpuFallbackAll = false;
     public b8 valid = false;
 }
+
+const u32 s_GpuRenderBindingCustomPoseBit = 0x80000000u;
 
 [align(16)]
 class GpuPhysicsRenderTransformBinding{
@@ -1104,6 +1112,7 @@ static_assert(is_trivially_copyable<GpuPhysicsEvent>(), "GpuPhysicsEvent must st
 static_assert(is_trivially_copyable<GpuPhysicsSoftParticleState>(), "GpuPhysicsSoftParticleState must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsSoftDistConstraint>(), "GpuPhysicsSoftDistConstraint must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsSoftVolConstraint>(), "GpuPhysicsSoftVolConstraint must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsSoftBendConstraint>(), "GpuPhysicsSoftBendConstraint must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsSoftBackstop>(), "GpuPhysicsSoftBackstop must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsForceField>(), "GpuPhysicsForceField must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsFluidVolume>(), "GpuPhysicsFluidVolume must stay trivially copyable");
@@ -1150,6 +1159,7 @@ static_assert(s_GpuShapeFlagEnlargeAabb != 0u && s_GpuShapeFlagEnlargeAabb != s_
 static_assert(s_GpuShapeFlagHasLocalTransform != 0u && (s_GpuShapeFlagHasLocalTransform & (s_GpuShapeFlagEnlargeAabb | s_GpuShapeFlagHasNonCollideJoint | s_GpuShapeFlagFastOrBullet)) == 0u, "ShapeFlag HasLocalTransform distinct bit");
 static_assert(s_GpuSolverFlagHasHitEvents != 0u && (s_GpuSolverFlagHasHitEvents & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep)) == 0u, "SolverFlag HasHitEvents distinct bit");
 static_assert(s_GpuSolverFlagIndirectSlice != 0u && (s_GpuSolverFlagIndirectSlice & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep | s_GpuSolverFlagHasHitEvents)) == 0u, "SolverFlag IndirectSlice distinct bit");
+static_assert(s_GpuSolverFlagBlockSolver != 0u && (s_GpuSolverFlagBlockSolver & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep | s_GpuSolverFlagHasHitEvents | s_GpuSolverFlagIndirectSlice | s_GpuSolverFlagFusedColors)) == 0u, "SolverFlag BlockSolver distinct bit");
 static_assert(cast<u32>(BodyFlags::EnableSleep) == s_ShaderPhysicsBodyFlagAllowSleep, "BodyFlags::EnableSleep mismatch");
 static_assert((cast<u32>(BodyFlags::LastStepGpuSolved) & s_ShaderPhysicsBodyFlagSleeping) == 0u, "BodyFlags::LastStepGpuSolved collides with GPU sleeping bit");
 static_assert((cast<u32>(BodyFlags::JustWoke) & s_ShaderPhysicsBodyFlagSleeping) == 0u, "BodyFlags::JustWoke collides with GPU sleeping bit");
@@ -1452,9 +1462,12 @@ GpuPhysicsForceField PackGpuForceField(in ForceField field){
     ;
     outField.boundsMinMeta = f32x4(field.bounds.lowerBound.x, field.bounds.lowerBound.y, field.bounds.lowerBound.z, bit_cast<f32>(packedMeta));
     outField.boundsMaxSuction = f32x4(field.bounds.upperBound.x, field.bounds.upperBound.y, field.bounds.upperBound.z, field.inwardSuction);
+    outField.shapeHalfExtentsExtra = f32x4(field.obbHalfExtents.x, field.obbHalfExtents.y, field.obbHalfExtents.z, 0.0f);
     if(field.shape == ForceFieldShape::Capsule){
         outField.shapeCenterOrCapA = f32x4(field.capsulePointA.x, field.capsulePointA.y, field.capsulePointA.z, Max(0.0f, field.capsuleRadius));
         outField.shapeRotOrCapB = f32x4(field.capsulePointB.x, field.capsulePointB.y, field.capsulePointB.z, 0.0f);
+        const VectorSingle sc = field.sphereShapeCenter();
+        outField.shapeHalfExtentsExtra = f32x4(sc.x, sc.y, sc.z, 0.0f);
     }
     else if(field.shape == ForceFieldShape::Sphere){
         const VectorSingle sc = field.sphereShapeCenter();
@@ -1471,8 +1484,7 @@ GpuPhysicsForceField PackGpuForceField(in ForceField field){
         outField.shapeCenterOrCapA = f32x4(sc.x, sc.y, sc.z, 0.0f);
         outField.shapeRotOrCapB = f32x4(SafeNormalizeQuat(VectorSingle(field.obbRotation)));
     }
-    outField.shapeHalfExtentsExtra = f32x4(field.obbHalfExtents.x, field.obbHalfExtents.y, field.obbHalfExtents.z, 0.0f);
-    outField.filterData = u32x4(field.filter.categoryBits, field.filter.maskBits, bit_cast<u32>(field.filter.groupIndex), 0u);
+    outField.filterData = u32x4(cast<u32>(field.filter.categoryBits), cast<u32>(field.filter.maskBits), bit_cast<u32>(field.filter.groupIndex), 0u);
     return outField;
 }
 
@@ -1504,7 +1516,7 @@ GpuPhysicsFluidVolume PackGpuFluidVolume(
     outFluid.obbRotation = f32x4(SafeNormalizeQuat(VectorSingle(fluid.obbRotation)));
     const u32 gerstnerPack = (gerstnerOffset & 0xffffu) | ((gerstnerCount & 0xffffu) << 16u);
     outFluid.obbHalfExtentsGerstner = f32x4(fluid.obbHalfExtents.x, fluid.obbHalfExtents.y, fluid.obbHalfExtents.z, bit_cast<f32>(gerstnerPack));
-    outFluid.filterData = u32x4(fluid.filter.categoryBits, fluid.filter.maskBits, bit_cast<u32>(fluid.filter.groupIndex), fluidIndex);
+    outFluid.filterData = u32x4(cast<u32>(fluid.filter.categoryBits), cast<u32>(fluid.filter.maskBits), bit_cast<u32>(fluid.filter.groupIndex), fluidIndex);
     return outFluid;
 }
 

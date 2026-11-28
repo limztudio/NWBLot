@@ -623,6 +623,8 @@ class PhysicsDebugDrawScratch{
     public Vector<PhysicsDebugScreenLabel> projectedLabels;
     public Vector<Transform3D> resolvedLinkXfsScratch;
     public Vector<Transform3D> ragdollTargetScratch;
+    public Vector<SkeletonJointMatrix> skeletonModelJointsScratch;
+    public Vector<Transform3D> ragdollOffsetsScratch;
     public HashMap<EntityID, EcsWorldPose> worldPoseCache;
     public FluidVolume fluidVolumeScratch;
     public ForceField forceFieldScratch;

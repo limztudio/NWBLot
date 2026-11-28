@@ -103,6 +103,10 @@ void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRul
     QueryAssetAutoRegistrationQueue<AssetPairedSidecarRule, AssetsArenaScope::s_PairedSidecarRuleQueueArena>().copyTo(outRules);
 }
 
+void CopyCookExternalSourceCollectors(Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena>& outCollectors){
+    QueryAssetAutoRegistrationQueue<NotNull<CookExternalSourceCollectorFunction>, AssetsArenaScope::s_ExternalSourceCollectorQueueArena>().copyTo(outCollectors);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,6 +152,10 @@ NonStandaloneFirstTokenSuffixAutoRegistrar::NonStandaloneFirstTokenSuffixAutoReg
 
 AssetPairedSidecarRuleAutoRegistrar::AssetPairedSidecarRuleAutoRegistrar(const AssetPairedSidecarRule& rule){
     RegisterAssetPairedSidecarRule(rule);
+}
+
+CookExternalSourceCollectorAutoRegistrar::CookExternalSourceCollectorAutoRegistrar(const CookExternalSourceCollectorFunction function){
+    RegisterCookExternalSourceCollector(function);
 }
 
 
@@ -238,6 +246,18 @@ void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule){
         AssetPairedSidecarRule{ __hidden_cook_metadata_registry::StableRegistrationText(rule.sidecarExtension) },
         [](const AssetPairedSidecarRule& lhs, const AssetPairedSidecarRule& rhs)noexcept{
             return lhs.sidecarExtension == rhs.sidecarExtension;
+        }
+    );
+}
+
+void RegisterCookExternalSourceCollector(const CookExternalSourceCollectorFunction function){
+    if(function == nullptr)
+        return;
+
+    QueryAssetAutoRegistrationQueue<NotNull<CookExternalSourceCollectorFunction>, AssetsArenaScope::s_ExternalSourceCollectorQueueArena>().appendUnique(
+        NotNull(function),
+        [](const NotNull<CookExternalSourceCollectorFunction> lhs, const NotNull<CookExternalSourceCollectorFunction> rhs)noexcept{
+            return lhs.get() == rhs.get();
         }
     );
 }

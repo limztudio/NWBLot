@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/physics/distance.adhd>
 #include <impl/physics/heightfield.adhd>
 
 
@@ -26,6 +27,15 @@ const u32 s_HeightfieldVersion = 1u;
 
 const u32 s_CompoundHullMagic = 0x50434D50u;
 const u32 s_CompoundHullVersion = 1u;
+
+const u32 s_SdfAssetMagic = 0x50534446u;
+const u32 s_SdfAssetVersion = 1u;
+
+const u32 s_ChainShapeMagic = 0x5043484Eu;
+const u32 s_ChainShapeVersion = 1u;
+
+const u32 s_CompoundShapeMagic = 0x50435044u;
+const u32 s_CompoundShapeVersion = 1u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,8 +87,11 @@ class CollisionLayerMatrix{
     public Filter makeFilter(in u32 layerIdx, in i32 groupIndex)const{
         Filter f;
         if(layerIdx < s_MaxCollisionLayers){
-            f.categoryBits = 1u << layerIdx;
-            f.maskBits = this.layerMasks[layerIdx];
+            f.categoryBits = 1ull << layerIdx;
+            if(this.layerMasks[layerIdx] == u32.max)
+                f.maskBits = u64.max;
+            else
+                f.maskBits = cast<u64>(this.layerMasks[layerIdx]);
         }
         f.groupIndex = groupIndex;
         return f;
@@ -200,6 +213,76 @@ class CompoundHullAsset{
 
     public in Vector<HullShape> hullShapes()const{
         return this.m_hulls;
+    }
+}
+
+class CompoundAssetChild{
+    public ShapeType type = ShapeType::Sphere;
+    public ShapeType scaledChildType = ShapeType::Sphere;
+    public Transform3D localTransform;
+    public f32x4 geom0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 geom1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scale(1.0f, 1.0f, 1.0f, 1.0f);
+    public u32 geometryPoolIndex = s_NullIndex;
+    public f32 density = 1.0f;
+    public SurfaceMaterial material;
+    public b8 overrideMaterial = false;
+}
+
+class CompoundShapeAssetData{
+    public Vector<CompoundAssetChild> children;
+    public Vector<HullShape> hulls;
+    public Vector<MeshShape> meshes;
+    public Vector<HeightfieldShape> heightfields;
+    public Vector<ChainShape> chains;
+    public Vector<SdfShape> sdfs;
+}
+
+[asset("physics_sdf")]
+class SdfAsset{
+    private SdfShape m_sdf;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setSdf(in SdfShape inSdf){
+        this.m_sdf = inSdf;
+    }
+
+    public in SdfShape sdfShape()const{
+        return this.m_sdf;
+    }
+}
+
+[asset("physics_chain")]
+class ChainShapeAsset{
+    private ChainShape m_chain;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setChain(in ChainShape inChain){
+        this.m_chain = inChain;
+    }
+
+    public in ChainShape chainShape()const{
+        return this.m_chain;
+    }
+}
+
+[asset("physics_compound")]
+class CompoundShapeAsset{
+    private CompoundShapeAssetData m_compound;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setCompound(in CompoundShapeAssetData inCompound){
+        this.m_compound = inCompound;
+    }
+
+    public in CompoundShapeAssetData compoundShape()const{
+        return this.m_compound;
     }
 }
 

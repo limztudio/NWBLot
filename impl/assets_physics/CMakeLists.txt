@@ -4,6 +4,8 @@ nwb_target_adhd_sources(nwb_assets_physics_data_types
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/physics_assets.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/physics_asset_binary_codec.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/physics_rig_assets.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/physics_rig_binary_codec.adhd"
 )
 target_link_libraries(nwb_assets_physics_data_types PUBLIC nwb_assets nwb_physics)
 
@@ -41,10 +43,11 @@ if(NWB_BUILD_PIPELINE)
             "${CMAKE_CURRENT_LIST_DIR}/runtime_physics_assets.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime_components.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_physics_assets.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_physics_rig_assets.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_components.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_subsystem_components.adhd"
     )
-    target_link_libraries(nwb_assets_physics_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_mesh_cook nwb_ecs_physics_components nwb_assets_physics_types)
+    target_link_libraries(nwb_assets_physics_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_mesh_cook nwb_assets_skeleton_cook nwb_ecs_physics_components nwb_assets_physics_types)
     target_link_libraries(nwb_assets_physics_cook PRIVATE nwb::ufbx nwb::basis_universal nwb::nlohmann_json nwb::miniz)
     target_compile_definitions(nwb_assets_physics_cook PRIVATE NWB_COOK=1)
 
@@ -55,6 +58,6 @@ if(NWB_BUILD_PIPELINE)
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/volume_entry.adhd"
     )
-    target_link_libraries(nwb_assets_physics_volume_entry PRIVATE nwb_assets_physics_cook nwb_assets_physics_types nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_cook)
+    target_link_libraries(nwb_assets_physics_volume_entry PRIVATE nwb_assets_physics_cook nwb_assets_physics_types nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_cook nwb_assets_volume_cook)
     target_compile_definitions(nwb_assets_physics_volume_entry PRIVATE NWB_COOK=1)
 endif()

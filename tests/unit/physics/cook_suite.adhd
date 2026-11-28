@@ -700,12 +700,485 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
     EXPECT_TRUE(RemoveAllIfExists(tempRoot).has_value());
 }
 
+void VerifyPhysicsCook_Wave4RigAssetsFractureAndSubsystemParity(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_TestArena);
+
+    const Expected<Path, ErrorCode> cwdRes = GetCurrentPath();
+    ASSERT_TRUE(cwdRes.has_value());
+    const Path tempRoot = cwdRes.value() / "__nwb_physics_cook_wave4_tmp";
+    ASSERT_TRUE(EnsureEmptyDirectory(tempRoot).has_value());
+    const Path metaFile = tempRoot / "wave4_cook_diag.nwb";
+    const Name vPath("tests/physics/wave4_diag");
+
+    const StringView cubeObjText =
+        "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\nf 1 3 2\nf 1 4 3\nf 5 6 7\nf 5 7 8\nf 1 2 6\nf 1 6 5\nf 2 3 7\nf 2 7 6\nf 3 4 8\nf 3 8 7\nf 4 1 5\nf 4 5 8\n";
+    ASSERT_TRUE(WriteTextFile(tempRoot / "cube.obj", cubeObjText));
+
+    {
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        const StringView colScript =
+            "collider_component asset;\nasset.shape_type = \"sphere\";\nasset.category_bits = 1099511627776;\nasset.mask_bits = 1099511627776;\nasset.broad_phase_layer = 31;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(colScript, doc, val));
+        const auto colRes = ParseColliderComponentCookMetadata(vPath, metaFile, val);
+        ASSERT_TRUE(colRes.has_value());
+        EXPECT_EQ(colRes.value().component.primaryShape.categoryBits, 1ull << 40u);
+        EXPECT_EQ(colRes.value().component.primaryShape.maskBits, 1ull << 40u);
+        EXPECT_EQ(colRes.value().component.primaryShape.broadPhaseLayer, cast<u8>(31u));
+
+        MetascriptDocument badColDoc(testArena); MetascriptValue badColVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("collider_component asset; asset.broad_phase_layer = 32;", badColDoc, badColVal));
+        const u32 beforeColErr = logger.errorCount();
+        EXPECT_FALSE(ParseColliderComponentCookMetadata(vPath, metaFile, badColVal).has_value());
+        EXPECT_GT(logger.errorCount(), beforeColErr);
+
+        MetascriptDocument jDoc(testArena); MetascriptValue jVal(testArena);
+        const StringView jScript =
+            "joint_component asset;\nasset.type = \"gear\";\nasset.ratio = 2.0;\nasset.body_entity_a = \"wheel_a\";\nasset.body_entity_b = \"wheel_b\";\nasset.reference_joint_entity_a = \"hinge_a\";\nasset.reference_joint_entity_b = \"hinge_b\";\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(jScript, jDoc, jVal));
+        const auto jRes = ParseJointComponentCookMetadata(vPath, metaFile, jVal);
+        ASSERT_TRUE(jRes.has_value());
+        EXPECT_EQ(jRes.value().component.primaryJoint.referenceJointEntityNameA, Name("hinge_a"));
+        EXPECT_EQ(jRes.value().component.primaryJoint.referenceJointEntityNameB, Name("hinge_b"));
+
+        MetascriptDocument wcDoc(testArena); MetascriptValue wcVal(testArena);
+        const StringView wcScript =
+            "physics_world_config_component asset;\nasset.broad_phase_layer_masks = [4294967295, 1];\nasset.splash_impulse_threshold = 3.5;\nasset.enable_double_precision_positions = 1;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(wcScript, wcDoc, wcVal));
+        const auto wcRes = ParsePhysicsWorldConfigComponentCookMetadata(vPath, metaFile, wcVal);
+        ASSERT_TRUE(wcRes.has_value());
+        EXPECT_EQ(wcRes.value().component.broadPhaseLayerMasks[0u], u32.max);
+        EXPECT_EQ(wcRes.value().component.broadPhaseLayerMasks[1u], 1u);
+        EXPECT_NEAR(wcRes.value().component.splashImpulseThreshold, 3.5f, 1.0e-5f);
+        EXPECT_TRUE(wcRes.value().component.enableDoublePrecisionPositions);
+
+        MetascriptDocument badWcDoc(testArena); MetascriptValue badWcVal(testArena);
+        const StringView badWcScript =
+            "physics_world_config_component asset;\nasset.broad_phase_layer_masks = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1];\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(badWcScript, badWcDoc, badWcVal));
+        const u32 beforeWcErr = logger.errorCount();
+        EXPECT_FALSE(ParsePhysicsWorldConfigComponentCookMetadata(vPath, metaFile, badWcVal).has_value());
+        EXPECT_GT(logger.errorCount(), beforeWcErr);
+    }
+
+    {
+        const StringView attachScript =
+            "soft_body asset;\nasset.particles = [{ \"position\": [0.0, 0.0, 0.0] }];\nasset.attachments = [{ \"particle_index\": 0, \"body_entity\": \"anchor_ent\" }];\n";
+        MetascriptDocument badSbDoc(testArena); MetascriptValue badSbVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(attachScript, badSbDoc, badSbVal));
+        const u32 beforeSbErr = logger.errorCount();
+        EXPECT_FALSE(ParseSoftBodyCookMetadata(vPath, metaFile, badSbVal).has_value());
+        EXPECT_GT(logger.errorCount(), beforeSbErr);
+
+        const StringView compAttachScript =
+            "soft_body_component asset;\nasset.particles = [{ \"position\": [0.0, 0.0, 0.0] }];\nasset.attachments = [{ \"particle_index\": 0, \"body_entity\": \"anchor_ent\" }];\n";
+        MetascriptDocument okSbDoc(testArena); MetascriptValue okSbVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(compAttachScript, okSbDoc, okSbVal));
+        const auto okSbRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, okSbVal);
+        ASSERT_TRUE(okSbRes.has_value());
+        ASSERT_EQ(okSbRes.value().component.attachmentBodyEntityNames.size(), cast<usize>(1u));
+        EXPECT_EQ(okSbRes.value().component.attachmentBodyEntityNames[0u], Name("anchor_ent"));
+
+        const StringView volScript =
+            "soft_body_component asset;\nasset.particles = [{ \"position\": [0,0,0] }, { \"position\": [1,0,0] }, { \"position\": [0,1,0] }, { \"position\": [0,0,1] }];\nasset.volume_constraints = [{ \"p0\": 0, \"p1\": 1, \"p2\": 2, \"p3\": 3, \"rest_volume\": 0.75, \"rest_col0\": [1,0,0], \"rest_col1\": [0,1,0], \"rest_col2\": [0,0,1] }];\n";
+        MetascriptDocument volDoc(testArena); MetascriptValue volVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(volScript, volDoc, volVal));
+        const auto volRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, volVal);
+        ASSERT_TRUE(volRes.has_value());
+        ASSERT_EQ(volRes.value().component.softBody.volumeConstraints.size(), cast<usize>(1u));
+        EXPECT_NEAR(volRes.value().component.softBody.volumeConstraints[0u].restVolume, 0.75f, 1.0e-5f);
+        EXPECT_NEAR(volRes.value().component.softBody.volumeConstraints[0u].restCol0.w, 1.0f, 1.0e-5f);
+
+        MetascriptDocument clothOkDoc(testArena); MetascriptValue clothOkVal(testArena);
+        const StringView clothOkScript =
+            "soft_body_component asset;\nasset.collision_filter = { \"category_bits\": 1099511627776, \"broad_phase_layer\": 31 };\nasset.cloth_grid = { \"rows\": 2, \"cols\": 2, \"fixed_particles\": [0] };\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(clothOkScript, clothOkDoc, clothOkVal));
+        const auto clothOkRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, clothOkVal);
+        ASSERT_TRUE(clothOkRes.has_value());
+        EXPECT_TRUE(clothOkRes.value().component.softBody.particles[0u].isFixed);
+        EXPECT_EQ(clothOkRes.value().component.softBody.collisionFilter.broadPhaseLayer, cast<u8>(31u));
+
+        MetascriptDocument clothBadDoc(testArena); MetascriptValue clothBadVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("soft_body_component asset; asset.collision_filter = { \"broad_phase_layer\": 32 }; asset.cloth_grid = { \"rows\": 2, \"cols\": 2 };", clothBadDoc, clothBadVal));
+        EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, clothBadVal).has_value());
+    }
+
+    {
+        MetascriptDocument cycRagDoc(testArena); MetascriptValue cycRagVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("ragdoll asset; asset.bones = [{ \"parent_index\": 1 }, { \"parent_index\": 0 }];", cycRagDoc, cycRagVal));
+        const u32 beforeRagErr = logger.errorCount();
+        EXPECT_FALSE(ParseRagdollCookMetadata(vPath, metaFile, cycRagVal).has_value());
+        EXPECT_GT(logger.errorCount(), beforeRagErr);
+
+        MetascriptDocument ragCompDoc(testArena); MetascriptValue ragCompVal(testArena);
+        const StringView ragCompScript =
+            "ragdoll_component asset;\nasset.skeleton_asset = \"project/skel/hero\";\nasset.ragdoll_asset = \"project/physics/rag\";\nasset.material_asset = \"project/physics/mat_def\";\nasset.bone_material_assets = [\"project/physics/mat_a\", \"\", \"project/physics/mat_b\"];\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(ragCompScript, ragCompDoc, ragCompVal));
+        const auto ragCompRes = ParseRagdollComponentCookMetadata(vPath, metaFile, ragCompVal);
+        ASSERT_TRUE(ragCompRes.has_value());
+        EXPECT_EQ(ragCompRes.value().component.skeletonAsset.name(), Name("project/skel/hero"));
+        EXPECT_EQ(ragCompRes.value().component.ragdollAsset.name(), Name("project/physics/rag"));
+        EXPECT_EQ(ragCompRes.value().component.materialAsset.name(), Name("project/physics/mat_def"));
+        ASSERT_EQ(ragCompRes.value().component.boneMaterialAssets.size(), cast<usize>(3u));
+        EXPECT_EQ(ragCompRes.value().component.boneMaterialAssets[0u].name(), Name("project/physics/mat_a"));
+        EXPECT_FALSE(ragCompRes.value().component.boneMaterialAssets[1u].valid());
+        EXPECT_EQ(ragCompRes.value().component.boneMaterialAssets[2u].name(), Name("project/physics/mat_b"));
+
+        MetascriptDocument artCompDoc(testArena); MetascriptValue artCompVal(testArena);
+        const StringView artCompScript =
+            "articulation_component asset;\nasset.runtime_urdf_xml = \"<robot name='r'/>\";\nasset.skeleton_asset = \"project/skel/bot\";\nasset.articulation_asset = \"project/physics/art\";\nasset.material_asset = \"project/physics/mat\";\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(artCompScript, artCompDoc, artCompVal));
+        const auto artCompRes = ParseArticulationComponentCookMetadata(vPath, metaFile, artCompVal);
+        ASSERT_TRUE(artCompRes.has_value());
+        EXPECT_EQ(StringView(artCompRes.value().component.urdfXml), StringView("<robot name='r'/>"));
+        EXPECT_EQ(artCompRes.value().component.skeletonAsset.name(), Name("project/skel/bot"));
+        EXPECT_EQ(artCompRes.value().component.articulationAsset.name(), Name("project/physics/art"));
+        EXPECT_EQ(artCompRes.value().component.materialAsset.name(), Name("project/physics/mat"));
+
+        MetascriptDocument vehCompDoc(testArena); MetascriptValue vehCompVal(testArena);
+        const StringView vehCompScript =
+            "vehicle_component asset;\nasset.vehicle_asset = \"project/physics/veh\";\nasset.trailer_entity = \"trailer_body\";\nasset.query_filter = { \"category_bits\": 1099511627776, \"broad_phase_layer\": 12 };\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(vehCompScript, vehCompDoc, vehCompVal));
+        const auto vehCompRes = ParseVehicleComponentCookMetadata(vPath, metaFile, vehCompVal);
+        ASSERT_TRUE(vehCompRes.has_value());
+        EXPECT_EQ(vehCompRes.value().component.vehicleAsset.name(), Name("project/physics/veh"));
+        EXPECT_EQ(vehCompRes.value().component.trailerEntityName, Name("trailer_body"));
+        EXPECT_EQ(vehCompRes.value().component.queryFilter.categoryBits, 1ull << 40u);
+        EXPECT_EQ(vehCompRes.value().component.queryFilter.broadPhaseLayer, cast<u8>(12u));
+
+        MetascriptDocument fvCompDoc(testArena); MetascriptValue fvCompVal(testArena);
+        const StringView fvCompScript =
+            "fluid_volume_component asset;\nasset.shape = \"gerstner_ocean\";\nasset.enable_dynamic_wave_grid = 1;\nasset.gerstner_waves = [{ \"amplitude\": 0.4, \"wavelength\": 8.0 }];\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(fvCompScript, fvCompDoc, fvCompVal));
+        const auto fvCompRes = ParseFluidVolumeComponentCookMetadata(vPath, metaFile, fvCompVal);
+        ASSERT_TRUE(fvCompRes.has_value());
+        EXPECT_TRUE(fvCompRes.value().component.volume.enableDynamicWaveGrid);
+        ASSERT_EQ(fvCompRes.value().component.volume.gerstnerWaves.size(), cast<usize>(1u));
+
+        MetascriptDocument ffCompDoc(testArena); MetascriptValue ffCompVal(testArena);
+        const StringView ffCompScript =
+            "force_field_component asset;\nasset.type = \"vector_field\";\nasset.vector_field_dim_x = 2;\nasset.vector_field_dim_y = 2;\nasset.vector_field_dim_z = 2;\nasset.vector_field_samples = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[0,1,1],[1,0,1],[1,1,1],[0,0,0]];\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(ffCompScript, ffCompDoc, ffCompVal));
+        const auto ffCompRes = ParseForceFieldComponentCookMetadata(vPath, metaFile, ffCompVal);
+        ASSERT_TRUE(ffCompRes.has_value());
+        EXPECT_EQ(ffCompRes.value().component.field.type, ForceFieldType::VectorField);
+        EXPECT_EQ(ffCompRes.value().component.field.vectorFieldSamples.size(), cast<usize>(8u));
+
+        MetascriptDocument gxDoc(testArena); MetascriptValue gxVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("gpu_render_transform_export_component asset; asset.target = \"fracture_body\";", gxDoc, gxVal));
+        const auto gxRes = ParseGpuRenderTransformExportComponentCookMetadata(vPath, metaFile, gxVal);
+        ASSERT_TRUE(gxRes.has_value());
+        EXPECT_EQ(gxRes.value().component.target, GpuRenderTransformExportTarget::FractureBody);
+    }
+
+    {
+        MetascriptDocument fcVertDoc(testArena); MetascriptValue fcVertVal(testArena);
+        const StringView fcVertScript =
+            "fracture_component asset;\nasset.vertices = [[0,0,0],[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,1,1]];\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(fcVertScript, fcVertDoc, fcVertVal));
+        const auto fcVertEntry = ParseFractureComponentCookMetadata(vPath, metaFile, fcVertVal);
+        ASSERT_TRUE(fcVertEntry.has_value());
+        const auto fcBuilt = CookFractureComponentVolumeEntry(fcVertEntry.value());
+        ASSERT_TRUE(fcBuilt.has_value());
+        Vector<u8> fcPayload;
+        ASSERT_TRUE(fcBuilt.value().serializeComponentPayload(fcPayload));
+        FractureComponentAsset fcReloaded(vPath);
+        ASSERT_TRUE(fcReloaded.loadComponentPayload(fcPayload));
+        EXPECT_TRUE(fcReloaded.component.useCustomHull);
+        EXPECT_GE(fcReloaded.component.customHull.vertices.size(), cast<usize>(4u));
+
+        MetascriptDocument fcMeshDoc(testArena); MetascriptValue fcMeshVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("fracture_component asset; asset.source_mesh = \"cube.obj\";", fcMeshDoc, fcMeshVal));
+        const auto fcMeshEntry = ParseFractureComponentCookMetadata(vPath, tempRoot / "fc_mesh.nwb", fcMeshVal);
+        ASSERT_TRUE(fcMeshEntry.has_value());
+        EXPECT_TRUE(fcMeshEntry.value().component.useCustomHull);
+
+        MetascriptDocument fcBadComboDoc(testArena); MetascriptValue fcBadComboVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("fracture_component asset; asset.source_mesh = \"cube.obj\"; asset.vertices = [[0,0,0]];", fcBadComboDoc, fcBadComboVal));
+        const u32 beforeFcErr = logger.errorCount();
+        EXPECT_FALSE(ParseFractureComponentCookMetadata(vPath, tempRoot / "fc_bad.nwb", fcBadComboVal).has_value());
+        EXPECT_GT(logger.errorCount(), beforeFcErr);
+
+        MetascriptDocument frAssetDoc(testArena); MetascriptValue frAssetVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("physics_fracture asset; asset.chunk_count = 6; asset.half_extents = [0.5, 0.5, 0.5];", frAssetDoc, frAssetVal));
+        const auto frAssetEntry = ParseFractureCookMetadata(Name("tests/physics/wave4_fr_asset"), metaFile, frAssetVal);
+        ASSERT_TRUE(frAssetEntry.has_value());
+        const auto frAssetBuilt = BuildFractureAsset(frAssetEntry.value());
+        ASSERT_TRUE(frAssetBuilt.has_value());
+        Vector<u8> frBytes;
+        ASSERT_TRUE(SerializeFractureAsset(frAssetBuilt.value(), frBytes));
+        FractureAsset frAssetReloaded(Name("tests/physics/wave4_fr_asset"));
+        ASSERT_TRUE(frAssetReloaded.loadBinary(frBytes));
+        EXPECT_FALSE(frAssetReloaded.fractureCollection().nodes.empty());
+        EXPECT_GT(frAssetReloaded.fractureCollection().totalVolume, 0.0f);
+    }
+
+    EXPECT_TRUE(RemoveAllIfExists(tempRoot).has_value());
+}
+
+void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_TestArena);
+    const Path metaFile("tests/physics/wave4_dep.nwb");
+
+    {
+        MetascriptDocument vehDoc(testArena); MetascriptValue vehVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("vehicle_component asset; asset.vehicle_asset = \"project/physics/v\";", vehDoc, vehVal));
+        const auto vehDep = ParseVehicleDepEntry(Name("tests/dep/veh"), metaFile, vehVal);
+        ASSERT_TRUE(vehDep.has_value());
+        EXPECT_EQ(vehDep.value().vehicleAsset.name(), Name("project/physics/v"));
+
+        MetascriptDocument ragDoc(testArena); MetascriptValue ragVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("ragdoll_component asset; asset.skeleton_asset = \"project/s\"; asset.ragdoll_asset = \"project/r\"; asset.material_asset = \"project/m\"; asset.bone_material_assets = [\"project/m0\", \"\", \"project/m2\"];", ragDoc, ragVal));
+        const auto ragDep = ParseRagdollDepEntry(Name("tests/dep/rag"), metaFile, ragVal);
+        ASSERT_TRUE(ragDep.has_value());
+        EXPECT_EQ(ragDep.value().skeletonAsset.name(), Name("project/s"));
+        EXPECT_EQ(ragDep.value().ragdollAsset.name(), Name("project/r"));
+        EXPECT_EQ(ragDep.value().materialAsset.name(), Name("project/m"));
+        ASSERT_EQ(ragDep.value().boneMaterialAssets.size(), cast<usize>(2u));
+        EXPECT_EQ(ragDep.value().boneMaterialAssets[0u].name(), Name("project/m0"));
+        EXPECT_EQ(ragDep.value().boneMaterialAssets[1u].name(), Name("project/m2"));
+
+        MetascriptDocument artDoc(testArena); MetascriptValue artVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("articulation_component asset; asset.skeleton_asset = \"project/s\"; asset.articulation_asset = \"project/a\"; asset.material_asset = \"project/m\";", artDoc, artVal));
+        const auto artDep = ParseArticulationDepEntry(Name("tests/dep/art"), metaFile, artVal);
+        ASSERT_TRUE(artDep.has_value());
+        EXPECT_EQ(artDep.value().skeletonAsset.name(), Name("project/s"));
+        EXPECT_EQ(artDep.value().articulationAsset.name(), Name("project/a"));
+        EXPECT_EQ(artDep.value().materialAsset.name(), Name("project/m"));
+
+        MetascriptDocument sbDoc(testArena); MetascriptValue sbVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("soft_body_component asset; asset.soft_body_asset = \"project/sb\"; asset.material_asset = \"project/m\";", sbDoc, sbVal));
+        const auto sbDep = ParseSoftBodyDepEntry(Name("tests/dep/sb"), metaFile, sbVal);
+        ASSERT_TRUE(sbDep.has_value());
+        EXPECT_EQ(sbDep.value().softBodyAsset.name(), Name("project/sb"));
+        EXPECT_EQ(sbDep.value().materialAsset.name(), Name("project/m"));
+
+        MetascriptDocument frDoc(testArena); MetascriptValue frVal(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("fracture_component asset; asset.material_asset = \"project/m\"; asset.fracture_asset = \"project/fr\";", frDoc, frVal));
+        const auto frDep = ParseFractureDepEntry(Name("tests/dep/fr"), metaFile, frVal);
+        ASSERT_TRUE(frDep.has_value());
+        EXPECT_EQ(frDep.value().materialAsset.name(), Name("project/m"));
+        EXPECT_EQ(frDep.value().fractureAsset.name(), Name("project/fr"));
+
+        CookDependencyRegistry depReg(testArena);
+        ASSERT_TRUE(RegisterPhysicsComponentCookDependencies(depReg));
+        EXPECT_TRUE(depReg.matchesAssetType(FractureComponentAsset::AssetTypeName(), IComponent::AssetTypeName()));
+    }
+
+    {
+        SceneCookEntry scene;
+        scene.virtualPath = Name("project/scenes/main");
+        scene.entities.push_back(EntityRef(Name("project/entities/a")));
+        scene.entities.push_back(EntityRef(Name("project/entities/b")));
+        scene.entities.push_back(EntityRef(Name("project/entities/c")));
+
+        EntityCookEntry entA;
+        entA.virtualPath = Name("project/entities/a");
+        entA.name = Name("chassis");
+        entA.components.push_back(ComponentRef(Name("project/comp/j")));
+        entA.components.push_back(ComponentRef(Name("project/comp/p")));
+        entA.components.push_back(ComponentRef(Name("project/comp/v")));
+        entA.components.push_back(ComponentRef(Name("project/comp/r")));
+        entA.components.push_back(ComponentRef(Name("project/comp/a")));
+        entA.components.push_back(ComponentRef(Name("project/comp/sb")));
+
+        EntityCookEntry entB;
+        entB.virtualPath = Name("project/entities/b");
+        entB.components.push_back(ComponentRef(Name("project/comp/rb_b")));
+
+        EntityCookEntry entC;
+        entC.virtualPath = Name("project/entities/c");
+        entC.components.push_back(ComponentRef(Name("project/comp/col_c")));
+
+        RigidBodyComponentCookEntry rbB;
+        rbB.virtualPath = Name("project/comp/rb_b");
+        rbB.component.entityTag = Name("rb_tag_anchor");
+
+        ColliderComponentCookEntry colC;
+        colC.virtualPath = Name("project/comp/col_c");
+        colC.component.entityTag = Name("col_tag_trailer");
+
+        JointComponentCookEntry jc;
+        jc.virtualPath = Name("project/comp/j");
+        jc.component.primaryJoint.bodyEntityNameA = Name("chassis");
+        jc.component.primaryJoint.bodyEntityNameB = Name("rb_tag_anchor");
+        jc.component.primaryJoint.referenceJointEntityNameA = Name("chassis");
+        jc.component.primaryJoint.referenceJointEntityNameB = Name("col_tag_trailer");
+        JointEntry exJ;
+        exJ.bodyEntityNameA = Name("rb_tag_anchor");
+        exJ.bodyEntityNameB = Name("col_tag_trailer");
+        jc.component.extraJoints.push_back(exJ);
+
+        PhysicsParentComponentCookEntry pc;
+        pc.virtualPath = Name("project/comp/p");
+        pc.component.parentEntityName = Name("chassis");
+
+        VehicleComponentCookEntry vc;
+        vc.virtualPath = Name("project/comp/v");
+        vc.component.wheelEntityNames.push_back(Name("rb_tag_anchor"));
+        vc.component.skeletonEntityName = Name("chassis");
+        vc.component.trailerEntityName = Name("col_tag_trailer");
+
+        RagdollComponentCookEntry rc;
+        rc.virtualPath = Name("project/comp/r");
+        rc.component.boneEntityNames.push_back(Name("rb_tag_anchor"));
+        rc.component.skeletonEntityName = Name("chassis");
+
+        ArticulationComponentCookEntry ac;
+        ac.virtualPath = Name("project/comp/a");
+        ac.component.proxyEntityNames.push_back(Name("rb_tag_anchor"));
+        ac.component.linkEntityNames.push_back(Name("col_tag_trailer"));
+        ac.component.skeletonEntityName = Name("chassis");
+
+        SoftBodyComponentCookEntry sbc;
+        sbc.virtualPath = Name("project/comp/sb");
+        sbc.component.attachmentBodyEntityNames.push_back(Name("col_tag_trailer"));
+
+        Vector<SceneCookEntry> scenes;
+        scenes.push_back(scene);
+        Vector<EntityCookEntry> entities;
+        entities.push_back(entA);
+        entities.push_back(entB);
+        entities.push_back(entC);
+        Vector<RigidBodyComponentCookEntry> rigidBodies;
+        rigidBodies.push_back(rbB);
+        Vector<ColliderComponentCookEntry> colliders;
+        colliders.push_back(colC);
+        Vector<JointComponentCookEntry> joints;
+        joints.push_back(jc);
+        Vector<PhysicsParentComponentCookEntry> parents;
+        parents.push_back(pc);
+        Vector<VehicleComponentCookEntry> vehicles;
+        vehicles.push_back(vc);
+        Vector<RagdollComponentCookEntry> ragdolls;
+        ragdolls.push_back(rc);
+        Vector<ArticulationComponentCookEntry> articulations;
+        articulations.push_back(ac);
+        Vector<SoftBodyComponentCookEntry> softBodies;
+        softBodies.push_back(sbc);
+
+        const u32 errValid = logger.errorCount();
+        EXPECT_TRUE(ValidateScenePhysicsEntityReferences(
+            Span<SceneCookEntry>(scenes),
+            Span<EntityCookEntry>(entities),
+            Span<RigidBodyComponentCookEntry>(rigidBodies),
+            Span<ColliderComponentCookEntry>(colliders),
+            Span<JointComponentCookEntry>(joints),
+            Span<PhysicsParentComponentCookEntry>(parents),
+            Span<VehicleComponentCookEntry>(vehicles),
+            Span<RagdollComponentCookEntry>(ragdolls),
+            Span<ArticulationComponentCookEntry>(articulations),
+            Span<SoftBodyComponentCookEntry>(softBodies),
+            false
+        ));
+        EXPECT_EQ(logger.errorCount(), errValid);
+
+        joints[0u].component.primaryJoint.referenceJointEntityNameB = Name("missing_joint");
+        softBodies[0u].component.attachmentBodyEntityNames[0u] = Name("missing_sb_body");
+        const u32 errBroken = logger.errorCount();
+        EXPECT_FALSE(ValidateScenePhysicsEntityReferences(
+            Span<SceneCookEntry>(scenes),
+            Span<EntityCookEntry>(entities),
+            Span<RigidBodyComponentCookEntry>(rigidBodies),
+            Span<ColliderComponentCookEntry>(colliders),
+            Span<JointComponentCookEntry>(joints),
+            Span<PhysicsParentComponentCookEntry>(parents),
+            Span<VehicleComponentCookEntry>(vehicles),
+            Span<RagdollComponentCookEntry>(ragdolls),
+            Span<ArticulationComponentCookEntry>(articulations),
+            Span<SoftBodyComponentCookEntry>(softBodies),
+            false
+        ));
+        EXPECT_GE(logger.errorCount(), errBroken + 2u);
+
+        joints[0u].component.primaryJoint.referenceJointEntityNameB = Name("col_tag_trailer");
+        softBodies[0u].component.attachmentBodyEntityNames[0u] = Name("col_tag_trailer");
+
+        entities.pop_back();
+        const u32 errMissingStrict = logger.errorCount();
+        EXPECT_FALSE(ValidateScenePhysicsEntityReferences(
+            Span<SceneCookEntry>(scenes),
+            Span<EntityCookEntry>(entities),
+            Span<RigidBodyComponentCookEntry>(rigidBodies),
+            Span<ColliderComponentCookEntry>(colliders),
+            Span<JointComponentCookEntry>(joints),
+            Span<PhysicsParentComponentCookEntry>(parents),
+            Span<VehicleComponentCookEntry>(vehicles),
+            Span<RagdollComponentCookEntry>(ragdolls),
+            Span<ArticulationComponentCookEntry>(articulations),
+            Span<SoftBodyComponentCookEntry>(softBodies),
+            false
+        ));
+        EXPECT_GT(logger.errorCount(), errMissingStrict);
+
+        const u32 errMissingPartial = logger.errorCount();
+        EXPECT_TRUE(ValidateScenePhysicsEntityReferences(
+            Span<SceneCookEntry>(scenes),
+            Span<EntityCookEntry>(entities),
+            Span<RigidBodyComponentCookEntry>(rigidBodies),
+            Span<ColliderComponentCookEntry>(colliders),
+            Span<JointComponentCookEntry>(joints),
+            Span<PhysicsParentComponentCookEntry>(parents),
+            Span<VehicleComponentCookEntry>(vehicles),
+            Span<RagdollComponentCookEntry>(ragdolls),
+            Span<ArticulationComponentCookEntry>(articulations),
+            Span<SoftBodyComponentCookEntry>(softBodies),
+            true
+        ));
+        EXPECT_EQ(logger.errorCount(), errMissingPartial);
+
+        entities.push_back(entC);
+        joints[0u].component.primaryJoint.bodyEntityNameA = Name("tag_on_cached_rb");
+        Vector<Name> cachedPaths;
+        cachedPaths.push_back(Name("project/comp/rb_b"));
+
+        const u32 errCachedPartial = logger.errorCount();
+        EXPECT_TRUE(ValidateScenePhysicsEntityReferencesWithCache(
+            Span<SceneCookEntry>(scenes),
+            Span<EntityCookEntry>(entities),
+            Span<RigidBodyComponentCookEntry>(rigidBodies),
+            Span<ColliderComponentCookEntry>(colliders),
+            Span<JointComponentCookEntry>(joints),
+            Span<PhysicsParentComponentCookEntry>(parents),
+            Span<VehicleComponentCookEntry>(vehicles),
+            Span<RagdollComponentCookEntry>(ragdolls),
+            Span<ArticulationComponentCookEntry>(articulations),
+            Span<SoftBodyComponentCookEntry>(softBodies),
+            Span<Name>(cachedPaths),
+            true
+        ));
+        EXPECT_EQ(logger.errorCount(), errCachedPartial);
+
+        const u32 errCachedStrict = logger.errorCount();
+        EXPECT_FALSE(ValidateScenePhysicsEntityReferencesWithCache(
+            Span<SceneCookEntry>(scenes),
+            Span<EntityCookEntry>(entities),
+            Span<RigidBodyComponentCookEntry>(rigidBodies),
+            Span<ColliderComponentCookEntry>(colliders),
+            Span<JointComponentCookEntry>(joints),
+            Span<PhysicsParentComponentCookEntry>(parents),
+            Span<VehicleComponentCookEntry>(vehicles),
+            Span<RagdollComponentCookEntry>(ragdolls),
+            Span<ArticulationComponentCookEntry>(articulations),
+            Span<SoftBodyComponentCookEntry>(softBodies),
+            Span<Name>(cachedPaths),
+            false
+        ));
+        EXPECT_GT(logger.errorCount(), errCachedStrict);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_GTEST(PhysicsCookCases, SubsystemDiagnosticsNewFieldsAndGenerators, VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators)
 NWB_ADHD_GTEST(PhysicsCookCases, OfflineMeshCompoundHullAndHeightmapSources, VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources)
+NWB_ADHD_GTEST(PhysicsCookCases, Wave4RigAssetsFractureAndSubsystemParity, VerifyPhysicsCook_Wave4RigAssetsFractureAndSubsystemParity)
+NWB_ADHD_GTEST(PhysicsCookCases, Wave4DependenciesAndSceneEntityValidation, VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

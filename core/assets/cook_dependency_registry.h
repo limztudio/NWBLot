@@ -65,6 +65,11 @@ public:
 
 public:
     [[nodiscard]] virtual b8 addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone) = 0;
+    [[nodiscard]] virtual b8 addSourceFileDependency(const Path::native_string_view sourceFileNativePath){ (void)sourceFileNativePath; return true; }
+    template<typename PathArenaT>
+    [[nodiscard]] b8 addSourceFileDependency(const ::Path<PathArenaT>& sourceFilePath){
+        return addSourceFileDependency(sourceFilePath.native());
+    }
 };
 
 

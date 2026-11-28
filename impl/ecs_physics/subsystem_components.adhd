@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_physics/physics_assets.adhd>
+#include <impl/assets_physics/physics_rig_assets.adhd>
+#include <impl/assets_skeleton/asset.adhd>
 #include <impl/ecs_scene/components.adhd>
 #include <impl/physics/character_controller.adhd>
 #include <impl/physics/vehicle.adhd>
@@ -111,6 +114,14 @@ class VehicleComponent{
     public Vector<u32> wheelJointIndices;
     public VehicleInput input;
     public Filter queryFilter;
+    public f32 wheelSlipEventThreshold = 0.35f;
+    [transient]
+    public EntityID trailerEntity = s_InvalidEntityId;
+    public Name trailerEntityName = s_NameNone;
+    public f32x4 trailerLocalHitchChassis(0.0f, 0.0f, -2.0f, 0.0f);
+    public f32x4 trailerLocalHitchTrailer(0.0f, 0.0f, 2.0f, 0.0f);
+    public f32 trailerSwingLimitRad = 1.2f;
+    public AssetRef<VehicleAsset> vehicleAsset;
     [transient]
     public VehicleController controller;
     public Name collisionLayer = s_NameNone;
@@ -140,6 +151,11 @@ class RagdollComponent{
     [transient]
     public EntityID skeletonEntity = s_InvalidEntityId;
     public Name skeletonEntityName = s_NameNone;
+    public AssetRef<Skeleton> skeletonAsset;
+    public AssetRef<RagdollAsset> ragdollAsset;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+    public Vector<AssetRef<PhysicsMaterialAsset>> boneMaterialAssets;
+    public RagdollAutoGenParams autoGenParams;
     public Vector<u32> boneJointIndices;
     public b8 driveFromSkeleton = false;
     public b8 writeBackToSkeleton = false;
@@ -178,13 +194,17 @@ class ArticulationComponent{
     [transient]
     public EntityID skeletonEntity = s_InvalidEntityId;
     public Name skeletonEntityName = s_NameNone;
+    public AssetRef<Skeleton> skeletonAsset;
     public Vector<u32> linkJointIndices;
     public b8 isFixedBase = true;
     public u32 subSteps = 4u;
     public u32 solverIterations = 6u;
     public b8 enableContactCoupling = false;
+    public b8 overrideContactFriction = false;
     public f32 contactRestitution = 0.0f;
     public f32 contactFriction = 0.5f;
+    public AssetRef<ArticulationAsset> articulationAsset;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
     public Filter contactFilter;
     public Name collisionLayer = s_NameNone;
     public Vector<ArticulationMimicConstraint> mimicConstraints;
@@ -202,6 +222,10 @@ class ArticulationComponent{
     [transient]
     public Articulation articulation;
     public b8 enabled = true;
+    public b8 autoGenerateFromSkeleton = false;
+    public b8 driveFromSkeleton = false;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public String urdfXml;
     public b8 writeBackToSkeleton = false;
     public b8 writeBackLinkTransforms = true;
     [transient]
@@ -213,7 +237,9 @@ class ArticulationComponent{
 [component("soft_body")]
 class SoftBodyComponent{
     public SoftBody softBody;
+    public AssetRef<SoftBodyAsset> softBodyAsset;
     public Vector<Name> attachmentBodyEntityNames;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
     [transient]
@@ -231,28 +257,55 @@ class FractureComponent{
     public b8 useCustomHull = false;
     public f32 bondStrengthPerArea = 250.0f;
     public f32 impactDamageThreshold = 15.0f;
+    public f32 impactEnergyThreshold = 0.0f;
     public f32 damageRadius = 0.75f;
     public f32 totalMass = 100.0f;
     public f32 stressPropagationDecay = 0.72f;
     public f32 gravityStressScale = 1.0f;
+    public f32 outwardBurstScale = 0.15f;
+    public f32 minChunkVolumeRatio = 0.005f;
+    public f32 impactPointBias = 0.0f;
     public b8 anchorBottomChunks = false;
     public f32 anchorBottomThreshold = 0.2f;
     public b8 autoFractureOnImpact = true;
+    public b8 useHierarchyCollection = false;
+    public u32 hierarchyLevel2SiteCount = 3u;
+    public b8 allowSecondaryFracture = false;
+    public u32 secondaryChunkCount = 4u;
+    public u32 maxSecondaryFractureDepth = 1u;
+    public b8 spawnDetachedChunkEntities = false;
+    public b8 generateChunkVisualMeshes = false;
     public Filter collisionFilter;
     public SurfaceMaterial material;
+    public AssetRef<PhysicsMaterialAsset> materialAsset;
+    public AssetRef<FractureAsset> fractureAsset;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
     [transient]
     public FractureClusterBody cluster;
+    [transient]
+    public Vector<FractureChunkMesh> chunkVisualMeshes;
+    [transient]
+    public Vector<EntityID> detachedChunkEntities;
     [transient]
     public b8 initialized = false;
     [transient]
     public b8 dirty = true;
 }
 
+enum<u32> GpuRenderTransformExportTarget{
+    Auto = 0u,
+    RagdollBone = 1u,
+    ArticulationLink = 2u,
+    VehicleWheel = 3u,
+    FractureBody = 4u,
+}
+
 [component("gpu_render_transform_export")]
 class GpuRenderTransformExportComponent{
     public b8 enabled = true;
+    public GpuRenderTransformExportTarget target = GpuRenderTransformExportTarget::Auto;
+    public u32 subTargetIndex = 0u;
     public u32 instanceIndex = 0u;
     public u32 flags = 0u;
     public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);

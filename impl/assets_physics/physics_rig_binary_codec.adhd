@@ -1,0 +1,3083 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/physics_asset_binary_codec.adhd>
+#include <impl/assets_physics/physics_rig_assets.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class PhysicsFilterBinary{
+    public u64 categoryBits = 1ull;
+    public u64 maskBits = u64.max;
+    public i32 groupIndex = 0;
+    public u8 broadPhaseLayer = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class FractureAssetHeaderBinary{
+    public u32 magic = s_FractureAssetMagic;
+    public u32 version = s_FractureAssetVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+[serialize]
+class FractureCollectionPayloadHeaderBinary{
+    public u32 nodeCount = 0u;
+    public u32 leafNeighborCount = 0u;
+    public f32 totalVolume = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+const u8 s_FractureNodeFlagIsLeaf = 0x01u;
+const u8 s_FractureNodeFlagHasHull = 0x02u;
+
+[serialize]
+class FractureNodeBinary{
+    public f32x4 localCentroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 parentIndex = s_NullIndex;
+    public u32 level = 0u;
+    public f32 volume = 0.0f;
+    public f32 massFraction = 0.0f;
+    public u32 cellIndex = 0u;
+    public u32 childCount = 0u;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+}
+
+[serialize]
+class FractureNeighborPairBinary{
+    public f32x4 localSharedCentroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 chunkA = 0u;
+    public u32 chunkB = 0u;
+    public f32 sharedArea = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyAssetHeaderBinary{
+    public u32 magic = s_SoftBodyAssetMagic;
+    public u32 version = s_SoftBodyAssetVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+const u32 s_SoftBodyPayloadFlagEnableSelfCollision = 0x0001u;
+const u32 s_SoftBodyPayloadFlagEnableTriEdgeSelfCollision = 0x0002u;
+const u32 s_SoftBodyPayloadFlagEnableContinuousSelfCollision = 0x0004u;
+const u32 s_SoftBodyPayloadFlagEnableVertexSplitTearing = 0x0008u;
+const u32 s_SoftBodyPayloadFlagEnableParticleCcd = 0x0010u;
+const u32 s_SoftBodyPayloadFlagEnableSurfaceTriCollision = 0x0020u;
+const u32 s_SoftBodyPayloadFlagUseAttachmentRefFrame = 0x0040u;
+const u32 s_SoftBodyPayloadFlagEnableSleep = 0x0080u;
+const u32 s_SoftBodyPayloadFlagEnableShapeMatching = 0x0100u;
+const u32 s_SoftBodyPayloadFlagCollideWithWorld = 0x0200u;
+const u32 s_SoftBodyPayloadAllFlagsMask = 0x03ffu;
+
+[serialize]
+class SoftBodyPayloadHeaderBinary{
+    public f32x4 windVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 referenceFramePosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 referenceFrameRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public PhysicsSurfaceMaterialBinary surfaceMaterial;
+    public PhysicsFilterBinary collisionFilter;
+    public u32 particleCount = 0u;
+    public u32 distanceCount = 0u;
+    public u32 bendingCount = 0u;
+    public u32 dihedralBendingCount = 0u;
+    public u32 volumeCount = 0u;
+    public u32 anisotropicCount = 0u;
+    public u32 tetherCount = 0u;
+    public u32 surfaceTriangleCount = 0u;
+    public u32 attachmentCount = 0u;
+    public u32 backstopCount = 0u;
+    public u32 goalCount = 0u;
+    public u32 cageBindCount = 0u;
+    public u32 restLocalPosCount = 0u;
+    public u32 particleSourceIdxCount = 0u;
+    public u32 flags = 0u;
+    public u32 subSteps = 4u;
+    public u32 solverIterations = 4u;
+    public f32 particleRadius = 0.03f;
+    public f32 damping = 0.02f;
+    public f32 aerodynamicDrag = 0.02f;
+    public f32 liftCoeff = 0.0f;
+    public f32 tearStrainThreshold = 0.0f;
+    public f32 selfCollisionRadius = 0.0f;
+    public f32 selfCollisionStiffness = 0.5f;
+    public f32 selfCollisionFriction = 0.2f;
+    public f32 inertialBlendFactor = 1.0f;
+    public f32 sleepLinearThreshold = 0.05f;
+    public f32 sleepTimeThreshold = 0.5f;
+    public f32 pressureCoeff = 0.0f;
+    public f32 restSurfaceVolume = 0.0f;
+    public f32 pressureCompliance = 0.0f;
+    public f32 shapeMatchingStiffness = 0.0f;
+    public f32 impactEventThreshold = 0.02f;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+    public u32 reserved3 = 0u;
+    public u32 reserved4 = 0u;
+}
+
+[serialize]
+class SoftBodyParticleBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 velocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 externalForce(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 invMass = 1.0f;
+    public u8 isFixed = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
+}
+
+[serialize]
+class SoftBodyDistanceBinary{
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public f32 restLength = 0.0f;
+    public f32 compliance = 0.0f;
+}
+
+[serialize]
+class SoftBodyDihedralBendingBinary{
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public u32 p2 = 0u;
+    public u32 p3 = 0u;
+    public f32 restAngle = 0.0f;
+    public f32 compliance = 1.0e-3f;
+    public u64 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyVolumeBinary{
+    public f32x4 restCol0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 restCol1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 restCol2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 restEdgeLen0123(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 restEdgeLen45(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public u32 p2 = 0u;
+    public u32 p3 = 0u;
+    public f32 restVolume = 0.0f;
+    public f32 compliance = 0.0f;
+    public f32 youngsModulus = 0.0f;
+    public f32 poissonsRatio = 0.35f;
+    public f32 plasticYield = 0.0f;
+    public f32 plasticCreep = 0.0f;
+    public f32 plasticMaxStrain = 0.5f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyAnisotropicBinary{
+    public f32x4 uvInvRow0(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 uvInvRow1(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public u32 p2 = 0u;
+    public f32 restArea = 0.0f;
+    public f32 warpStiffness = 100.0f;
+    public f32 weftStiffness = 100.0f;
+    public f32 shearStiffness = 50.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyTetherBinary{
+    public u32 anchorIndex = 0u;
+    public u32 particleIndex = 0u;
+    public f32 maxDistance = 0.0f;
+    public f32 compliance = 0.0f;
+}
+
+[serialize]
+class SoftBodyTriangleBinary{
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public u32 p2 = 0u;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyAttachmentBinary{
+    public f32x4 localAnchor(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 particleIndex = 0u;
+    public f32 compliance = 0.0f;
+    public u64 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyBackstopBinary{
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32 particleIndex = 0u;
+    public f32 maxDistance = 0.0f;
+    public f32 backstopRadius = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyGoalBinary{
+    public f32x4 targetPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 particleIndex = 0u;
+    public f32 stiffness = 0.5f;
+    public f32 damping = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyTetBindWeightBinary{
+    public f32x4 baryWeights(0.25f, 0.25f, 0.25f, 0.25f);
+    public u32 tetIndex = 0u;
+    public u32 reserved0 = 0u;
+    public u64 reserved1 = 0u;
+}
+
+[serialize]
+class RagdollAssetHeaderBinary{
+    public u32 magic = s_RagdollAssetMagic;
+    public u32 version = s_RagdollAssetVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+const u8 s_RagdollFlagEnableSelfCollision = 0x01u;
+const u8 s_RagdollFlagAutoExcludeInitialOverlaps = 0x02u;
+const u8 s_RagdollFlagUseBoxForRoot = 0x04u;
+
+[serialize]
+class RagdollPayloadHeaderBinary{
+    public u32 boneCount = 0u;
+    public u32 disabledSelfCollisionPairCount = 0u;
+    public u32 boneKinematicMaskCount = 0u;
+    public u32 boneJointIndexCount = 0u;
+    public f32 minBoneLength = 0.05f;
+    public f32 defaultRadiusRatio = 0.22f;
+    public f32 minCapsuleRadius = 0.04f;
+    public f32 maxCapsuleRadius = 0.22f;
+    public f32 defaultDensity = 1000.0f;
+    public f32 defaultSwingLimit = 0.7f;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public u8 mode = cast<u8>(RagdollMode::Joints);
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+}
+
+const u16 s_PhysicsShapeFlagIsSensor = 0x0001u;
+const u16 s_PhysicsShapeFlagContactEvents = 0x0002u;
+const u16 s_PhysicsShapeFlagHitEvents = 0x0004u;
+const u16 s_PhysicsShapeFlagSensorEvents = 0x0008u;
+const u16 s_PhysicsShapeFlagPreSolveEvents = 0x0010u;
+const u16 s_PhysicsShapeFlagPostSolveEvents = 0x0020u;
+const u16 s_PhysicsShapeFlagInvokeCreation = 0x0040u;
+const u16 s_PhysicsShapeFlagUpdateBodyMass = 0x0080u;
+const u16 s_PhysicsShapeAllFlagsMask = 0x00ffu;
+
+const u8 s_PhysicsBodyFlagEnableSleep = 0x01u;
+const u8 s_PhysicsBodyFlagIsAwake = 0x02u;
+const u8 s_PhysicsBodyFlagIsBullet = 0x04u;
+const u8 s_PhysicsBodyFlagIsEnabled = 0x08u;
+const u8 s_PhysicsBodyFlagAllowFastRotation = 0x10u;
+const u8 s_PhysicsBodyFlagEnableGyroscopicTorque = 0x20u;
+const u8 s_PhysicsBodyAllFlagsMask = 0x3fu;
+
+const u8 s_RagdollBoneExtraFlagUseSixDof = 0x01u;
+const u8 s_RagdollBoneExtraFlagUseSolverMotors = 0x02u;
+const u8 s_RagdollBoneExtraFlagApplyPresetOnCreate = 0x04u;
+
+[serialize]
+class RagdollBoneFullBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 capsuleCenter1Radius(0.0f, -0.5f, 0.0f, 0.25f);
+    public f32x4 capsuleCenter2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 sphereCenterRadius(0.0f, 0.0f, 0.0f, 0.5f);
+    public f32x4 boxHalfExtents(0.1f, 0.2f, 0.1f, 0.0f);
+    public f32x4 shapeLocalPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 shapeLocalRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 jointAnchorWorld(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 jointAxisWorld(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 jointToBodyOffsetPos(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 jointToBodyOffsetRot(0.0f, 0.0f, 0.0f, 1.0f);
+    public PhysicsSurfaceMaterialBinary shapeMaterial;
+    public PhysicsFilterBinary shapeFilter;
+    public u64 bodyUserData = 0u;
+    public u64 shapeUserData = 0u;
+    public u32 parentIndex = s_NullIndex;
+    public u32 bodyMotionLocks = 0u;
+    public f32 linearDamping = 0.0f;
+    public f32 angularDamping = 0.01f;
+    public f32 gravityScale = 1.0f;
+    public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public f32 maxAngularVelocity = 0.0f;
+    public f32 shapeDensity = 1.0f;
+    public f32 hullRadius = 0.0f;
+    public u32 hullVertexCount = 0u;
+    public u32 extraShapeCount = 0u;
+    public f32 swingLimitY = 0.7f;
+    public f32 swingLimitZ = 0.7f;
+    public f32 twistMin = -0.5f;
+    public f32 twistMax = 0.5f;
+    public f32 motorMaxTorque = 0.0f;
+    public f32 motorHertz = 8.0f;
+    public f32 motorDamping = 1.0f;
+    public f32 breakForce = 0.0f;
+    public f32 breakTorque = 0.0f;
+    public u16 shapeFlags = 0u;
+    public u8 bodyType = cast<u8>(BodyType::Dynamic);
+    public u8 bodyFlags = 0u;
+    public u8 extraFlags = 0u;
+    public u8 shapeType = cast<u8>(RagdollBoneShapeType::Capsule);
+    public u8 preset = cast<u8>(RagdollJointPreset::BallSocket);
+    public u8 reserved0 = 0u;
+    public Array<u8, 6u> sixDofMotions;
+    public Array<u8, 6u> sixDofFlags;
+    public Array<f32, 42u> sixDofParams;
+    public u32 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+    public u32 reserved3 = 0u;
+}
+
+[serialize]
+class RagdollExtraShapeFullBinary{
+    public f32x4 capsuleCenter1Radius(0.0f, -0.5f, 0.0f, 0.25f);
+    public f32x4 capsuleCenter2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 sphereCenterRadius(0.0f, 0.0f, 0.0f, 0.5f);
+    public f32x4 boxHalfExtents(0.1f, 0.2f, 0.1f, 0.0f);
+    public f32x4 localOffset(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 shapeLocalPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 shapeLocalRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public PhysicsSurfaceMaterialBinary shapeMaterial;
+    public PhysicsFilterBinary shapeFilter;
+    public u64 shapeUserData = 0u;
+    public f32 shapeDensity = 1.0f;
+    public f32 hullRadius = 0.0f;
+    public u32 hullVertexCount = 0u;
+    public u16 shapeFlags = 0u;
+    public u8 shapeType = cast<u8>(RagdollBoneShapeType::Capsule);
+    public u8 reserved0 = 0u;
+}
+
+[serialize]
+class RagdollSelfPairBinary{
+    public u32 boneA = 0u;
+    public u32 boneB = 0u;
+}
+
+[serialize]
+class ArticulationAssetHeaderBinary{
+    public u32 magic = s_ArticulationAssetMagic;
+    public u32 version = s_ArticulationAssetVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+const u16 s_ArticulationFlagIsFixedBase = 0x0001u;
+const u16 s_ArticulationFlagEnableContactCoupling = 0x0002u;
+const u16 s_ArticulationFlagOverrideContactFriction = 0x0004u;
+const u16 s_ArticulationFlagEnableSelfCollision = 0x0008u;
+const u16 s_ArticulationFlagEnableCcd = 0x0010u;
+const u16 s_ArticulationFlagEnableSleep = 0x0020u;
+const u16 s_ArticulationAllFlagsMask = 0x003fu;
+
+[serialize]
+class ArticulationPayloadHeaderBinary{
+    public PhysicsFilterBinary contactFilter;
+    public u32 linkCount = 0u;
+    public u32 mimicCount = 0u;
+    public u32 tendonCount = 0u;
+    public u32 spatialTendonCount = 0u;
+    public u32 loopCount = 0u;
+    public u32 linkJointIndexCount = 0u;
+    public u32 subSteps = 4u;
+    public u32 solverIterations = 6u;
+    public f32 contactRestitution = 0.0f;
+    public f32 contactFriction = 0.5f;
+    public f32 selfCollisionMargin = 0.0f;
+    public f32 ccdMotionThreshold = 0.25f;
+    public f32 sleepLinearThreshold = 0.02f;
+    public f32 sleepAngularThreshold = 0.03f;
+    public f32 sleepTimeThreshold = 0.5f;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public u16 flags = 0u;
+    public u16 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+const u16 s_ArticulationLinkFlagUseFullInertiaTensor = 0x0001u;
+const u16 s_ArticulationLinkFlagEnableLimit = 0x0002u;
+const u16 s_ArticulationLinkFlagEnableDrive = 0x0004u;
+const u16 s_ArticulationLinkFlagUsePerDofLimits = 0x0008u;
+const u16 s_ArticulationLinkFlagUsePerDofDrives = 0x0010u;
+const u16 s_ArticulationLinkFlagUseImplicitDrive = 0x0020u;
+const u16 s_ArticulationLinkFlagUseEllipticConeLimit = 0x0040u;
+const u16 s_ArticulationLinkFlagUseQuatDrive = 0x0080u;
+const u16 s_ArticulationLinkAllFlagsMask = 0x00ffu;
+
+[serialize]
+class ArticulationLinkFullBinary{
+    public f32x4 parentToJointPos(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 parentToJointRot(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 jointToChildPos(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 jointToChildRot(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 jointAxisLocal(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 jointAxisSecondaryLocal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 comLocal(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 inertiaDiag(0.1f, 0.1f, 0.1f, 0.0f);
+    public f32x4 lowerLimits(-s_Pi, -s_Pi, -s_Pi, 0.0f);
+    public f32x4 upperLimits(s_Pi, s_Pi, s_Pi, 0.0f);
+    public f32x4 driveTargetPos3(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 driveTargetVel3(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 driveStiffness3(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 driveDamping3(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 driveMaxForce3(1.0e6f, 1.0e6f, 1.0e6f, 0.0f);
+    public f32x4 armature(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 driveTargetQuat(0.0f, 0.0f, 0.0f, 1.0f);
+    public u32 parentIndex = s_NullIndex;
+    public f32 mass = 1.0f;
+    public f32 inertiaM00 = 0.0f;
+    public f32 inertiaM01 = 0.0f;
+    public f32 inertiaM02 = 0.0f;
+    public f32 inertiaM11 = 0.0f;
+    public f32 inertiaM12 = 0.0f;
+    public f32 inertiaM22 = 0.0f;
+    public f32 lowerLimit = -s_Pi;
+    public f32 upperLimit = s_Pi;
+    public f32 limitStiffness = 0.0f;
+    public f32 limitDamping = 0.0f;
+    public f32 driveTargetPos = 0.0f;
+    public f32 driveTargetVel = 0.0f;
+    public f32 driveStiffness = 0.0f;
+    public f32 driveDamping = 0.0f;
+    public f32 driveMaxForce = 1.0e6f;
+    public f32 jointDamping = 0.0f;
+    public f32 jointFriction = 0.0f;
+    public f32 limitRestitution = 0.0f;
+    public f32 screwPitch = 0.0f;
+    public f32 breakForce = 0.0f;
+    public f32 breakTorque = 0.0f;
+    public u16 flags = 0u;
+    public u8 jointType = cast<u8>(ArticulationJointType::Revolute);
+    public u8 limitDofMask = 0x7u;
+    public u8 driveDofMask = 0x7u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
+}
+
+const u8 s_ArticulationConstraintFlagEnabled = 0x01u;
+const u8 s_ArticulationConstraintFlagSecond = 0x02u;
+
+[serialize]
+class ArticulationMimicFullBinary{
+    public u32 linkIndex = 0u;
+    public u32 dofIndex = 0u;
+    public u32 targetLinkIndex = 0u;
+    public u32 targetDofIndex = 0u;
+    public f32 gearRatio = 1.0f;
+    public f32 offset = 0.0f;
+    public f32 compliance = 0.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class ArticulationTendonFullBinary{
+    public Array<u32, 8u> linkIndices;
+    public Array<u32, 8u> dofIndices;
+    public Array<f32, 8u> coefficients;
+    public u32 entryCount = 0u;
+    public f32 restLength = 0.0f;
+    public f32 lowerLimit = -s_MaxF32;
+    public f32 upperLimit = s_MaxF32;
+    public f32 compliance = 0.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
+}
+
+[serialize]
+class ArticulationSpatialTendonBinary{
+    public Array<f32x4, 8u> localPoints;
+    public Array<u32, 8u> linkIndices;
+    public u32 attachmentCount = 0u;
+    public f32 restLength = 0.0f;
+    public f32 lowerLimit = 0.0f;
+    public f32 upperLimit = s_MaxF32;
+    public f32 stiffness = 0.0f;
+    public f32 damping = 0.0f;
+    public f32 compliance = 0.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class ArticulationLoopFullBinary{
+    public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 relOrientation(0.0f, 0.0f, 0.0f, 1.0f);
+    public u32 linkIndexA = 0u;
+    public u32 linkIndexB = 0u;
+    public f32 compliance = 0.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class VehicleAssetHeaderBinary{
+    public u32 magic = s_VehicleAssetMagic;
+    public u32 version = s_VehicleAssetVersion;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+const u16 s_VehicleFlagUseAckerman = 0x0001u;
+const u16 s_VehicleFlagAutomaticTransmission = 0x0002u;
+const u16 s_VehicleFlagUseTorqueConverter = 0x0004u;
+const u16 s_VehicleFlagUseSolverImpulses = 0x0008u;
+const u16 s_VehicleFlagEnableAbs = 0x0010u;
+const u16 s_VehicleFlagEnableTcs = 0x0020u;
+const u16 s_VehicleFlagEnableEsp = 0x0040u;
+const u16 s_VehicleAllFlagsMask = 0x007fu;
+
+const u8 s_VehicleWheelFullFlagSteerable = 0x01u;
+const u8 s_VehicleWheelFullFlagDriven = 0x02u;
+const u8 s_VehicleWheelFullFlagHandbrake = 0x04u;
+const u8 s_VehicleWheelFullFlagSweptCast = 0x08u;
+const u8 s_VehicleWheelFullFlagAttachedToTrailer = 0x10u;
+const u8 s_VehicleWheelFullAllFlagsMask = 0x1fu;
+
+[serialize]
+class VehiclePayloadHeaderBinary{
+    public f32x4 ambientWindVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 chassisForwardAxis(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 chassisUpAxis(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 trailerLocalHitchChassis(0.0f, 0.0f, -2.0f, 0.0f);
+    public f32x4 trailerLocalHitchTrailer(0.0f, 0.0f, 2.0f, 0.0f);
+    public PhysicsFilterBinary queryFilter;
+    public Array<f32, 6u> forwardGearRatios;
+    public u32 wheelCount = 0u;
+    public u32 torqueCurvePointCount = 0u;
+    public u32 gearCount = 5u;
+    public u32 subSteps = 1u;
+    public f32 maxTorque = 450.0f;
+    public f32 idleRpm = 900.0f;
+    public f32 maxRpm = 7000.0f;
+    public f32 revLimiterRpm = 0.0f;
+    public f32 shiftUpRpm = 6200.0f;
+    public f32 shiftDownRpm = 2200.0f;
+    public f32 finalDriveRatio = 3.73f;
+    public f32 reverseRatio = -3.4f;
+    public f32 differentialBias = 0.5f;
+    public f32 torsenBiasRatio = 2.0f;
+    public f32 centerDiffFrontSplit = 0.5f;
+    public f32 differentialLockTorque = 250.0f;
+    public f32 clutchStrength = 12.0f;
+    public f32 torqueConverterStallRpm = 2200.0f;
+    public f32 torqueConverterMaxTorqueRatio = 1.6f;
+    public f32 engineInertia = 0.35f;
+    public f32 dragCoeff = 0.35f;
+    public f32 downforceCoeff = 0.25f;
+    public f32 frontalArea = 2.2f;
+    public f32 airDensity = 1.225f;
+    public f32 steerSlewRateRadPerSec = 0.0f;
+    public f32 rearSteerRatio = 0.0f;
+    public f32 motorcycleLeanGain = 0.6f;
+    public f32 motorcycleLeanMaxRad = 0.7f;
+    public f32 trackWidth = 1.6f;
+    public f32 wheelbase = 2.6f;
+    public f32 espStrength = 1.0f;
+    public f32 espMaxBrakeTorque = 2500.0f;
+    public f32 steerSelfCenteringGain = 0.05f;
+    public f32 trailerBrakeForce = 3000.0f;
+    public f32 motorcycleCasterAngleRad = 0.42f;
+    public f32 motorcycleTrail = 0.10f;
+    public f32 motorcycleCounterSteerGain = 0.35f;
+    public f32 motorcycleGyroGain = 1.0f;
+    public f32 wheelSlipEventThreshold = 0.35f;
+    public f32 trailerSwingLimitRad = 1.2f;
+    public u16 flags = 0u;
+    public u8 archetype = cast<u8>(VehicleArchetype::Wheeled);
+    public u8 centerDifferentialMode = cast<u8>(VehicleDifferentialMode::LimitedSlip);
+    public u8 axleDifferentialMode = cast<u8>(VehicleDifferentialMode::LimitedSlip);
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
+}
+
+[serialize]
+class VehicleWheelFullBinary{
+    public f32x4 attachmentPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 suspensionDirection(0.0f, -1.0f, 0.0f, 0.0f);
+    public f32x4 axleAxis(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 forwardAxis(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32 suspensionRestLength = 0.4f;
+    public f32 suspensionMaxTravel = 0.25f;
+    public f32 suspensionStiffness = 35000.0f;
+    public f32 suspensionDamping = 4500.0f;
+    public f32 suspensionReboundDamping = -1.0f;
+    public f32 bumpStopStiffness = 120000.0f;
+    public f32 bumpStopRestitution = 0.1f;
+    public f32 wheelRadius = 0.35f;
+    public f32 wheelWidth = 0.22f;
+    public f32 wheelChamfer = 0.02f;
+    public f32 wheelInertia = 1.5f;
+    public f32 maxSteerAngleRad = 0.55f;
+    public f32 rearSteerRatio = 0.0f;
+    public f32 camberAngleRad = 0.0f;
+    public f32 toeAngleRad = 0.0f;
+    public f32 driveFraction = 0.5f;
+    public f32 maxBrakeTorque = 2500.0f;
+    public f32 maxHandbrakeTorque = 4000.0f;
+    public f32 frictionMultiplier = 1.0f;
+    public f32 loadSensitivity = 0.0f;
+    public f32 nominalWheelLoad = 4000.0f;
+    public f32 rollingResistanceCoeff = 0.015f;
+    public f32 longitudinalStiffness = 12.0f;
+    public f32 lateralStiffness = 10.0f;
+    public f32 pacejkaShapeC = 1.35f;
+    public f32 pacejkaCurvatureE = 0.0f;
+    public f32 pacejkaShapeCLat = 0.0f;
+    public f32 pacejkaCurvatureELat = 0.0f;
+    public f32 relaxationLengthLong = 0.15f;
+    public f32 relaxationLengthLat = 0.2f;
+    public f32 selfAligningTrail = 0.03f;
+    public f32 antiRollStiffness = 8000.0f;
+    public i32 axleIndex = -1;
+    public i32 antiRollPairIndex = -1;
+    public i32 trackSide = 0;
+    public u8 wheelCastMode = cast<u8>(VehicleWheelCastMode::Raycast);
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+}
+
+[serialize]
+class VehicleTorqueCurvePointBinary{
+    public f32 rpm = 0.0f;
+    public f32 torque = 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidPhysicsVec3NonZero(in VectorSingle v){
+    return IsFinite(v.xyz) && Vector3LengthSq(v).x > s_NormalizeEpsilonSq;
+}
+
+b8 ValidPhysicsQuaternion(in VectorSingle q){
+    return IsFinite(q) && Vector4LengthSq(q).x > s_NormalizeEpsilonSq;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PhysicsRigBinaryCodec{
+    public b8 validFilter(in Filter f)const{
+        return f.broadPhaseLayer < 32u;
+    }
+
+    public PhysicsFilterBinary packFilter(in Filter f)const{
+        PhysicsFilterBinary outFilter;
+        outFilter.categoryBits = f.categoryBits;
+        outFilter.maskBits = f.maskBits;
+        outFilter.groupIndex = f.groupIndex;
+        outFilter.broadPhaseLayer = f.broadPhaseLayer;
+        return outFilter;
+    }
+
+    public Expected<Filter> unpackFilter(in PhysicsFilterBinary bin)const{
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.broadPhaseLayer >= 32u)
+            return MakeUnexpected(Failure());
+        Filter outFilter;
+        outFilter.categoryBits = bin.categoryBits;
+        outFilter.maskBits = bin.maskBits;
+        outFilter.groupIndex = bin.groupIndex;
+        outFilter.broadPhaseLayer = bin.broadPhaseLayer;
+        return outFilter;
+    }
+
+    private u16 packShapeDefFlags(in ShapeDef sd)const{
+        u16 flags = 0u;
+        if(sd.isSensor) flags |= s_PhysicsShapeFlagIsSensor;
+        if(sd.enableContactEvents) flags |= s_PhysicsShapeFlagContactEvents;
+        if(sd.enableHitEvents) flags |= s_PhysicsShapeFlagHitEvents;
+        if(sd.enableSensorEvents) flags |= s_PhysicsShapeFlagSensorEvents;
+        if(sd.enablePreSolveEvents) flags |= s_PhysicsShapeFlagPreSolveEvents;
+        if(sd.enablePostSolveEvents) flags |= s_PhysicsShapeFlagPostSolveEvents;
+        if(sd.invokeContactCreation) flags |= s_PhysicsShapeFlagInvokeCreation;
+        if(sd.updateBodyMass) flags |= s_PhysicsShapeFlagUpdateBodyMass;
+        return flags;
+    }
+
+    private void unpackShapeDefFlags(in u16 flags, mut ShapeDef sd)const{
+        sd.isSensor = (flags & s_PhysicsShapeFlagIsSensor) != 0u;
+        sd.enableContactEvents = (flags & s_PhysicsShapeFlagContactEvents) != 0u;
+        sd.enableHitEvents = (flags & s_PhysicsShapeFlagHitEvents) != 0u;
+        sd.enableSensorEvents = (flags & s_PhysicsShapeFlagSensorEvents) != 0u;
+        sd.enablePreSolveEvents = (flags & s_PhysicsShapeFlagPreSolveEvents) != 0u;
+        sd.enablePostSolveEvents = (flags & s_PhysicsShapeFlagPostSolveEvents) != 0u;
+        sd.invokeContactCreation = (flags & s_PhysicsShapeFlagInvokeCreation) != 0u;
+        sd.updateBodyMass = (flags & s_PhysicsShapeFlagUpdateBodyMass) != 0u;
+    }
+
+    public b8 validFractureCollectionData(in FractureCollection col, in b8 allowEmpty)const{
+        if(col.nodes.empty())
+            return allowEmpty;
+        if(col.nodes.size() > cast<usize>(u32.max) || col.leafNeighborPairs.size() > cast<usize>(u32.max))
+            return false;
+        if(!IsFinite(VectorSingle(col.totalVolume)) || col.totalVolume < 0.0f)
+            return false;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        u32 leafCount = 0u;
+        const usize nodeCount = col.nodes.size();
+        for(usize ni = 0u; ni < nodeCount; ++ni){
+            in FractureCollectionNode node = col.nodes[ni];
+            if(node.parentIndex != s_NullIndex && cast<usize>(node.parentIndex) >= nodeCount)
+                return false;
+            if(node.parentIndex != s_NullIndex && cast<usize>(node.parentIndex) == ni)
+                return false;
+            if(node.childIndices.size() > cast<usize>(u32.max))
+                return false;
+            for(usize ci = 0u; ci < node.childIndices.size(); ++ci){
+                if(cast<usize>(node.childIndices[ci]) >= nodeCount || cast<usize>(node.childIndices[ci]) == ni)
+                    return false;
+            }
+            in FractureChunkSpec ch = node.chunk;
+            if(
+                !IsValidPositionVec3(VectorSingle(ch.localCentroid, 0.0f))
+                || !IsFinite(VectorSingle(ch.localAabbMin, 0.0f))
+                || !IsFinite(VectorSingle(ch.localAabbMax, 0.0f))
+                || !IsFinite(VectorSingle(ch.volume, ch.massFraction, 0.0f, 0.0f))
+                || ch.volume < 0.0f
+                || ch.massFraction < 0.0f
+            )
+                return false;
+            if(ch.localAabbMin.x > ch.localAabbMax.x || ch.localAabbMin.y > ch.localAabbMax.y || ch.localAabbMin.z > ch.localAabbMax.z)
+                return false;
+            if(node.isLeaf){
+                if(!assetCodec.validHullShapeData(ch.hull))
+                    return false;
+                ++leafCount;
+            }
+            else if(!ch.hull.vertices.empty() && !assetCodec.validHullShapeData(ch.hull)){
+                return false;
+            }
+        }
+        if(leafCount == 0u)
+            return false;
+        for(usize pi = 0u; pi < col.leafNeighborPairs.size(); ++pi){
+            in FractureNeighborPair np = col.leafNeighborPairs[pi];
+            if(
+                np.chunkA >= leafCount
+                || np.chunkB >= leafCount
+                || np.chunkA >= np.chunkB
+                || !IsFinite(VectorSingle(np.sharedArea))
+                || np.sharedArea < 0.0f
+                || !IsValidPositionVec3(VectorSingle(np.localSharedCentroid, 0.0f))
+            )
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateFractureCollection(in FractureCollection col, in Name virtualPath)const{
+        if(this.validFractureCollectionData(col, false))
+            return true;
+        error("FractureAsset::validatePayload failed: invalid fracture collection for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendFractureCollectionPayload(in FractureCollection col, mut Vector<u8> outBinary)const{
+        if(col.nodes.size() > cast<usize>(u32.max) || col.leafNeighborPairs.size() > cast<usize>(u32.max))
+            return false;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        FractureCollectionPayloadHeaderBinary phdr;
+        phdr.nodeCount = cast<u32>(col.nodes.size());
+        phdr.leafNeighborCount = cast<u32>(col.leafNeighborPairs.size());
+        phdr.totalVolume = col.totalVolume;
+        AppendPOD(outBinary, phdr);
+
+        for(usize ni = 0u; ni < col.nodes.size(); ++ni){
+            in FractureCollectionNode node = col.nodes[ni];
+            if(node.childIndices.size() > cast<usize>(u32.max))
+                return false;
+            FractureNodeBinary nbin;
+            nbin.localCentroid = node.chunk.localCentroid;
+            nbin.localAabbMin = node.chunk.localAabbMin;
+            nbin.localAabbMax = node.chunk.localAabbMax;
+            nbin.parentIndex = node.parentIndex;
+            nbin.level = node.level;
+            nbin.volume = node.chunk.volume;
+            nbin.massFraction = node.chunk.massFraction;
+            nbin.cellIndex = node.chunk.cellIndex;
+            nbin.childCount = cast<u32>(node.childIndices.size());
+            if(node.isLeaf)
+                nbin.flags |= s_FractureNodeFlagIsLeaf;
+            if(!node.chunk.hull.vertices.empty())
+                nbin.flags |= s_FractureNodeFlagHasHull;
+            AppendPOD(outBinary, nbin);
+            if(!AppendBinaryVectorPayload(outBinary, node.childIndices).has_value())
+                return false;
+            if((nbin.flags & s_FractureNodeFlagHasHull) != 0u){
+                if(!assetCodec.appendConvexHullBinary(node.chunk.hull, outBinary))
+                    return false;
+            }
+        }
+        for(usize pi = 0u; pi < col.leafNeighborPairs.size(); ++pi){
+            in FractureNeighborPair np = col.leafNeighborPairs[pi];
+            FractureNeighborPairBinary npBin;
+            npBin.localSharedCentroid = np.localSharedCentroid;
+            npBin.chunkA = np.chunkA;
+            npBin.chunkB = np.chunkB;
+            npBin.sharedArea = np.sharedArea;
+            AppendPOD(outBinary, npBin);
+        }
+        return true;
+    }
+
+    public Expected<FractureCollection> readFractureCollectionPayload(in Span<u8> binary, mut usize cursor, in b8 allowEmpty)const{
+        const Expected<FractureCollectionPayloadHeaderBinary> phdrRes = ReadPOD<FractureCollectionPayloadHeaderBinary>(binary, cursor);
+        if(!phdrRes.has_value())
+            return MakeUnexpected(Failure());
+        in FractureCollectionPayloadHeaderBinary phdr = phdrRes.value();
+        if(phdr.reserved0 != 0u)
+            return MakeUnexpected(Failure());
+
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        FractureCollection col;
+        col.totalVolume = phdr.totalVolume;
+        col.nodes.reserve(phdr.nodeCount);
+        for(u32 ni = 0u; ni < phdr.nodeCount; ++ni){
+            const Expected<FractureNodeBinary> nRes = ReadPOD<FractureNodeBinary>(binary, cursor);
+            if(!nRes.has_value())
+                return MakeUnexpected(Failure());
+            in FractureNodeBinary nbin = nRes.value();
+            if(nbin.reserved0 != 0u || nbin.reserved1 != 0u || nbin.reserved2 != 0u || (nbin.flags & ~(s_FractureNodeFlagIsLeaf | s_FractureNodeFlagHasHull)) != 0u)
+                return MakeUnexpected(Failure());
+            FractureCollectionNode node;
+            node.parentIndex = nbin.parentIndex;
+            node.level = nbin.level;
+            node.isLeaf = (nbin.flags & s_FractureNodeFlagIsLeaf) != 0u;
+            node.chunk.localCentroid = nbin.localCentroid;
+            node.chunk.localAabbMin = nbin.localAabbMin;
+            node.chunk.localAabbMax = nbin.localAabbMax;
+            node.chunk.volume = nbin.volume;
+            node.chunk.massFraction = nbin.massFraction;
+            node.chunk.cellIndex = nbin.cellIndex;
+            if(cast<u64>(nbin.childCount) * cast<u64>(size_of<CollisionMeshU32Binary>()) > cast<u64>(binary.size() - cursor))
+                return MakeUnexpected(Failure());
+            if(!ReadBinaryVectorPayload(binary, nbin.childCount, cursor, node.childIndices).has_value())
+                return MakeUnexpected(Failure());
+            if((nbin.flags & s_FractureNodeFlagHasHull) != 0u){
+                const Expected<HullShape> hullRes = assetCodec.readConvexHullPayload(binary, cursor);
+                if(!hullRes.has_value())
+                    return MakeUnexpected(Failure());
+                node.chunk.hull = hullRes.value();
+            }
+            col.nodes.push_back(node);
+        }
+
+        if(cast<u64>(phdr.leafNeighborCount) * cast<u64>(size_of<FractureNeighborPairBinary>()) > cast<u64>(binary.size() - cursor))
+            return MakeUnexpected(Failure());
+        col.leafNeighborPairs.reserve(phdr.leafNeighborCount);
+        for(u32 pi = 0u; pi < phdr.leafNeighborCount; ++pi){
+            const Expected<FractureNeighborPairBinary> npRes = ReadPOD<FractureNeighborPairBinary>(binary, cursor);
+            if(!npRes.has_value() || npRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            FractureNeighborPair np;
+            np.chunkA = npRes.value().chunkA;
+            np.chunkB = npRes.value().chunkB;
+            np.sharedArea = npRes.value().sharedArea;
+            np.localSharedCentroid = npRes.value().localSharedCentroid;
+            col.leafNeighborPairs.push_back(np);
+        }
+
+        if(!this.validFractureCollectionData(col, allowEmpty))
+            return MakeUnexpected(Failure());
+        return col;
+    }
+
+    public b8 serializeFractureCollectionUnchecked(in FractureCollection col, mut Vector<u8> outBinary)const{
+        static_assert(size_of<FractureAssetHeaderBinary>() == 16u && size_of<FractureCollectionPayloadHeaderBinary>() == 16u && size_of<FractureNodeBinary>() == 80u && size_of<FractureNeighborPairBinary>() == 32u);
+        outBinary.clear();
+        FractureAssetHeaderBinary hdr;
+        AppendPOD(outBinary, hdr);
+        return this.appendFractureCollectionPayload(col, outBinary);
+    }
+
+    public b8 serializeFractureCollection(in FractureCollection col, mut Vector<u8> outBinary)const{
+        if(!this.validFractureCollectionData(col, false))
+            return false;
+        return this.serializeFractureCollectionUnchecked(col, outBinary);
+    }
+
+    public Expected<FractureCollection> deserializeFractureCollection(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<FractureAssetHeaderBinary> hdrRes = ReadPOD<FractureAssetHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("FractureAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in FractureAssetHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_FractureAssetMagic || hdr.version != s_FractureAssetVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("FractureAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<FractureCollection> colRes = this.readFractureCollectionPayload(binary, cursor, false);
+        if(!colRes.has_value() || cursor != binary.size()){
+            error("FractureAsset::loadBinary failed: invalid payload");
+            return MakeUnexpected(Failure());
+        }
+        return colRes.value();
+    }
+
+    public b8 validSoftBodyData(in SoftBody sb, in b8 allowEmpty)const{
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        if(!assetCodec.validSurfaceMaterial(sb.surfaceMaterial) || !this.validFilter(sb.collisionFilter))
+            return false;
+        if(
+            !IsFinite(VectorSingle(sb.windVelocity))
+            || !IsValidPositionVec3(VectorSingle(sb.referenceFramePosition))
+            || !ValidPhysicsQuaternion(VectorSingle(sb.referenceFrameRotation))
+            || !IsFinite(VectorSingle(sb.particleRadius, sb.damping, sb.aerodynamicDrag, sb.liftCoeff))
+            || !IsFinite(VectorSingle(sb.tearStrainThreshold, sb.selfCollisionRadius, sb.selfCollisionStiffness, sb.selfCollisionFriction))
+            || !IsFinite(VectorSingle(sb.inertialBlendFactor, sb.sleepLinearThreshold, sb.sleepTimeThreshold, sb.pressureCoeff))
+            || !IsFinite(VectorSingle(sb.restSurfaceVolume, sb.pressureCompliance, sb.shapeMatchingStiffness, sb.impactEventThreshold))
+            || sb.particleRadius < 0.0f
+            || sb.damping < 0.0f
+            || sb.aerodynamicDrag < 0.0f
+            || sb.tearStrainThreshold < 0.0f
+            || sb.selfCollisionRadius < 0.0f
+            || sb.selfCollisionStiffness < 0.0f
+            || sb.selfCollisionFriction < 0.0f
+            || sb.inertialBlendFactor < 0.0f
+            || sb.sleepLinearThreshold < 0.0f
+            || sb.sleepTimeThreshold < 0.0f
+            || sb.pressureCompliance < 0.0f
+            || sb.shapeMatchingStiffness < 0.0f
+            || sb.impactEventThreshold < 0.0f
+            || sb.subSteps < 1u
+            || sb.solverIterations < 1u
+        )
+            return false;
+
+        if(sb.particles.empty()){
+            return allowEmpty
+                && sb.distanceConstraints.empty()
+                && sb.bendingConstraints.empty()
+                && sb.dihedralBendingConstraints.empty()
+                && sb.volumeConstraints.empty()
+                && sb.anisotropicConstraints.empty()
+                && sb.tetherConstraints.empty()
+                && sb.surfaceTriangles.empty()
+                && sb.attachments.empty()
+                && sb.backstopConstraints.empty()
+                && sb.goalConstraints.empty()
+                && sb.cageBinding.bindings.empty()
+                && sb.restLocalPositions.empty()
+                && sb.particleSourceIndices.empty();
+        }
+
+        const usize pCount = sb.particles.size();
+        for(usize pi = 0u; pi < pCount; ++pi){
+            in SoftBodyParticle pt = sb.particles[pi];
+            if(
+                !IsValidPositionVec3(VectorSingle(pt.position))
+                || !IsFinite(VectorSingle(pt.velocity))
+                || !IsFinite(VectorSingle(pt.externalForce))
+                || !IsFinite(VectorSingle(pt.invMass))
+                || pt.invMass < 0.0f
+            )
+                return false;
+        }
+        for(usize di = 0u; di < sb.distanceConstraints.size(); ++di){
+            in SoftBodyDistanceConstraint c = sb.distanceConstraints[di];
+            if(cast<usize>(c.p0) >= pCount || cast<usize>(c.p1) >= pCount || !IsFinite(VectorSingle(c.restLength, c.compliance)) || c.restLength < 0.0f || c.compliance < 0.0f)
+                return false;
+        }
+        for(usize bi = 0u; bi < sb.bendingConstraints.size(); ++bi){
+            in SoftBodyBendingConstraint c = sb.bendingConstraints[bi];
+            if(cast<usize>(c.p0) >= pCount || cast<usize>(c.p1) >= pCount || !IsFinite(VectorSingle(c.restLength, c.compliance)) || c.restLength < 0.0f || c.compliance < 0.0f)
+                return false;
+        }
+        for(usize dbi = 0u; dbi < sb.dihedralBendingConstraints.size(); ++dbi){
+            in SoftBodyDihedralBendingConstraint c = sb.dihedralBendingConstraints[dbi];
+            if(cast<usize>(c.p0) >= pCount || cast<usize>(c.p1) >= pCount || cast<usize>(c.p2) >= pCount || cast<usize>(c.p3) >= pCount || !IsFinite(VectorSingle(c.restAngle, c.compliance)) || c.compliance < 0.0f)
+                return false;
+        }
+        const usize vCount = sb.volumeConstraints.size();
+        for(usize vi = 0u; vi < vCount; ++vi){
+            in SoftBodyVolumeConstraint vc = sb.volumeConstraints[vi];
+            if(
+                cast<usize>(vc.p0) >= pCount || cast<usize>(vc.p1) >= pCount || cast<usize>(vc.p2) >= pCount || cast<usize>(vc.p3) >= pCount
+                || !IsFinite(VectorSingle(vc.restVolume, vc.compliance, vc.youngsModulus, vc.poissonsRatio))
+                || !IsFinite(VectorSingle(vc.plasticYield, vc.plasticCreep, vc.plasticMaxStrain, 0.0f))
+                || !IsFinite(VectorSingle(vc.restCol0)) || !IsFinite(VectorSingle(vc.restCol1)) || !IsFinite(VectorSingle(vc.restCol2))
+                || !IsFinite(VectorSingle(vc.restEdgeLen0123)) || !IsFinite(VectorSingle(vc.restEdgeLen45))
+                || vc.compliance < 0.0f || vc.youngsModulus < 0.0f || vc.poissonsRatio <= -1.0f || vc.poissonsRatio >= 0.5f
+                || vc.plasticYield < 0.0f || vc.plasticCreep < 0.0f || vc.plasticMaxStrain < 0.0f
+            )
+                return false;
+        }
+        for(usize ai = 0u; ai < sb.anisotropicConstraints.size(); ++ai){
+            in SoftBodyAnisotropicClothConstraint ac = sb.anisotropicConstraints[ai];
+            if(
+                cast<usize>(ac.p0) >= pCount || cast<usize>(ac.p1) >= pCount || cast<usize>(ac.p2) >= pCount
+                || !IsFinite(VectorSingle(ac.restArea, ac.warpStiffness, ac.weftStiffness, ac.shearStiffness))
+                || !IsFinite(VectorSingle(ac.uvInvRow0)) || !IsFinite(VectorSingle(ac.uvInvRow1))
+                || ac.restArea < 0.0f || ac.warpStiffness < 0.0f || ac.weftStiffness < 0.0f || ac.shearStiffness < 0.0f
+            )
+                return false;
+        }
+        for(usize ti = 0u; ti < sb.tetherConstraints.size(); ++ti){
+            in SoftBodyTetherConstraint tc = sb.tetherConstraints[ti];
+            if(cast<usize>(tc.anchorIndex) >= pCount || cast<usize>(tc.particleIndex) >= pCount || !IsFinite(VectorSingle(tc.maxDistance, tc.compliance)) || tc.maxDistance < 0.0f || tc.compliance < 0.0f)
+                return false;
+        }
+        for(usize si = 0u; si < sb.surfaceTriangles.size(); ++si){
+            in SoftBodyTriangle st = sb.surfaceTriangles[si];
+            if(cast<usize>(st.p0) >= pCount || cast<usize>(st.p1) >= pCount || cast<usize>(st.p2) >= pCount)
+                return false;
+        }
+        for(usize ati = 0u; ati < sb.attachments.size(); ++ati){
+            in SoftBodyAttachment att = sb.attachments[ati];
+            if(cast<usize>(att.particleIndex) >= pCount || !IsFinite(VectorSingle(att.localAnchor)) || !IsFinite(VectorSingle(att.compliance)) || att.compliance < 0.0f)
+                return false;
+        }
+        for(usize bsi = 0u; bsi < sb.backstopConstraints.size(); ++bsi){
+            in SoftBodyBackstopConstraint bs = sb.backstopConstraints[bsi];
+            if(cast<usize>(bs.particleIndex) >= pCount || !IsFinite(VectorSingle(bs.center)) || !IsFinite(VectorSingle(bs.normal)) || !IsFinite(VectorSingle(bs.maxDistance, bs.backstopRadius)) || bs.maxDistance < 0.0f || bs.backstopRadius < 0.0f)
+                return false;
+        }
+        for(usize gi = 0u; gi < sb.goalConstraints.size(); ++gi){
+            in SoftBodyGoalConstraint gc = sb.goalConstraints[gi];
+            if(cast<usize>(gc.particleIndex) >= pCount || !IsFinite(VectorSingle(gc.targetPosition)) || !IsFinite(VectorSingle(gc.stiffness, gc.damping)) || gc.stiffness < 0.0f || gc.damping < 0.0f)
+                return false;
+        }
+        for(usize cbi = 0u; cbi < sb.cageBinding.bindings.size(); ++cbi){
+            in SoftBodyTetBindWeight bw = sb.cageBinding.bindings[cbi];
+            if(cast<usize>(bw.tetIndex) >= vCount || !IsFinite(VectorSingle(bw.baryWeights)))
+                return false;
+        }
+        if(!sb.restLocalPositions.empty()){
+            if(sb.restLocalPositions.size() != pCount)
+                return false;
+            for(usize ri = 0u; ri < sb.restLocalPositions.size(); ++ri){
+                if(!IsValidPositionVec3(VectorSingle(sb.restLocalPositions[ri])))
+                    return false;
+            }
+        }
+        if(!sb.particleSourceIndices.empty() && sb.particleSourceIndices.size() != pCount)
+            return false;
+        return true;
+    }
+
+    public b8 validateSoftBody(in SoftBody sb, in Name virtualPath)const{
+        if(this.validSoftBodyData(sb, false))
+            return true;
+        error("SoftBodyAsset::validatePayload failed: invalid soft body for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendSoftBodyPayload(in SoftBody sb, mut Vector<u8> outBinary)const{
+        static_assert(size_of<SoftBodyPayloadHeaderBinary>() == 304u && size_of<SoftBodyParticleBinary>() == 64u && size_of<SoftBodyVolumeBinary>() == 128u);
+        if(
+            sb.particles.size() > cast<usize>(u32.max)
+            || sb.distanceConstraints.size() > cast<usize>(u32.max)
+            || sb.bendingConstraints.size() > cast<usize>(u32.max)
+            || sb.dihedralBendingConstraints.size() > cast<usize>(u32.max)
+            || sb.volumeConstraints.size() > cast<usize>(u32.max)
+            || sb.anisotropicConstraints.size() > cast<usize>(u32.max)
+            || sb.tetherConstraints.size() > cast<usize>(u32.max)
+            || sb.surfaceTriangles.size() > cast<usize>(u32.max)
+            || sb.attachments.size() > cast<usize>(u32.max)
+            || sb.backstopConstraints.size() > cast<usize>(u32.max)
+            || sb.goalConstraints.size() > cast<usize>(u32.max)
+            || sb.cageBinding.bindings.size() > cast<usize>(u32.max)
+            || sb.restLocalPositions.size() > cast<usize>(u32.max)
+            || sb.particleSourceIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        SoftBodyPayloadHeaderBinary hdr;
+        hdr.windVelocity = sb.windVelocity;
+        hdr.referenceFramePosition = sb.referenceFramePosition;
+        hdr.referenceFrameRotation = sb.referenceFrameRotation;
+        hdr.surfaceMaterial = assetCodec.packSurfaceMaterialFields(sb.surfaceMaterial);
+        hdr.collisionFilter = this.packFilter(sb.collisionFilter);
+        hdr.particleCount = cast<u32>(sb.particles.size());
+        hdr.distanceCount = cast<u32>(sb.distanceConstraints.size());
+        hdr.bendingCount = cast<u32>(sb.bendingConstraints.size());
+        hdr.dihedralBendingCount = cast<u32>(sb.dihedralBendingConstraints.size());
+        hdr.volumeCount = cast<u32>(sb.volumeConstraints.size());
+        hdr.anisotropicCount = cast<u32>(sb.anisotropicConstraints.size());
+        hdr.tetherCount = cast<u32>(sb.tetherConstraints.size());
+        hdr.surfaceTriangleCount = cast<u32>(sb.surfaceTriangles.size());
+        hdr.attachmentCount = cast<u32>(sb.attachments.size());
+        hdr.backstopCount = cast<u32>(sb.backstopConstraints.size());
+        hdr.goalCount = cast<u32>(sb.goalConstraints.size());
+        hdr.cageBindCount = cast<u32>(sb.cageBinding.bindings.size());
+        hdr.restLocalPosCount = cast<u32>(sb.restLocalPositions.size());
+        hdr.particleSourceIdxCount = cast<u32>(sb.particleSourceIndices.size());
+        if(sb.enableSelfCollision) hdr.flags |= s_SoftBodyPayloadFlagEnableSelfCollision;
+        if(sb.enableTriangleEdgeSelfCollision) hdr.flags |= s_SoftBodyPayloadFlagEnableTriEdgeSelfCollision;
+        if(sb.enableContinuousSelfCollision) hdr.flags |= s_SoftBodyPayloadFlagEnableContinuousSelfCollision;
+        if(sb.enableVertexSplitTearing) hdr.flags |= s_SoftBodyPayloadFlagEnableVertexSplitTearing;
+        if(sb.enableParticleCcd) hdr.flags |= s_SoftBodyPayloadFlagEnableParticleCcd;
+        if(sb.enableSurfaceTriangleCollision) hdr.flags |= s_SoftBodyPayloadFlagEnableSurfaceTriCollision;
+        if(sb.useAttachmentReferenceFrame) hdr.flags |= s_SoftBodyPayloadFlagUseAttachmentRefFrame;
+        if(sb.enableSleep) hdr.flags |= s_SoftBodyPayloadFlagEnableSleep;
+        if(sb.enableShapeMatching) hdr.flags |= s_SoftBodyPayloadFlagEnableShapeMatching;
+        if(sb.collideWithWorld) hdr.flags |= s_SoftBodyPayloadFlagCollideWithWorld;
+        hdr.subSteps = sb.subSteps;
+        hdr.solverIterations = sb.solverIterations;
+        hdr.particleRadius = sb.particleRadius;
+        hdr.damping = sb.damping;
+        hdr.aerodynamicDrag = sb.aerodynamicDrag;
+        hdr.liftCoeff = sb.liftCoeff;
+        hdr.tearStrainThreshold = sb.tearStrainThreshold;
+        hdr.selfCollisionRadius = sb.selfCollisionRadius;
+        hdr.selfCollisionStiffness = sb.selfCollisionStiffness;
+        hdr.selfCollisionFriction = sb.selfCollisionFriction;
+        hdr.inertialBlendFactor = sb.inertialBlendFactor;
+        hdr.sleepLinearThreshold = sb.sleepLinearThreshold;
+        hdr.sleepTimeThreshold = sb.sleepTimeThreshold;
+        hdr.pressureCoeff = sb.pressureCoeff;
+        hdr.restSurfaceVolume = sb.restSurfaceVolume;
+        hdr.pressureCompliance = sb.pressureCompliance;
+        hdr.shapeMatchingStiffness = sb.shapeMatchingStiffness;
+        hdr.impactEventThreshold = sb.impactEventThreshold;
+        AppendPOD(outBinary, hdr);
+
+        for(usize i = 0u; i < sb.particles.size(); ++i){
+            in SoftBodyParticle pt = sb.particles[i];
+            SoftBodyParticleBinary pbin;
+            pbin.position = pt.position;
+            pbin.velocity = pt.velocity;
+            pbin.externalForce = pt.externalForce;
+            pbin.invMass = pt.invMass;
+            if(pt.isFixed)
+                pbin.isFixed = 1u;
+            AppendPOD(outBinary, pbin);
+        }
+        for(usize i = 0u; i < sb.distanceConstraints.size(); ++i){
+            in SoftBodyDistanceConstraint dc = sb.distanceConstraints[i];
+            SoftBodyDistanceBinary dbin;
+            dbin.p0 = dc.p0;
+            dbin.p1 = dc.p1;
+            dbin.restLength = dc.restLength;
+            dbin.compliance = dc.compliance;
+            AppendPOD(outBinary, dbin);
+        }
+        for(usize i = 0u; i < sb.bendingConstraints.size(); ++i){
+            in SoftBodyBendingConstraint bc = sb.bendingConstraints[i];
+            SoftBodyDistanceBinary bbin;
+            bbin.p0 = bc.p0;
+            bbin.p1 = bc.p1;
+            bbin.restLength = bc.restLength;
+            bbin.compliance = bc.compliance;
+            AppendPOD(outBinary, bbin);
+        }
+        for(usize i = 0u; i < sb.dihedralBendingConstraints.size(); ++i){
+            in SoftBodyDihedralBendingConstraint dbc = sb.dihedralBendingConstraints[i];
+            SoftBodyDihedralBendingBinary dbbin;
+            dbbin.p0 = dbc.p0;
+            dbbin.p1 = dbc.p1;
+            dbbin.p2 = dbc.p2;
+            dbbin.p3 = dbc.p3;
+            dbbin.restAngle = dbc.restAngle;
+            dbbin.compliance = dbc.compliance;
+            AppendPOD(outBinary, dbbin);
+        }
+        for(usize i = 0u; i < sb.volumeConstraints.size(); ++i){
+            in SoftBodyVolumeConstraint vc = sb.volumeConstraints[i];
+            SoftBodyVolumeBinary vbin;
+            vbin.restCol0 = vc.restCol0;
+            vbin.restCol1 = vc.restCol1;
+            vbin.restCol2 = vc.restCol2;
+            vbin.restEdgeLen0123 = vc.restEdgeLen0123;
+            vbin.restEdgeLen45 = vc.restEdgeLen45;
+            vbin.p0 = vc.p0;
+            vbin.p1 = vc.p1;
+            vbin.p2 = vc.p2;
+            vbin.p3 = vc.p3;
+            vbin.restVolume = vc.restVolume;
+            vbin.compliance = vc.compliance;
+            vbin.youngsModulus = vc.youngsModulus;
+            vbin.poissonsRatio = vc.poissonsRatio;
+            vbin.plasticYield = vc.plasticYield;
+            vbin.plasticCreep = vc.plasticCreep;
+            vbin.plasticMaxStrain = vc.plasticMaxStrain;
+            AppendPOD(outBinary, vbin);
+        }
+        for(usize i = 0u; i < sb.anisotropicConstraints.size(); ++i){
+            in SoftBodyAnisotropicClothConstraint ac = sb.anisotropicConstraints[i];
+            SoftBodyAnisotropicBinary abin;
+            abin.uvInvRow0 = ac.uvInvRow0;
+            abin.uvInvRow1 = ac.uvInvRow1;
+            abin.p0 = ac.p0;
+            abin.p1 = ac.p1;
+            abin.p2 = ac.p2;
+            abin.restArea = ac.restArea;
+            abin.warpStiffness = ac.warpStiffness;
+            abin.weftStiffness = ac.weftStiffness;
+            abin.shearStiffness = ac.shearStiffness;
+            AppendPOD(outBinary, abin);
+        }
+        for(usize i = 0u; i < sb.tetherConstraints.size(); ++i){
+            in SoftBodyTetherConstraint tc = sb.tetherConstraints[i];
+            SoftBodyTetherBinary tbin;
+            tbin.anchorIndex = tc.anchorIndex;
+            tbin.particleIndex = tc.particleIndex;
+            tbin.maxDistance = tc.maxDistance;
+            tbin.compliance = tc.compliance;
+            AppendPOD(outBinary, tbin);
+        }
+        for(usize i = 0u; i < sb.surfaceTriangles.size(); ++i){
+            in SoftBodyTriangle st = sb.surfaceTriangles[i];
+            SoftBodyTriangleBinary sbin;
+            sbin.p0 = st.p0;
+            sbin.p1 = st.p1;
+            sbin.p2 = st.p2;
+            AppendPOD(outBinary, sbin);
+        }
+        for(usize i = 0u; i < sb.attachments.size(); ++i){
+            in SoftBodyAttachment att = sb.attachments[i];
+            SoftBodyAttachmentBinary attBin;
+            attBin.localAnchor = att.localAnchor;
+            attBin.particleIndex = att.particleIndex;
+            attBin.compliance = att.compliance;
+            AppendPOD(outBinary, attBin);
+        }
+        for(usize i = 0u; i < sb.backstopConstraints.size(); ++i){
+            in SoftBodyBackstopConstraint bs = sb.backstopConstraints[i];
+            SoftBodyBackstopBinary bsBin;
+            bsBin.center = bs.center;
+            bsBin.normal = bs.normal;
+            bsBin.particleIndex = bs.particleIndex;
+            bsBin.maxDistance = bs.maxDistance;
+            bsBin.backstopRadius = bs.backstopRadius;
+            AppendPOD(outBinary, bsBin);
+        }
+        for(usize i = 0u; i < sb.goalConstraints.size(); ++i){
+            in SoftBodyGoalConstraint gc = sb.goalConstraints[i];
+            SoftBodyGoalBinary gbin;
+            gbin.targetPosition = gc.targetPosition;
+            gbin.particleIndex = gc.particleIndex;
+            gbin.stiffness = gc.stiffness;
+            gbin.damping = gc.damping;
+            AppendPOD(outBinary, gbin);
+        }
+        for(usize i = 0u; i < sb.cageBinding.bindings.size(); ++i){
+            in SoftBodyTetBindWeight bw = sb.cageBinding.bindings[i];
+            SoftBodyTetBindWeightBinary bwBin;
+            bwBin.baryWeights = bw.baryWeights;
+            bwBin.tetIndex = bw.tetIndex;
+            AppendPOD(outBinary, bwBin);
+        }
+        if(!AppendBinaryVectorPayload(outBinary, sb.restLocalPositions).has_value())
+            return false;
+        return AppendBinaryVectorPayload(outBinary, sb.particleSourceIndices).has_value();
+    }
+
+    public Expected<SoftBody> readSoftBodyPayload(in Span<u8> binary, mut usize cursor, in b8 allowEmpty)const{
+        const Expected<SoftBodyPayloadHeaderBinary> hdrRes = ReadPOD<SoftBodyPayloadHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value())
+            return MakeUnexpected(Failure());
+        in SoftBodyPayloadHeaderBinary hdr = hdrRes.value();
+        if(
+            hdr.reserved0 != 0u
+            || hdr.reserved1 != 0u
+            || hdr.reserved2 != 0u
+            || hdr.reserved3 != 0u
+            || hdr.reserved4 != 0u
+            || (hdr.flags & ~s_SoftBodyPayloadAllFlagsMask) != 0u
+        )
+            return MakeUnexpected(Failure());
+
+        const u64 expectedBytes =
+            cast<u64>(hdr.particleCount) * cast<u64>(size_of<SoftBodyParticleBinary>())
+            + cast<u64>(hdr.distanceCount) * cast<u64>(size_of<SoftBodyDistanceBinary>())
+            + cast<u64>(hdr.bendingCount) * cast<u64>(size_of<SoftBodyDistanceBinary>())
+            + cast<u64>(hdr.dihedralBendingCount) * cast<u64>(size_of<SoftBodyDihedralBendingBinary>())
+            + cast<u64>(hdr.volumeCount) * cast<u64>(size_of<SoftBodyVolumeBinary>())
+            + cast<u64>(hdr.anisotropicCount) * cast<u64>(size_of<SoftBodyAnisotropicBinary>())
+            + cast<u64>(hdr.tetherCount) * cast<u64>(size_of<SoftBodyTetherBinary>())
+            + cast<u64>(hdr.surfaceTriangleCount) * cast<u64>(size_of<SoftBodyTriangleBinary>())
+            + cast<u64>(hdr.attachmentCount) * cast<u64>(size_of<SoftBodyAttachmentBinary>())
+            + cast<u64>(hdr.backstopCount) * cast<u64>(size_of<SoftBodyBackstopBinary>())
+            + cast<u64>(hdr.goalCount) * cast<u64>(size_of<SoftBodyGoalBinary>())
+            + cast<u64>(hdr.cageBindCount) * cast<u64>(size_of<SoftBodyTetBindWeightBinary>())
+            + cast<u64>(hdr.restLocalPosCount) * cast<u64>(size_of<f32x4>())
+            + cast<u64>(hdr.particleSourceIdxCount) * cast<u64>(size_of<CollisionMeshU32Binary>());
+        if(expectedBytes > cast<u64>(binary.size() - cursor))
+            return MakeUnexpected(Failure());
+
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        const Expected<SurfaceMaterial> matRes = assetCodec.unpackSurfaceMaterialFields(hdr.surfaceMaterial);
+        if(!matRes.has_value())
+            return MakeUnexpected(Failure());
+        const Expected<Filter> filterRes = this.unpackFilter(hdr.collisionFilter);
+        if(!filterRes.has_value())
+            return MakeUnexpected(Failure());
+
+        SoftBody sb;
+        sb.windVelocity = hdr.windVelocity;
+        sb.referenceFramePosition = hdr.referenceFramePosition;
+        sb.referenceFrameRotation = hdr.referenceFrameRotation;
+        sb.surfaceMaterial = matRes.value();
+        sb.collisionFilter = filterRes.value();
+        sb.subSteps = hdr.subSteps;
+        sb.solverIterations = hdr.solverIterations;
+        sb.particleRadius = hdr.particleRadius;
+        sb.damping = hdr.damping;
+        sb.aerodynamicDrag = hdr.aerodynamicDrag;
+        sb.liftCoeff = hdr.liftCoeff;
+        sb.tearStrainThreshold = hdr.tearStrainThreshold;
+        sb.selfCollisionRadius = hdr.selfCollisionRadius;
+        sb.selfCollisionStiffness = hdr.selfCollisionStiffness;
+        sb.selfCollisionFriction = hdr.selfCollisionFriction;
+        sb.inertialBlendFactor = hdr.inertialBlendFactor;
+        sb.sleepLinearThreshold = hdr.sleepLinearThreshold;
+        sb.sleepTimeThreshold = hdr.sleepTimeThreshold;
+        sb.pressureCoeff = hdr.pressureCoeff;
+        sb.restSurfaceVolume = hdr.restSurfaceVolume;
+        sb.pressureCompliance = hdr.pressureCompliance;
+        sb.shapeMatchingStiffness = hdr.shapeMatchingStiffness;
+        sb.impactEventThreshold = hdr.impactEventThreshold;
+        sb.enableSelfCollision = (hdr.flags & s_SoftBodyPayloadFlagEnableSelfCollision) != 0u;
+        sb.enableTriangleEdgeSelfCollision = (hdr.flags & s_SoftBodyPayloadFlagEnableTriEdgeSelfCollision) != 0u;
+        sb.enableContinuousSelfCollision = (hdr.flags & s_SoftBodyPayloadFlagEnableContinuousSelfCollision) != 0u;
+        sb.enableVertexSplitTearing = (hdr.flags & s_SoftBodyPayloadFlagEnableVertexSplitTearing) != 0u;
+        sb.enableParticleCcd = (hdr.flags & s_SoftBodyPayloadFlagEnableParticleCcd) != 0u;
+        sb.enableSurfaceTriangleCollision = (hdr.flags & s_SoftBodyPayloadFlagEnableSurfaceTriCollision) != 0u;
+        sb.useAttachmentReferenceFrame = (hdr.flags & s_SoftBodyPayloadFlagUseAttachmentRefFrame) != 0u;
+        sb.enableSleep = (hdr.flags & s_SoftBodyPayloadFlagEnableSleep) != 0u;
+        sb.enableShapeMatching = (hdr.flags & s_SoftBodyPayloadFlagEnableShapeMatching) != 0u;
+        sb.collideWithWorld = (hdr.flags & s_SoftBodyPayloadFlagCollideWithWorld) != 0u;
+
+        sb.particles.reserve(hdr.particleCount);
+        for(u32 i = 0u; i < hdr.particleCount; ++i){
+            const Expected<SoftBodyParticleBinary> pRes = ReadPOD<SoftBodyParticleBinary>(binary, cursor);
+            if(!pRes.has_value() || pRes.value().isFixed > 1u || pRes.value().reserved0 != 0u || pRes.value().reserved1 != 0u || pRes.value().reserved2 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyParticle pt;
+            pt.position = pRes.value().position;
+            pt.prevPosition = pRes.value().position;
+            pt.velocity = pRes.value().velocity;
+            pt.externalForce = pRes.value().externalForce;
+            pt.invMass = pRes.value().invMass;
+            pt.isFixed = pRes.value().isFixed != 0u;
+            sb.particles.push_back(pt);
+        }
+        sb.distanceConstraints.reserve(hdr.distanceCount);
+        for(u32 i = 0u; i < hdr.distanceCount; ++i){
+            const Expected<SoftBodyDistanceBinary> dRes = ReadPOD<SoftBodyDistanceBinary>(binary, cursor);
+            if(!dRes.has_value())
+                return MakeUnexpected(Failure());
+            SoftBodyDistanceConstraint dc;
+            dc.p0 = dRes.value().p0;
+            dc.p1 = dRes.value().p1;
+            dc.restLength = dRes.value().restLength;
+            dc.compliance = dRes.value().compliance;
+            sb.distanceConstraints.push_back(dc);
+        }
+        sb.bendingConstraints.reserve(hdr.bendingCount);
+        for(u32 i = 0u; i < hdr.bendingCount; ++i){
+            const Expected<SoftBodyDistanceBinary> bRes = ReadPOD<SoftBodyDistanceBinary>(binary, cursor);
+            if(!bRes.has_value())
+                return MakeUnexpected(Failure());
+            SoftBodyBendingConstraint bc;
+            bc.p0 = bRes.value().p0;
+            bc.p1 = bRes.value().p1;
+            bc.restLength = bRes.value().restLength;
+            bc.compliance = bRes.value().compliance;
+            sb.bendingConstraints.push_back(bc);
+        }
+        sb.dihedralBendingConstraints.reserve(hdr.dihedralBendingCount);
+        for(u32 i = 0u; i < hdr.dihedralBendingCount; ++i){
+            const Expected<SoftBodyDihedralBendingBinary> dbRes = ReadPOD<SoftBodyDihedralBendingBinary>(binary, cursor);
+            if(!dbRes.has_value() || dbRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyDihedralBendingConstraint dbc;
+            dbc.p0 = dbRes.value().p0;
+            dbc.p1 = dbRes.value().p1;
+            dbc.p2 = dbRes.value().p2;
+            dbc.p3 = dbRes.value().p3;
+            dbc.restAngle = dbRes.value().restAngle;
+            dbc.compliance = dbRes.value().compliance;
+            sb.dihedralBendingConstraints.push_back(dbc);
+        }
+        sb.volumeConstraints.reserve(hdr.volumeCount);
+        for(u32 i = 0u; i < hdr.volumeCount; ++i){
+            const Expected<SoftBodyVolumeBinary> vRes = ReadPOD<SoftBodyVolumeBinary>(binary, cursor);
+            if(!vRes.has_value() || vRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyVolumeConstraint vc;
+            vc.p0 = vRes.value().p0;
+            vc.p1 = vRes.value().p1;
+            vc.p2 = vRes.value().p2;
+            vc.p3 = vRes.value().p3;
+            vc.restVolume = vRes.value().restVolume;
+            vc.compliance = vRes.value().compliance;
+            vc.youngsModulus = vRes.value().youngsModulus;
+            vc.poissonsRatio = vRes.value().poissonsRatio;
+            vc.plasticYield = vRes.value().plasticYield;
+            vc.plasticCreep = vRes.value().plasticCreep;
+            vc.plasticMaxStrain = vRes.value().plasticMaxStrain;
+            vc.restCol0 = vRes.value().restCol0;
+            vc.restCol1 = vRes.value().restCol1;
+            vc.restCol2 = vRes.value().restCol2;
+            vc.restEdgeLen0123 = vRes.value().restEdgeLen0123;
+            vc.restEdgeLen45 = vRes.value().restEdgeLen45;
+            sb.volumeConstraints.push_back(vc);
+        }
+        sb.anisotropicConstraints.reserve(hdr.anisotropicCount);
+        for(u32 i = 0u; i < hdr.anisotropicCount; ++i){
+            const Expected<SoftBodyAnisotropicBinary> aRes = ReadPOD<SoftBodyAnisotropicBinary>(binary, cursor);
+            if(!aRes.has_value() || aRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyAnisotropicClothConstraint ac;
+            ac.p0 = aRes.value().p0;
+            ac.p1 = aRes.value().p1;
+            ac.p2 = aRes.value().p2;
+            ac.restArea = aRes.value().restArea;
+            ac.warpStiffness = aRes.value().warpStiffness;
+            ac.weftStiffness = aRes.value().weftStiffness;
+            ac.shearStiffness = aRes.value().shearStiffness;
+            ac.uvInvRow0 = aRes.value().uvInvRow0;
+            ac.uvInvRow1 = aRes.value().uvInvRow1;
+            sb.anisotropicConstraints.push_back(ac);
+        }
+        sb.tetherConstraints.reserve(hdr.tetherCount);
+        for(u32 i = 0u; i < hdr.tetherCount; ++i){
+            const Expected<SoftBodyTetherBinary> tRes = ReadPOD<SoftBodyTetherBinary>(binary, cursor);
+            if(!tRes.has_value())
+                return MakeUnexpected(Failure());
+            SoftBodyTetherConstraint tc;
+            tc.anchorIndex = tRes.value().anchorIndex;
+            tc.particleIndex = tRes.value().particleIndex;
+            tc.maxDistance = tRes.value().maxDistance;
+            tc.compliance = tRes.value().compliance;
+            sb.tetherConstraints.push_back(tc);
+        }
+        sb.surfaceTriangles.reserve(hdr.surfaceTriangleCount);
+        for(u32 i = 0u; i < hdr.surfaceTriangleCount; ++i){
+            const Expected<SoftBodyTriangleBinary> sRes = ReadPOD<SoftBodyTriangleBinary>(binary, cursor);
+            if(!sRes.has_value() || sRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyTriangle st;
+            st.p0 = sRes.value().p0;
+            st.p1 = sRes.value().p1;
+            st.p2 = sRes.value().p2;
+            sb.surfaceTriangles.push_back(st);
+        }
+        sb.attachments.reserve(hdr.attachmentCount);
+        for(u32 i = 0u; i < hdr.attachmentCount; ++i){
+            const Expected<SoftBodyAttachmentBinary> attRes = ReadPOD<SoftBodyAttachmentBinary>(binary, cursor);
+            if(!attRes.has_value() || attRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyAttachment att;
+            att.particleIndex = attRes.value().particleIndex;
+            att.localAnchor = attRes.value().localAnchor;
+            att.compliance = attRes.value().compliance;
+            sb.attachments.push_back(att);
+        }
+        sb.backstopConstraints.reserve(hdr.backstopCount);
+        for(u32 i = 0u; i < hdr.backstopCount; ++i){
+            const Expected<SoftBodyBackstopBinary> bsRes = ReadPOD<SoftBodyBackstopBinary>(binary, cursor);
+            if(!bsRes.has_value() || bsRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyBackstopConstraint bs;
+            bs.particleIndex = bsRes.value().particleIndex;
+            bs.center = bsRes.value().center;
+            bs.normal = bsRes.value().normal;
+            bs.maxDistance = bsRes.value().maxDistance;
+            bs.backstopRadius = bsRes.value().backstopRadius;
+            sb.backstopConstraints.push_back(bs);
+        }
+        sb.goalConstraints.reserve(hdr.goalCount);
+        for(u32 i = 0u; i < hdr.goalCount; ++i){
+            const Expected<SoftBodyGoalBinary> gRes = ReadPOD<SoftBodyGoalBinary>(binary, cursor);
+            if(!gRes.has_value() || gRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyGoalConstraint gc;
+            gc.particleIndex = gRes.value().particleIndex;
+            gc.targetPosition = gRes.value().targetPosition;
+            gc.stiffness = gRes.value().stiffness;
+            gc.damping = gRes.value().damping;
+            sb.goalConstraints.push_back(gc);
+        }
+        sb.cageBinding.bindings.reserve(hdr.cageBindCount);
+        for(u32 i = 0u; i < hdr.cageBindCount; ++i){
+            const Expected<SoftBodyTetBindWeightBinary> bwRes = ReadPOD<SoftBodyTetBindWeightBinary>(binary, cursor);
+            if(!bwRes.has_value() || bwRes.value().reserved0 != 0u || bwRes.value().reserved1 != 0u)
+                return MakeUnexpected(Failure());
+            SoftBodyTetBindWeight bw;
+            bw.tetIndex = bwRes.value().tetIndex;
+            bw.baryWeights = bwRes.value().baryWeights;
+            sb.cageBinding.bindings.push_back(bw);
+        }
+        if(!ReadBinaryVectorPayload(binary, hdr.restLocalPosCount, cursor, sb.restLocalPositions).has_value())
+            return MakeUnexpected(Failure());
+        if(!ReadBinaryVectorPayload(binary, hdr.particleSourceIdxCount, cursor, sb.particleSourceIndices).has_value())
+            return MakeUnexpected(Failure());
+
+        if(!this.validSoftBodyData(sb, allowEmpty))
+            return MakeUnexpected(Failure());
+        return sb;
+    }
+
+    public b8 serializeSoftBodyUnchecked(in SoftBody sb, mut Vector<u8> outBinary)const{
+        static_assert(size_of<SoftBodyAssetHeaderBinary>() == 16u);
+        outBinary.clear();
+        SoftBodyAssetHeaderBinary hdr;
+        AppendPOD(outBinary, hdr);
+        return this.appendSoftBodyPayload(sb, outBinary);
+    }
+
+    public b8 serializeSoftBody(in SoftBody sb, mut Vector<u8> outBinary)const{
+        if(!this.validSoftBodyData(sb, false))
+            return false;
+        return this.serializeSoftBodyUnchecked(sb, outBinary);
+    }
+
+    public Expected<SoftBody> deserializeSoftBody(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<SoftBodyAssetHeaderBinary> hdrRes = ReadPOD<SoftBodyAssetHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("SoftBodyAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in SoftBodyAssetHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_SoftBodyAssetMagic || hdr.version != s_SoftBodyAssetVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("SoftBodyAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<SoftBody> sbRes = this.readSoftBodyPayload(binary, cursor, false);
+        if(!sbRes.has_value() || cursor != binary.size()){
+            error("SoftBodyAsset::loadBinary failed: invalid payload");
+            return MakeUnexpected(Failure());
+        }
+        return sbRes.value();
+    }
+
+    private b8 validRagdollShapeFields(
+        in RagdollBoneShapeType shapeType,
+        in CapsuleShape cap,
+        in SphereShape sph,
+        in VectorSingle boxHalfExtents,
+        in Span<f32x4> hullVertices,
+        in f32 hullRadius,
+        in ShapeDef sd
+    )const{
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        if(cast<u8>(shapeType) >= cast<u8>(RagdollBoneShapeType::kCount))
+            return false;
+        if(
+            !IsValidPositionVec3(VectorSingle(sd.localTransform.position))
+            || !ValidPhysicsQuaternion(VectorSingle(sd.localTransform.rotation))
+            || !IsFinite(VectorSingle(sd.density, hullRadius, 0.0f, 0.0f))
+            || sd.density < 0.0f
+            || hullRadius < 0.0f
+            || !assetCodec.validSurfaceMaterial(sd.material)
+            || !this.validFilter(sd.filter)
+        )
+            return false;
+        if(shapeType == RagdollBoneShapeType::Capsule){
+            if(!IsValidPositionVec3(cap.center1()) || !IsValidPositionVec3(cap.center2Vec()) || !IsFinite(VectorSingle(cap.radius())) || cap.radius() <= 0.0f)
+                return false;
+        }
+        else if(shapeType == RagdollBoneShapeType::Sphere){
+            if(!IsValidPositionVec3(sph.center()) || !IsFinite(VectorSingle(sph.radius())) || sph.radius() <= 0.0f)
+                return false;
+        }
+        else if(shapeType == RagdollBoneShapeType::Box){
+            if(!IsFinite(boxHalfExtents.xyz) || boxHalfExtents.x <= 0.0f || boxHalfExtents.y <= 0.0f || boxHalfExtents.z <= 0.0f)
+                return false;
+        }
+        else if(shapeType == RagdollBoneShapeType::Hull){
+            if(hullVertices.size() < 4u || hullVertices.size() > 32u)
+                return false;
+        }
+        for(usize vi = 0u; vi < hullVertices.size(); ++vi){
+            if(!IsValidPositionVec3(VectorSingle(hullVertices[vi])))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validRagdollData(in RagdollAssetData data, in b8 allowEmptyBones)const{
+        if(cast<u8>(data.mode) >= cast<u8>(RagdollMode::kCount))
+            return false;
+        if(
+            !IsFinite(VectorSingle(data.driveStrengthMultiplier))
+            || data.driveStrengthMultiplier < 0.0f
+            || !IsFinite(VectorSingle(data.autoGenParams.minBoneLength, data.autoGenParams.defaultRadiusRatio, data.autoGenParams.minCapsuleRadius, data.autoGenParams.maxCapsuleRadius))
+            || !IsFinite(VectorSingle(data.autoGenParams.defaultDensity, data.autoGenParams.defaultSwingLimit, 0.0f, 0.0f))
+            || data.autoGenParams.minBoneLength <= 0.0f
+            || data.autoGenParams.defaultRadiusRatio <= 0.0f
+            || data.autoGenParams.minCapsuleRadius <= 0.0f
+            || data.autoGenParams.maxCapsuleRadius < data.autoGenParams.minCapsuleRadius
+            || data.autoGenParams.defaultDensity <= 0.0f
+            || data.autoGenParams.defaultSwingLimit < 0.0f
+        )
+            return false;
+        if(data.bones.empty())
+            return allowEmptyBones && data.disabledSelfCollisionPairs.empty() && data.boneKinematicMask.size() <= cast<usize>(u32.max) && data.boneJointIndices.size() <= cast<usize>(u32.max);
+        if(data.bones.size() > cast<usize>(u32.max))
+            return false;
+
+        const usize boneCount = data.bones.size();
+        for(usize bi = 0u; bi < boneCount; ++bi){
+            in RagdollBoneDef b = data.bones[bi];
+            if(b.parentIndex != s_NullIndex && (cast<usize>(b.parentIndex) >= boneCount || cast<usize>(b.parentIndex) == bi))
+                return false;
+            if(cast<u8>(b.bodyDef.type) >= cast<u8>(BodyType::kCount) || cast<u8>(b.preset) >= cast<u8>(RagdollJointPreset::kCount))
+                return false;
+            if(
+                !IsValidPositionVec3(VectorSingle(b.bodyDef.position))
+                || !ValidPhysicsQuaternion(VectorSingle(b.bodyDef.rotation))
+                || !IsFinite(VectorSingle(b.bodyDef.linearVelocity))
+                || !IsFinite(VectorSingle(b.bodyDef.angularVelocity))
+                || !IsFinite(VectorSingle(b.bodyDef.linearDamping, b.bodyDef.angularDamping, b.bodyDef.gravityScale, b.bodyDef.sleepThreshold))
+                || !IsFinite(VectorSingle(b.bodyDef.maxAngularVelocity))
+                || b.bodyDef.linearDamping < 0.0f
+                || b.bodyDef.angularDamping < 0.0f
+                || b.bodyDef.sleepThreshold < 0.0f
+                || b.bodyDef.maxAngularVelocity < 0.0f
+            )
+                return false;
+            if(
+                !this.validRagdollShapeFields(
+                    b.shapeType,
+                    b.capsule,
+                    b.sphere,
+                    VectorSingle(b.boxHalfExtents),
+                    Span<f32x4>(b.hullVertices.data(), b.hullVertices.size()),
+                    b.hullRadius,
+                    b.shapeDef
+                )
+            )
+                return false;
+            if(b.extraShapes.size() > 4u)
+                return false;
+            for(usize ei = 0u; ei < b.extraShapes.size(); ++ei){
+                in RagdollExtraShapeDef es = b.extraShapes[ei];
+                if(
+                    !IsValidPositionVec3(VectorSingle(es.localOffset))
+                    || !ValidPhysicsQuaternion(VectorSingle(es.localRotation))
+                    || !this.validRagdollShapeFields(
+                        es.shapeType,
+                        es.capsule,
+                        es.sphere,
+                        VectorSingle(es.boxHalfExtents),
+                        Span<f32x4>(es.hullVertices.data(), es.hullVertices.size()),
+                        es.hullRadius,
+                        es.shapeDef
+                    )
+                )
+                    return false;
+            }
+            if(
+                !IsValidPositionVec3(VectorSingle(b.jointAnchorWorld))
+                || !ValidPhysicsVec3NonZero(VectorSingle(b.jointAxisWorld))
+                || !IsValidPositionVec3(VectorSingle(b.jointToBodyOffset.position))
+                || !ValidPhysicsQuaternion(VectorSingle(b.jointToBodyOffset.rotation))
+                || !IsFinite(VectorSingle(b.swingLimitY, b.swingLimitZ, b.twistMin, b.twistMax))
+                || !IsFinite(VectorSingle(b.motorMaxTorque, b.motorHertz, b.motorDamping, 0.0f))
+                || !IsFinite(VectorSingle(b.breakForce, b.breakTorque, 0.0f, 0.0f))
+                || b.swingLimitY < 0.0f || b.swingLimitZ < 0.0f || b.twistMin > b.twistMax
+                || b.motorMaxTorque < 0.0f || b.motorHertz < 0.0f || b.motorDamping < 0.0f
+                || b.breakForce < 0.0f || b.breakTorque < 0.0f
+            )
+                return false;
+            for(usize ai = 0u; ai < 6u; ++ai){
+                in SixDofAxisConfig ax = b.sixDofAxes[ai];
+                if(
+                    cast<u8>(ax.motion) >= cast<u8>(JointMotion::kCount)
+                    || !IsFinite(VectorSingle(ax.lowerLimit, ax.upperLimit, ax.motorTargetVelocity, ax.motorTargetPosition))
+                    || !IsFinite(VectorSingle(ax.maxMotorForce, ax.springHertz, ax.springDampingRatio, 0.0f))
+                    || ax.lowerLimit > ax.upperLimit
+                    || ax.maxMotorForce < 0.0f || ax.springHertz < 0.0f || ax.springDampingRatio < 0.0f
+                )
+                    return false;
+            }
+        }
+
+        for(usize bi = 0u; bi < boneCount; ++bi){
+            u32 cur = data.bones[bi].parentIndex;
+            usize steps = 0u;
+            while(cur != s_NullIndex){
+                if(steps >= boneCount)
+                    return false;
+                cur = data.bones[cur].parentIndex;
+                ++steps;
+            }
+        }
+
+        for(usize pi = 0u; pi < data.disabledSelfCollisionPairs.size(); ++pi){
+            in RagdollSelfCollisionPair pair = data.disabledSelfCollisionPairs[pi];
+            if(cast<usize>(pair.boneA) >= boneCount || cast<usize>(pair.boneB) >= boneCount || pair.boneA == pair.boneB)
+                return false;
+        }
+        if(!data.boneKinematicMask.empty() && data.boneKinematicMask.size() != boneCount)
+            return false;
+        if(!data.boneJointIndices.empty() && data.boneJointIndices.size() != boneCount)
+            return false;
+        return true;
+    }
+
+    public b8 validateRagdoll(in RagdollAssetData data, in Name virtualPath)const{
+        if(this.validRagdollData(data, false))
+            return true;
+        error("RagdollAsset::validatePayload failed: invalid ragdoll for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendRagdollPayload(in RagdollAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(size_of<RagdollPayloadHeaderBinary>() == 48u && size_of<RagdollBoneFullBinary>() == 624u && size_of<RagdollExtraShapeFullBinary>() == 256u && size_of<RagdollSelfPairBinary>() == 8u);
+        if(
+            data.bones.size() > cast<usize>(u32.max)
+            || data.disabledSelfCollisionPairs.size() > cast<usize>(u32.max)
+            || data.boneKinematicMask.size() > cast<usize>(u32.max)
+            || data.boneJointIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        RagdollPayloadHeaderBinary hdr;
+        hdr.boneCount = cast<u32>(data.bones.size());
+        hdr.disabledSelfCollisionPairCount = cast<u32>(data.disabledSelfCollisionPairs.size());
+        hdr.boneKinematicMaskCount = cast<u32>(data.boneKinematicMask.size());
+        hdr.boneJointIndexCount = cast<u32>(data.boneJointIndices.size());
+        hdr.minBoneLength = data.autoGenParams.minBoneLength;
+        hdr.defaultRadiusRatio = data.autoGenParams.defaultRadiusRatio;
+        hdr.minCapsuleRadius = data.autoGenParams.minCapsuleRadius;
+        hdr.maxCapsuleRadius = data.autoGenParams.maxCapsuleRadius;
+        hdr.defaultDensity = data.autoGenParams.defaultDensity;
+        hdr.defaultSwingLimit = data.autoGenParams.defaultSwingLimit;
+        hdr.driveStrengthMultiplier = data.driveStrengthMultiplier;
+        hdr.mode = cast<u8>(data.mode);
+        if(data.enableSelfCollision) hdr.flags |= s_RagdollFlagEnableSelfCollision;
+        if(data.autoExcludeInitialOverlaps) hdr.flags |= s_RagdollFlagAutoExcludeInitialOverlaps;
+        if(data.autoGenParams.useBoxForRoot) hdr.flags |= s_RagdollFlagUseBoxForRoot;
+        AppendPOD(outBinary, hdr);
+
+        for(usize bi = 0u; bi < data.bones.size(); ++bi){
+            in RagdollBoneDef b = data.bones[bi];
+            RagdollBoneFullBinary bbin;
+            bbin.position = b.bodyDef.position;
+            bbin.rotation = b.bodyDef.rotation;
+            bbin.linearVelocity = b.bodyDef.linearVelocity;
+            bbin.angularVelocity = b.bodyDef.angularVelocity;
+            bbin.capsuleCenter1Radius = b.capsule.center1Radius;
+            bbin.capsuleCenter2 = b.capsule.center2;
+            bbin.sphereCenterRadius = b.sphere.centerRadius;
+            bbin.boxHalfExtents = b.boxHalfExtents;
+            bbin.shapeLocalPosition = b.shapeDef.localTransform.position;
+            bbin.shapeLocalRotation = b.shapeDef.localTransform.rotation;
+            bbin.jointAnchorWorld = b.jointAnchorWorld;
+            bbin.jointAxisWorld = b.jointAxisWorld;
+            bbin.jointToBodyOffsetPos = b.jointToBodyOffset.position;
+            bbin.jointToBodyOffsetRot = b.jointToBodyOffset.rotation;
+            bbin.shapeMaterial = assetCodec.packSurfaceMaterialFields(b.shapeDef.material);
+            bbin.shapeFilter = this.packFilter(b.shapeDef.filter);
+            bbin.bodyUserData = b.bodyDef.userData;
+            bbin.shapeUserData = b.shapeDef.userData;
+            bbin.parentIndex = b.parentIndex;
+            bbin.bodyMotionLocks = b.bodyDef.motionLocks;
+            bbin.linearDamping = b.bodyDef.linearDamping;
+            bbin.angularDamping = b.bodyDef.angularDamping;
+            bbin.gravityScale = b.bodyDef.gravityScale;
+            bbin.sleepThreshold = b.bodyDef.sleepThreshold;
+            bbin.maxAngularVelocity = b.bodyDef.maxAngularVelocity;
+            bbin.shapeDensity = b.shapeDef.density;
+            bbin.hullRadius = b.hullRadius;
+            bbin.hullVertexCount = cast<u32>(b.hullVertices.size());
+            bbin.extraShapeCount = cast<u32>(b.extraShapes.size());
+            bbin.swingLimitY = b.swingLimitY;
+            bbin.swingLimitZ = b.swingLimitZ;
+            bbin.twistMin = b.twistMin;
+            bbin.twistMax = b.twistMax;
+            bbin.motorMaxTorque = b.motorMaxTorque;
+            bbin.motorHertz = b.motorHertz;
+            bbin.motorDamping = b.motorDamping;
+            bbin.breakForce = b.breakForce;
+            bbin.breakTorque = b.breakTorque;
+            bbin.shapeFlags = this.packShapeDefFlags(b.shapeDef);
+            bbin.bodyType = cast<u8>(b.bodyDef.type);
+            if(b.bodyDef.enableSleep) bbin.bodyFlags |= s_PhysicsBodyFlagEnableSleep;
+            if(b.bodyDef.isAwake) bbin.bodyFlags |= s_PhysicsBodyFlagIsAwake;
+            if(b.bodyDef.isBullet) bbin.bodyFlags |= s_PhysicsBodyFlagIsBullet;
+            if(b.bodyDef.isEnabled) bbin.bodyFlags |= s_PhysicsBodyFlagIsEnabled;
+            if(b.bodyDef.allowFastRotation) bbin.bodyFlags |= s_PhysicsBodyFlagAllowFastRotation;
+            if(b.bodyDef.enableGyroscopicTorque) bbin.bodyFlags |= s_PhysicsBodyFlagEnableGyroscopicTorque;
+            if(b.useSixDof) bbin.extraFlags |= s_RagdollBoneExtraFlagUseSixDof;
+            if(b.useSolverMotors) bbin.extraFlags |= s_RagdollBoneExtraFlagUseSolverMotors;
+            if(b.applyPresetOnCreate) bbin.extraFlags |= s_RagdollBoneExtraFlagApplyPresetOnCreate;
+            bbin.shapeType = cast<u8>(b.shapeType);
+            bbin.preset = cast<u8>(b.preset);
+            for(usize ai = 0u; ai < 6u; ++ai){
+                in SixDofAxisConfig ax = b.sixDofAxes[ai];
+                bbin.sixDofMotions[ai] = cast<u8>(ax.motion);
+                u8 axF = 0u;
+                if(ax.enableMotor) axF |= 0x01u;
+                if(ax.enableSpring) axF |= 0x02u;
+                bbin.sixDofFlags[ai] = axF;
+                const usize pb = ai * 7u;
+                bbin.sixDofParams[pb + 0u] = ax.lowerLimit;
+                bbin.sixDofParams[pb + 1u] = ax.upperLimit;
+                bbin.sixDofParams[pb + 2u] = ax.motorTargetVelocity;
+                bbin.sixDofParams[pb + 3u] = ax.motorTargetPosition;
+                bbin.sixDofParams[pb + 4u] = ax.maxMotorForce;
+                bbin.sixDofParams[pb + 5u] = ax.springHertz;
+                bbin.sixDofParams[pb + 6u] = ax.springDampingRatio;
+            }
+            AppendPOD(outBinary, bbin);
+            for(usize hi = 0u; hi < b.hullVertices.size(); ++hi)
+                AppendPOD(outBinary, b.hullVertices[hi]);
+            for(usize ei = 0u; ei < b.extraShapes.size(); ++ei){
+                in RagdollExtraShapeDef es = b.extraShapes[ei];
+                RagdollExtraShapeFullBinary esBin;
+                esBin.capsuleCenter1Radius = es.capsule.center1Radius;
+                esBin.capsuleCenter2 = es.capsule.center2;
+                esBin.sphereCenterRadius = es.sphere.centerRadius;
+                esBin.boxHalfExtents = es.boxHalfExtents;
+                esBin.localOffset = es.localOffset;
+                esBin.localRotation = es.localRotation;
+                esBin.shapeLocalPosition = es.shapeDef.localTransform.position;
+                esBin.shapeLocalRotation = es.shapeDef.localTransform.rotation;
+                esBin.shapeMaterial = assetCodec.packSurfaceMaterialFields(es.shapeDef.material);
+                esBin.shapeFilter = this.packFilter(es.shapeDef.filter);
+                esBin.shapeUserData = es.shapeDef.userData;
+                esBin.shapeDensity = es.shapeDef.density;
+                esBin.hullRadius = es.hullRadius;
+                esBin.hullVertexCount = cast<u32>(es.hullVertices.size());
+                esBin.shapeFlags = this.packShapeDefFlags(es.shapeDef);
+                esBin.shapeType = cast<u8>(es.shapeType);
+                AppendPOD(outBinary, esBin);
+                for(usize ehi = 0u; ehi < es.hullVertices.size(); ++ehi)
+                    AppendPOD(outBinary, es.hullVertices[ehi]);
+            }
+        }
+
+        for(usize pi = 0u; pi < data.disabledSelfCollisionPairs.size(); ++pi){
+            RagdollSelfPairBinary pbin;
+            pbin.boneA = data.disabledSelfCollisionPairs[pi].boneA;
+            pbin.boneB = data.disabledSelfCollisionPairs[pi].boneB;
+            AppendPOD(outBinary, pbin);
+        }
+        for(usize ki = 0u; ki < data.boneKinematicMask.size(); ++ki){
+            u8 val = 0u;
+            if(data.boneKinematicMask[ki])
+                val = 1u;
+            outBinary.push_back(val);
+        }
+        return AppendBinaryVectorPayload(outBinary, data.boneJointIndices).has_value();
+    }
+
+    public Expected<RagdollAssetData> readRagdollPayload(in Span<u8> binary, mut usize cursor, in b8 allowEmptyBones)const{
+        const Expected<RagdollPayloadHeaderBinary> hdrRes = ReadPOD<RagdollPayloadHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value())
+            return MakeUnexpected(Failure());
+        in RagdollPayloadHeaderBinary hdr = hdrRes.value();
+        if(
+            hdr.reserved0 != 0u
+            || hdr.mode >= cast<u8>(RagdollMode::kCount)
+            || (hdr.flags & ~(s_RagdollFlagEnableSelfCollision | s_RagdollFlagAutoExcludeInitialOverlaps | s_RagdollFlagUseBoxForRoot)) != 0u
+        )
+            return MakeUnexpected(Failure());
+
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        RagdollAssetData data;
+        data.mode = cast<RagdollMode>(hdr.mode);
+        data.enableSelfCollision = (hdr.flags & s_RagdollFlagEnableSelfCollision) != 0u;
+        data.autoExcludeInitialOverlaps = (hdr.flags & s_RagdollFlagAutoExcludeInitialOverlaps) != 0u;
+        data.autoGenParams.minBoneLength = hdr.minBoneLength;
+        data.autoGenParams.defaultRadiusRatio = hdr.defaultRadiusRatio;
+        data.autoGenParams.minCapsuleRadius = hdr.minCapsuleRadius;
+        data.autoGenParams.maxCapsuleRadius = hdr.maxCapsuleRadius;
+        data.autoGenParams.defaultDensity = hdr.defaultDensity;
+        data.autoGenParams.defaultSwingLimit = hdr.defaultSwingLimit;
+        data.autoGenParams.useBoxForRoot = (hdr.flags & s_RagdollFlagUseBoxForRoot) != 0u;
+        data.driveStrengthMultiplier = hdr.driveStrengthMultiplier;
+
+        if(cast<u64>(hdr.boneCount) * cast<u64>(size_of<RagdollBoneFullBinary>()) > cast<u64>(binary.size() - cursor))
+            return MakeUnexpected(Failure());
+        data.bones.reserve(hdr.boneCount);
+        for(u32 bi = 0u; bi < hdr.boneCount; ++bi){
+            const Expected<RagdollBoneFullBinary> bRes = ReadPOD<RagdollBoneFullBinary>(binary, cursor);
+            if(!bRes.has_value())
+                return MakeUnexpected(Failure());
+            in RagdollBoneFullBinary bbin = bRes.value();
+            if(
+                bbin.reserved0 != 0u
+                || bbin.reserved1 != 0u
+                || bbin.reserved2 != 0u
+                || bbin.reserved3 != 0u
+                || bbin.hullVertexCount > 32u
+                || bbin.extraShapeCount > 4u
+                || (bbin.shapeFlags & ~s_PhysicsShapeAllFlagsMask) != 0u
+                || (bbin.bodyFlags & ~s_PhysicsBodyAllFlagsMask) != 0u
+                || (bbin.extraFlags & ~(s_RagdollBoneExtraFlagUseSixDof | s_RagdollBoneExtraFlagUseSolverMotors | s_RagdollBoneExtraFlagApplyPresetOnCreate)) != 0u
+                || bbin.bodyType >= cast<u8>(BodyType::kCount)
+                || bbin.shapeType >= cast<u8>(RagdollBoneShapeType::kCount)
+                || bbin.preset >= cast<u8>(RagdollJointPreset::kCount)
+            )
+                return MakeUnexpected(Failure());
+            const Expected<SurfaceMaterial> sMat = assetCodec.unpackSurfaceMaterialFields(bbin.shapeMaterial);
+            const Expected<Filter> sFilter = this.unpackFilter(bbin.shapeFilter);
+            if(!sMat.has_value() || !sFilter.has_value())
+                return MakeUnexpected(Failure());
+
+            RagdollBoneDef b;
+            b.parentIndex = bbin.parentIndex;
+            b.bodyDef.type = cast<BodyType>(bbin.bodyType);
+            b.bodyDef.position = bbin.position;
+            b.bodyDef.rotation = bbin.rotation;
+            b.bodyDef.linearVelocity = bbin.linearVelocity;
+            b.bodyDef.angularVelocity = bbin.angularVelocity;
+            b.bodyDef.linearDamping = bbin.linearDamping;
+            b.bodyDef.angularDamping = bbin.angularDamping;
+            b.bodyDef.gravityScale = bbin.gravityScale;
+            b.bodyDef.sleepThreshold = bbin.sleepThreshold;
+            b.bodyDef.maxAngularVelocity = bbin.maxAngularVelocity;
+            b.bodyDef.motionLocks = bbin.bodyMotionLocks;
+            b.bodyDef.enableSleep = (bbin.bodyFlags & s_PhysicsBodyFlagEnableSleep) != 0u;
+            b.bodyDef.isAwake = (bbin.bodyFlags & s_PhysicsBodyFlagIsAwake) != 0u;
+            b.bodyDef.isBullet = (bbin.bodyFlags & s_PhysicsBodyFlagIsBullet) != 0u;
+            b.bodyDef.isEnabled = (bbin.bodyFlags & s_PhysicsBodyFlagIsEnabled) != 0u;
+            b.bodyDef.allowFastRotation = (bbin.bodyFlags & s_PhysicsBodyFlagAllowFastRotation) != 0u;
+            b.bodyDef.enableGyroscopicTorque = (bbin.bodyFlags & s_PhysicsBodyFlagEnableGyroscopicTorque) != 0u;
+            b.bodyDef.userData = bbin.bodyUserData;
+            b.shapeType = cast<RagdollBoneShapeType>(bbin.shapeType);
+            b.capsule.center1Radius = bbin.capsuleCenter1Radius;
+            b.capsule.center2 = bbin.capsuleCenter2;
+            b.sphere.centerRadius = bbin.sphereCenterRadius;
+            b.boxHalfExtents = bbin.boxHalfExtents;
+            b.hullRadius = bbin.hullRadius;
+            b.shapeDef.localTransform = Transform3D(VectorSingle(bbin.shapeLocalPosition), VectorSingle(bbin.shapeLocalRotation));
+            b.shapeDef.material = sMat.value();
+            b.shapeDef.filter = sFilter.value();
+            b.shapeDef.density = bbin.shapeDensity;
+            b.shapeDef.userData = bbin.shapeUserData;
+            this.unpackShapeDefFlags(bbin.shapeFlags, b.shapeDef);
+            b.useSixDof = (bbin.extraFlags & s_RagdollBoneExtraFlagUseSixDof) != 0u;
+            b.useSolverMotors = (bbin.extraFlags & s_RagdollBoneExtraFlagUseSolverMotors) != 0u;
+            b.applyPresetOnCreate = (bbin.extraFlags & s_RagdollBoneExtraFlagApplyPresetOnCreate) != 0u;
+            b.jointAnchorWorld = bbin.jointAnchorWorld;
+            b.jointAxisWorld = bbin.jointAxisWorld;
+            b.jointToBodyOffset = Transform3D(VectorSingle(bbin.jointToBodyOffsetPos), VectorSingle(bbin.jointToBodyOffsetRot));
+            b.swingLimitY = bbin.swingLimitY;
+            b.swingLimitZ = bbin.swingLimitZ;
+            b.twistMin = bbin.twistMin;
+            b.twistMax = bbin.twistMax;
+            b.motorMaxTorque = bbin.motorMaxTorque;
+            b.motorHertz = bbin.motorHertz;
+            b.motorDamping = bbin.motorDamping;
+            b.breakForce = bbin.breakForce;
+            b.breakTorque = bbin.breakTorque;
+            b.preset = cast<RagdollJointPreset>(bbin.preset);
+            for(usize ai = 0u; ai < 6u; ++ai){
+                if(bbin.sixDofMotions[ai] >= cast<u8>(JointMotion::kCount) || (bbin.sixDofFlags[ai] & ~0x03u) != 0u)
+                    return MakeUnexpected(Failure());
+                const usize pb = ai * 7u;
+                b.sixDofAxes[ai].motion = cast<JointMotion>(bbin.sixDofMotions[ai]);
+                b.sixDofAxes[ai].enableMotor = (bbin.sixDofFlags[ai] & 0x01u) != 0u;
+                b.sixDofAxes[ai].enableSpring = (bbin.sixDofFlags[ai] & 0x02u) != 0u;
+                b.sixDofAxes[ai].lowerLimit = bbin.sixDofParams[pb + 0u];
+                b.sixDofAxes[ai].upperLimit = bbin.sixDofParams[pb + 1u];
+                b.sixDofAxes[ai].motorTargetVelocity = bbin.sixDofParams[pb + 2u];
+                b.sixDofAxes[ai].motorTargetPosition = bbin.sixDofParams[pb + 3u];
+                b.sixDofAxes[ai].maxMotorForce = bbin.sixDofParams[pb + 4u];
+                b.sixDofAxes[ai].springHertz = bbin.sixDofParams[pb + 5u];
+                b.sixDofAxes[ai].springDampingRatio = bbin.sixDofParams[pb + 6u];
+            }
+            if(cast<u64>(bbin.hullVertexCount) * cast<u64>(size_of<f32x4>()) > cast<u64>(binary.size() - cursor))
+                return MakeUnexpected(Failure());
+            for(u32 hi = 0u; hi < bbin.hullVertexCount; ++hi){
+                const Expected<f32x4> hvRes = ReadPOD<f32x4>(binary, cursor);
+                if(!hvRes.has_value())
+                    return MakeUnexpected(Failure());
+                b.hullVertices.push_back(hvRes.value());
+            }
+            if(cast<u64>(bbin.extraShapeCount) * cast<u64>(size_of<RagdollExtraShapeFullBinary>()) > cast<u64>(binary.size() - cursor))
+                return MakeUnexpected(Failure());
+            for(u32 ei = 0u; ei < bbin.extraShapeCount; ++ei){
+                const Expected<RagdollExtraShapeFullBinary> esRes = ReadPOD<RagdollExtraShapeFullBinary>(binary, cursor);
+                if(!esRes.has_value())
+                    return MakeUnexpected(Failure());
+                in RagdollExtraShapeFullBinary esBin = esRes.value();
+                if(esBin.reserved0 != 0u || esBin.hullVertexCount > 32u || (esBin.shapeFlags & ~s_PhysicsShapeAllFlagsMask) != 0u || esBin.shapeType >= cast<u8>(RagdollBoneShapeType::kCount))
+                    return MakeUnexpected(Failure());
+                const Expected<SurfaceMaterial> esMat = assetCodec.unpackSurfaceMaterialFields(esBin.shapeMaterial);
+                const Expected<Filter> esFilter = this.unpackFilter(esBin.shapeFilter);
+                if(!esMat.has_value() || !esFilter.has_value())
+                    return MakeUnexpected(Failure());
+                RagdollExtraShapeDef es;
+                es.shapeType = cast<RagdollBoneShapeType>(esBin.shapeType);
+                es.capsule.center1Radius = esBin.capsuleCenter1Radius;
+                es.capsule.center2 = esBin.capsuleCenter2;
+                es.sphere.centerRadius = esBin.sphereCenterRadius;
+                es.boxHalfExtents = esBin.boxHalfExtents;
+                es.localOffset = esBin.localOffset;
+                es.localRotation = esBin.localRotation;
+                es.hullRadius = esBin.hullRadius;
+                es.shapeDef.localTransform = Transform3D(VectorSingle(esBin.shapeLocalPosition), VectorSingle(esBin.shapeLocalRotation));
+                es.shapeDef.material = esMat.value();
+                es.shapeDef.filter = esFilter.value();
+                es.shapeDef.density = esBin.shapeDensity;
+                es.shapeDef.userData = esBin.shapeUserData;
+                this.unpackShapeDefFlags(esBin.shapeFlags, es.shapeDef);
+                if(cast<u64>(esBin.hullVertexCount) * cast<u64>(size_of<f32x4>()) > cast<u64>(binary.size() - cursor))
+                    return MakeUnexpected(Failure());
+                for(u32 ehi = 0u; ehi < esBin.hullVertexCount; ++ehi){
+                    const Expected<f32x4> hvRes = ReadPOD<f32x4>(binary, cursor);
+                    if(!hvRes.has_value())
+                        return MakeUnexpected(Failure());
+                    es.hullVertices.push_back(hvRes.value());
+                }
+                b.extraShapes.push_back(es);
+            }
+            data.bones.push_back(b);
+        }
+
+        const u64 tailBytes =
+            cast<u64>(hdr.disabledSelfCollisionPairCount) * cast<u64>(size_of<RagdollSelfPairBinary>())
+            + cast<u64>(hdr.boneKinematicMaskCount)
+            + cast<u64>(hdr.boneJointIndexCount) * cast<u64>(size_of<CollisionMeshU32Binary>());
+        if(tailBytes > cast<u64>(binary.size() - cursor))
+            return MakeUnexpected(Failure());
+
+        data.disabledSelfCollisionPairs.reserve(hdr.disabledSelfCollisionPairCount);
+        for(u32 pi = 0u; pi < hdr.disabledSelfCollisionPairCount; ++pi){
+            const Expected<RagdollSelfPairBinary> pRes = ReadPOD<RagdollSelfPairBinary>(binary, cursor);
+            if(!pRes.has_value())
+                return MakeUnexpected(Failure());
+            RagdollSelfCollisionPair pair;
+            pair.boneA = pRes.value().boneA;
+            pair.boneB = pRes.value().boneB;
+            data.disabledSelfCollisionPairs.push_back(pair);
+        }
+        data.boneKinematicMask.reserve(hdr.boneKinematicMaskCount);
+        for(u32 ki = 0u; ki < hdr.boneKinematicMaskCount; ++ki){
+            const u8 val = binary[cursor];
+            ++cursor;
+            if(val > 1u)
+                return MakeUnexpected(Failure());
+            data.boneKinematicMask.push_back(val != 0u);
+        }
+        if(!ReadBinaryVectorPayload(binary, hdr.boneJointIndexCount, cursor, data.boneJointIndices).has_value())
+            return MakeUnexpected(Failure());
+
+        if(!this.validRagdollData(data, allowEmptyBones))
+            return MakeUnexpected(Failure());
+        return data;
+    }
+
+    public b8 serializeRagdollUnchecked(in RagdollAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(size_of<RagdollAssetHeaderBinary>() == 16u);
+        outBinary.clear();
+        RagdollAssetHeaderBinary hdr;
+        AppendPOD(outBinary, hdr);
+        return this.appendRagdollPayload(data, outBinary);
+    }
+
+    public b8 serializeRagdoll(in RagdollAssetData data, mut Vector<u8> outBinary)const{
+        if(!this.validRagdollData(data, false))
+            return false;
+        return this.serializeRagdollUnchecked(data, outBinary);
+    }
+
+    public Expected<RagdollAssetData> deserializeRagdoll(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<RagdollAssetHeaderBinary> hdrRes = ReadPOD<RagdollAssetHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("RagdollAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in RagdollAssetHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_RagdollAssetMagic || hdr.version != s_RagdollAssetVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("RagdollAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<RagdollAssetData> dataRes = this.readRagdollPayload(binary, cursor, false);
+        if(!dataRes.has_value() || cursor != binary.size()){
+            error("RagdollAsset::loadBinary failed: invalid payload");
+            return MakeUnexpected(Failure());
+        }
+        return dataRes.value();
+    }
+
+    public b8 validArticulationData(in ArticulationAssetData data, in b8 allowEmptyLinks)const{
+        if(
+            !this.validFilter(data.contactFilter)
+            || data.subSteps < 1u
+            || data.solverIterations < 1u
+            || !IsFinite(VectorSingle(data.contactRestitution, data.contactFriction, data.selfCollisionMargin, data.ccdMotionThreshold))
+            || !IsFinite(VectorSingle(data.sleepLinearThreshold, data.sleepAngularThreshold, data.sleepTimeThreshold, data.driveStrengthMultiplier))
+            || data.contactRestitution < 0.0f
+            || data.contactFriction < 0.0f
+            || data.selfCollisionMargin < 0.0f
+            || data.ccdMotionThreshold < 0.0f
+            || data.sleepLinearThreshold < 0.0f
+            || data.sleepAngularThreshold < 0.0f
+            || data.sleepTimeThreshold < 0.0f
+            || data.driveStrengthMultiplier < 0.0f
+        )
+            return false;
+        if(data.links.empty())
+            return allowEmptyLinks && data.mimicConstraints.empty() && data.tendonConstraints.empty() && data.spatialTendons.empty() && data.loopConstraints.empty() && data.linkJointIndices.size() <= cast<usize>(u32.max);
+        if(data.links.size() > cast<usize>(u32.max))
+            return false;
+
+        const usize linkCount = data.links.size();
+        for(usize li = 0u; li < linkCount; ++li){
+            in ArticulationLinkDef l = data.links[li];
+            if(li == 0u){
+                if(l.parentIndex != s_NullIndex)
+                    return false;
+            }
+            else if(cast<usize>(l.parentIndex) >= li){
+                return false;
+            }
+            if(cast<u8>(l.jointType) >= cast<u8>(ArticulationJointType::kCount))
+                return false;
+            if(
+                !IsValidPositionVec3(VectorSingle(l.parentToJoint.position))
+                || !ValidPhysicsQuaternion(VectorSingle(l.parentToJoint.rotation))
+                || !IsValidPositionVec3(VectorSingle(l.jointToChild.position))
+                || !ValidPhysicsQuaternion(VectorSingle(l.jointToChild.rotation))
+                || !ValidPhysicsVec3NonZero(VectorSingle(l.jointAxisLocal))
+                || !ValidPhysicsVec3NonZero(VectorSingle(l.jointAxisSecondaryLocal))
+                || !IsValidPositionVec3(VectorSingle(l.comLocal))
+                || !IsFinite(VectorSingle(l.inertiaDiag))
+                || !IsFinite(VectorSingle(l.mass, l.inertiaTensor.m00, l.inertiaTensor.m01, l.inertiaTensor.m02))
+                || !IsFinite(VectorSingle(l.inertiaTensor.m11, l.inertiaTensor.m12, l.inertiaTensor.m22, 0.0f))
+                || l.mass <= 0.0f
+                || l.inertiaDiag.x <= 0.0f || l.inertiaDiag.y <= 0.0f || l.inertiaDiag.z <= 0.0f
+                || !IsFinite(VectorSingle(l.lowerLimit, l.upperLimit, l.limitStiffness, l.limitDamping))
+                || !IsFinite(VectorSingle(l.lowerLimits)) || !IsFinite(VectorSingle(l.upperLimits))
+                || !IsFinite(VectorSingle(l.driveTargetPos, l.driveTargetVel, l.driveStiffness, l.driveDamping))
+                || !IsFinite(VectorSingle(l.driveMaxForce, l.jointDamping, l.jointFriction, l.limitRestitution))
+                || !IsFinite(VectorSingle(l.driveTargetPos3)) || !IsFinite(VectorSingle(l.driveTargetVel3))
+                || !IsFinite(VectorSingle(l.driveStiffness3)) || !IsFinite(VectorSingle(l.driveDamping3))
+                || !IsFinite(VectorSingle(l.driveMaxForce3)) || !IsFinite(VectorSingle(l.armature))
+                || !ValidPhysicsQuaternion(VectorSingle(l.driveTargetQuat))
+                || !IsFinite(VectorSingle(l.screwPitch, l.breakForce, l.breakTorque, 0.0f))
+                || l.lowerLimit > l.upperLimit
+                || l.lowerLimits.x > l.upperLimits.x || l.lowerLimits.y > l.upperLimits.y || l.lowerLimits.z > l.upperLimits.z
+                || l.limitStiffness < 0.0f || l.limitDamping < 0.0f || l.limitRestitution < 0.0f
+                || l.driveStiffness < 0.0f || l.driveDamping < 0.0f || l.driveMaxForce < 0.0f
+                || l.driveStiffness3.x < 0.0f || l.driveStiffness3.y < 0.0f || l.driveStiffness3.z < 0.0f
+                || l.driveDamping3.x < 0.0f || l.driveDamping3.y < 0.0f || l.driveDamping3.z < 0.0f
+                || l.driveMaxForce3.x < 0.0f || l.driveMaxForce3.y < 0.0f || l.driveMaxForce3.z < 0.0f
+                || l.armature.x < 0.0f || l.armature.y < 0.0f || l.armature.z < 0.0f
+                || l.jointDamping < 0.0f || l.jointFriction < 0.0f
+                || l.breakForce < 0.0f || l.breakTorque < 0.0f
+            )
+                return false;
+        }
+        for(usize mi = 0u; mi < data.mimicConstraints.size(); ++mi){
+            in ArticulationMimicConstraint mc = data.mimicConstraints[mi];
+            if(
+                cast<usize>(mc.linkIndex) >= linkCount
+                || cast<usize>(mc.targetLinkIndex) >= linkCount
+                || mc.dofIndex >= 3u
+                || mc.targetDofIndex >= 3u
+                || !IsFinite(VectorSingle(mc.gearRatio, mc.offset, mc.compliance, 0.0f))
+                || mc.compliance < 0.0f
+            )
+                return false;
+        }
+        for(usize ti = 0u; ti < data.tendonConstraints.size(); ++ti){
+            in ArticulationTendonConstraint tc = data.tendonConstraints[ti];
+            if(
+                tc.linkIndices.empty()
+                || tc.linkIndices.size() > 8u
+                || tc.linkIndices.size() != tc.dofIndices.size()
+                || tc.linkIndices.size() != tc.coefficients.size()
+                || !IsFinite(VectorSingle(tc.restLength, tc.lowerLimit, tc.upperLimit, tc.compliance))
+                || tc.lowerLimit > tc.upperLimit
+                || tc.compliance < 0.0f
+            )
+                return false;
+            for(usize ei = 0u; ei < tc.linkIndices.size(); ++ei){
+                if(cast<usize>(tc.linkIndices[ei]) >= linkCount || tc.dofIndices[ei] >= 3u || !IsFinite(VectorSingle(tc.coefficients[ei])))
+                    return false;
+            }
+        }
+        for(usize si = 0u; si < data.spatialTendons.size(); ++si){
+            in ArticulationSpatialTendon st = data.spatialTendons[si];
+            if(
+                st.attachments.size() < 2u
+                || st.attachments.size() > 8u
+                || !IsFinite(VectorSingle(st.restLength, st.lowerLimit, st.upperLimit, st.compliance))
+                || !IsFinite(VectorSingle(st.stiffness, st.damping, 0.0f, 0.0f))
+                || st.lowerLimit > st.upperLimit
+                || st.stiffness < 0.0f || st.damping < 0.0f || st.compliance < 0.0f
+            )
+                return false;
+            for(usize ai = 0u; ai < st.attachments.size(); ++ai){
+                if(cast<usize>(st.attachments[ai].linkIndex) >= linkCount || !IsValidPositionVec3(VectorSingle(st.attachments[ai].localPoint)))
+                    return false;
+            }
+        }
+        for(usize lpi = 0u; lpi < data.loopConstraints.size(); ++lpi){
+            in ArticulationLoopConstraint lc = data.loopConstraints[lpi];
+            if(
+                cast<usize>(lc.linkIndexA) >= linkCount
+                || cast<usize>(lc.linkIndexB) >= linkCount
+                || lc.linkIndexA == lc.linkIndexB
+                || !IsValidPositionVec3(VectorSingle(lc.localAnchorA))
+                || !IsValidPositionVec3(VectorSingle(lc.localAnchorB))
+                || !ValidPhysicsQuaternion(VectorSingle(lc.relOrientation))
+                || !IsFinite(VectorSingle(lc.compliance))
+                || lc.compliance < 0.0f
+            )
+                return false;
+        }
+        if(!data.linkJointIndices.empty() && data.linkJointIndices.size() != linkCount)
+            return false;
+        return true;
+    }
+
+    public b8 validateArticulation(in ArticulationAssetData data, in Name virtualPath)const{
+        if(this.validArticulationData(data, false))
+            return true;
+        error("ArticulationAsset::validatePayload failed: invalid articulation for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendArticulationPayload(in ArticulationAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(
+            size_of<ArticulationPayloadHeaderBinary>() == 96u
+            && size_of<ArticulationLinkFullBinary>() == 384u
+            && size_of<ArticulationMimicFullBinary>() == 32u
+            && size_of<ArticulationTendonFullBinary>() == 128u
+            && size_of<ArticulationSpatialTendonBinary>() == 192u
+            && size_of<ArticulationLoopFullBinary>() == 64u
+        );
+        if(
+            data.links.size() > cast<usize>(u32.max)
+            || data.mimicConstraints.size() > cast<usize>(u32.max)
+            || data.tendonConstraints.size() > cast<usize>(u32.max)
+            || data.spatialTendons.size() > cast<usize>(u32.max)
+            || data.loopConstraints.size() > cast<usize>(u32.max)
+            || data.linkJointIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        ArticulationPayloadHeaderBinary hdr;
+        hdr.contactFilter = this.packFilter(data.contactFilter);
+        hdr.linkCount = cast<u32>(data.links.size());
+        hdr.mimicCount = cast<u32>(data.mimicConstraints.size());
+        hdr.tendonCount = cast<u32>(data.tendonConstraints.size());
+        hdr.spatialTendonCount = cast<u32>(data.spatialTendons.size());
+        hdr.loopCount = cast<u32>(data.loopConstraints.size());
+        hdr.linkJointIndexCount = cast<u32>(data.linkJointIndices.size());
+        hdr.subSteps = data.subSteps;
+        hdr.solverIterations = data.solverIterations;
+        hdr.contactRestitution = data.contactRestitution;
+        hdr.contactFriction = data.contactFriction;
+        hdr.selfCollisionMargin = data.selfCollisionMargin;
+        hdr.ccdMotionThreshold = data.ccdMotionThreshold;
+        hdr.sleepLinearThreshold = data.sleepLinearThreshold;
+        hdr.sleepAngularThreshold = data.sleepAngularThreshold;
+        hdr.sleepTimeThreshold = data.sleepTimeThreshold;
+        hdr.driveStrengthMultiplier = data.driveStrengthMultiplier;
+        if(data.isFixedBase) hdr.flags |= s_ArticulationFlagIsFixedBase;
+        if(data.enableContactCoupling) hdr.flags |= s_ArticulationFlagEnableContactCoupling;
+        if(data.overrideContactFriction) hdr.flags |= s_ArticulationFlagOverrideContactFriction;
+        if(data.enableSelfCollision) hdr.flags |= s_ArticulationFlagEnableSelfCollision;
+        if(data.enableCcd) hdr.flags |= s_ArticulationFlagEnableCcd;
+        if(data.enableSleep) hdr.flags |= s_ArticulationFlagEnableSleep;
+        AppendPOD(outBinary, hdr);
+
+        for(usize li = 0u; li < data.links.size(); ++li){
+            in ArticulationLinkDef l = data.links[li];
+            ArticulationLinkFullBinary lbin;
+            lbin.parentToJointPos = l.parentToJoint.position;
+            lbin.parentToJointRot = l.parentToJoint.rotation;
+            lbin.jointToChildPos = l.jointToChild.position;
+            lbin.jointToChildRot = l.jointToChild.rotation;
+            lbin.jointAxisLocal = l.jointAxisLocal;
+            lbin.jointAxisSecondaryLocal = l.jointAxisSecondaryLocal;
+            lbin.comLocal = l.comLocal;
+            lbin.inertiaDiag = l.inertiaDiag;
+            lbin.lowerLimits = l.lowerLimits;
+            lbin.upperLimits = l.upperLimits;
+            lbin.driveTargetPos3 = l.driveTargetPos3;
+            lbin.driveTargetVel3 = l.driveTargetVel3;
+            lbin.driveStiffness3 = l.driveStiffness3;
+            lbin.driveDamping3 = l.driveDamping3;
+            lbin.driveMaxForce3 = l.driveMaxForce3;
+            lbin.armature = l.armature;
+            lbin.driveTargetQuat = l.driveTargetQuat;
+            lbin.parentIndex = l.parentIndex;
+            lbin.mass = l.mass;
+            lbin.inertiaM00 = l.inertiaTensor.m00;
+            lbin.inertiaM01 = l.inertiaTensor.m01;
+            lbin.inertiaM02 = l.inertiaTensor.m02;
+            lbin.inertiaM11 = l.inertiaTensor.m11;
+            lbin.inertiaM12 = l.inertiaTensor.m12;
+            lbin.inertiaM22 = l.inertiaTensor.m22;
+            lbin.lowerLimit = l.lowerLimit;
+            lbin.upperLimit = l.upperLimit;
+            lbin.limitStiffness = l.limitStiffness;
+            lbin.limitDamping = l.limitDamping;
+            lbin.driveTargetPos = l.driveTargetPos;
+            lbin.driveTargetVel = l.driveTargetVel;
+            lbin.driveStiffness = l.driveStiffness;
+            lbin.driveDamping = l.driveDamping;
+            lbin.driveMaxForce = l.driveMaxForce;
+            lbin.jointDamping = l.jointDamping;
+            lbin.jointFriction = l.jointFriction;
+            lbin.limitRestitution = l.limitRestitution;
+            lbin.screwPitch = l.screwPitch;
+            lbin.breakForce = l.breakForce;
+            lbin.breakTorque = l.breakTorque;
+            if(l.useFullInertiaTensor) lbin.flags |= s_ArticulationLinkFlagUseFullInertiaTensor;
+            if(l.enableLimit) lbin.flags |= s_ArticulationLinkFlagEnableLimit;
+            if(l.enableDrive) lbin.flags |= s_ArticulationLinkFlagEnableDrive;
+            if(l.usePerDofLimits) lbin.flags |= s_ArticulationLinkFlagUsePerDofLimits;
+            if(l.usePerDofDrives) lbin.flags |= s_ArticulationLinkFlagUsePerDofDrives;
+            if(l.useImplicitDrive) lbin.flags |= s_ArticulationLinkFlagUseImplicitDrive;
+            if(l.useEllipticConeLimit) lbin.flags |= s_ArticulationLinkFlagUseEllipticConeLimit;
+            if(l.useQuatDrive) lbin.flags |= s_ArticulationLinkFlagUseQuatDrive;
+            lbin.jointType = cast<u8>(l.jointType);
+            lbin.limitDofMask = l.limitDofMask;
+            lbin.driveDofMask = l.driveDofMask;
+            AppendPOD(outBinary, lbin);
+        }
+
+        for(usize mi = 0u; mi < data.mimicConstraints.size(); ++mi){
+            in ArticulationMimicConstraint mc = data.mimicConstraints[mi];
+            ArticulationMimicFullBinary mbin;
+            mbin.linkIndex = mc.linkIndex;
+            mbin.dofIndex = mc.dofIndex;
+            mbin.targetLinkIndex = mc.targetLinkIndex;
+            mbin.targetDofIndex = mc.targetDofIndex;
+            mbin.gearRatio = mc.gearRatio;
+            mbin.offset = mc.offset;
+            mbin.compliance = mc.compliance;
+            if(mc.enabled)
+                mbin.flags = s_ArticulationConstraintFlagEnabled;
+            AppendPOD(outBinary, mbin);
+        }
+
+        for(usize ti = 0u; ti < data.tendonConstraints.size(); ++ti){
+            in ArticulationTendonConstraint tc = data.tendonConstraints[ti];
+            ArticulationTendonFullBinary tbin;
+            tbin.entryCount = cast<u32>(tc.linkIndices.size());
+            for(usize ei = 0u; ei < tc.linkIndices.size() && ei < 8u; ++ei){
+                tbin.linkIndices[ei] = tc.linkIndices[ei];
+                tbin.dofIndices[ei] = tc.dofIndices[ei];
+                tbin.coefficients[ei] = tc.coefficients[ei];
+            }
+            tbin.restLength = tc.restLength;
+            tbin.lowerLimit = tc.lowerLimit;
+            tbin.upperLimit = tc.upperLimit;
+            tbin.compliance = tc.compliance;
+            if(tc.enabled) tbin.flags |= s_ArticulationConstraintFlagEnabled;
+            if(tc.isEquality) tbin.flags |= s_ArticulationConstraintFlagSecond;
+            AppendPOD(outBinary, tbin);
+        }
+
+        for(usize si = 0u; si < data.spatialTendons.size(); ++si){
+            in ArticulationSpatialTendon st = data.spatialTendons[si];
+            ArticulationSpatialTendonBinary stbin;
+            stbin.attachmentCount = cast<u32>(st.attachments.size());
+            for(usize ai = 0u; ai < st.attachments.size() && ai < 8u; ++ai){
+                stbin.localPoints[ai] = st.attachments[ai].localPoint;
+                stbin.linkIndices[ai] = st.attachments[ai].linkIndex;
+            }
+            stbin.restLength = st.restLength;
+            stbin.lowerLimit = st.lowerLimit;
+            stbin.upperLimit = st.upperLimit;
+            stbin.stiffness = st.stiffness;
+            stbin.damping = st.damping;
+            stbin.compliance = st.compliance;
+            if(st.enabled) stbin.flags |= s_ArticulationConstraintFlagEnabled;
+            if(st.isEquality) stbin.flags |= s_ArticulationConstraintFlagSecond;
+            AppendPOD(outBinary, stbin);
+        }
+
+        for(usize lpi = 0u; lpi < data.loopConstraints.size(); ++lpi){
+            in ArticulationLoopConstraint lc = data.loopConstraints[lpi];
+            ArticulationLoopFullBinary lpbin;
+            lpbin.localAnchorA = lc.localAnchorA;
+            lpbin.localAnchorB = lc.localAnchorB;
+            lpbin.relOrientation = lc.relOrientation;
+            lpbin.linkIndexA = lc.linkIndexA;
+            lpbin.linkIndexB = lc.linkIndexB;
+            lpbin.compliance = lc.compliance;
+            if(lc.enabled) lpbin.flags |= s_ArticulationConstraintFlagEnabled;
+            if(lc.lockOrientation) lpbin.flags |= s_ArticulationConstraintFlagSecond;
+            AppendPOD(outBinary, lpbin);
+        }
+
+        return AppendBinaryVectorPayload(outBinary, data.linkJointIndices).has_value();
+    }
+
+    public Expected<ArticulationAssetData> readArticulationPayload(in Span<u8> binary, mut usize cursor, in b8 allowEmptyLinks)const{
+        const Expected<ArticulationPayloadHeaderBinary> hdrRes = ReadPOD<ArticulationPayloadHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value())
+            return MakeUnexpected(Failure());
+        in ArticulationPayloadHeaderBinary hdr = hdrRes.value();
+        if(hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & ~s_ArticulationAllFlagsMask) != 0u)
+            return MakeUnexpected(Failure());
+
+        const u64 expectedBytes =
+            cast<u64>(hdr.linkCount) * cast<u64>(size_of<ArticulationLinkFullBinary>())
+            + cast<u64>(hdr.mimicCount) * cast<u64>(size_of<ArticulationMimicFullBinary>())
+            + cast<u64>(hdr.tendonCount) * cast<u64>(size_of<ArticulationTendonFullBinary>())
+            + cast<u64>(hdr.spatialTendonCount) * cast<u64>(size_of<ArticulationSpatialTendonBinary>())
+            + cast<u64>(hdr.loopCount) * cast<u64>(size_of<ArticulationLoopFullBinary>())
+            + cast<u64>(hdr.linkJointIndexCount) * cast<u64>(size_of<CollisionMeshU32Binary>());
+        if(expectedBytes > cast<u64>(binary.size() - cursor))
+            return MakeUnexpected(Failure());
+
+        const Expected<Filter> filterRes = this.unpackFilter(hdr.contactFilter);
+        if(!filterRes.has_value())
+            return MakeUnexpected(Failure());
+
+        ArticulationAssetData data;
+        data.contactFilter = filterRes.value();
+        data.subSteps = hdr.subSteps;
+        data.solverIterations = hdr.solverIterations;
+        data.contactRestitution = hdr.contactRestitution;
+        data.contactFriction = hdr.contactFriction;
+        data.selfCollisionMargin = hdr.selfCollisionMargin;
+        data.ccdMotionThreshold = hdr.ccdMotionThreshold;
+        data.sleepLinearThreshold = hdr.sleepLinearThreshold;
+        data.sleepAngularThreshold = hdr.sleepAngularThreshold;
+        data.sleepTimeThreshold = hdr.sleepTimeThreshold;
+        data.driveStrengthMultiplier = hdr.driveStrengthMultiplier;
+        data.isFixedBase = (hdr.flags & s_ArticulationFlagIsFixedBase) != 0u;
+        data.enableContactCoupling = (hdr.flags & s_ArticulationFlagEnableContactCoupling) != 0u;
+        data.overrideContactFriction = (hdr.flags & s_ArticulationFlagOverrideContactFriction) != 0u;
+        data.enableSelfCollision = (hdr.flags & s_ArticulationFlagEnableSelfCollision) != 0u;
+        data.enableCcd = (hdr.flags & s_ArticulationFlagEnableCcd) != 0u;
+        data.enableSleep = (hdr.flags & s_ArticulationFlagEnableSleep) != 0u;
+
+        data.links.reserve(hdr.linkCount);
+        for(u32 li = 0u; li < hdr.linkCount; ++li){
+            const Expected<ArticulationLinkFullBinary> lRes = ReadPOD<ArticulationLinkFullBinary>(binary, cursor);
+            if(!lRes.has_value())
+                return MakeUnexpected(Failure());
+            in ArticulationLinkFullBinary lbin = lRes.value();
+            if(
+                lbin.reserved0 != 0u || lbin.reserved1 != 0u || lbin.reserved2 != 0u
+                || (lbin.flags & ~s_ArticulationLinkAllFlagsMask) != 0u
+                || lbin.jointType >= cast<u8>(ArticulationJointType::kCount)
+            )
+                return MakeUnexpected(Failure());
+            ArticulationLinkDef l;
+            l.parentIndex = lbin.parentIndex;
+            l.jointType = cast<ArticulationJointType>(lbin.jointType);
+            l.parentToJoint = Transform3D(VectorSingle(lbin.parentToJointPos), VectorSingle(lbin.parentToJointRot));
+            l.jointToChild = Transform3D(VectorSingle(lbin.jointToChildPos), VectorSingle(lbin.jointToChildRot));
+            l.jointAxisLocal = lbin.jointAxisLocal;
+            l.jointAxisSecondaryLocal = lbin.jointAxisSecondaryLocal;
+            l.mass = lbin.mass;
+            l.comLocal = lbin.comLocal;
+            l.inertiaDiag = lbin.inertiaDiag;
+            l.inertiaTensor.m00 = lbin.inertiaM00;
+            l.inertiaTensor.m01 = lbin.inertiaM01;
+            l.inertiaTensor.m02 = lbin.inertiaM02;
+            l.inertiaTensor.m11 = lbin.inertiaM11;
+            l.inertiaTensor.m12 = lbin.inertiaM12;
+            l.inertiaTensor.m22 = lbin.inertiaM22;
+            l.lowerLimit = lbin.lowerLimit;
+            l.upperLimit = lbin.upperLimit;
+            l.lowerLimits = lbin.lowerLimits;
+            l.upperLimits = lbin.upperLimits;
+            l.limitStiffness = lbin.limitStiffness;
+            l.limitDamping = lbin.limitDamping;
+            l.driveTargetPos = lbin.driveTargetPos;
+            l.driveTargetVel = lbin.driveTargetVel;
+            l.driveTargetPos3 = lbin.driveTargetPos3;
+            l.driveTargetVel3 = lbin.driveTargetVel3;
+            l.driveStiffness = lbin.driveStiffness;
+            l.driveDamping = lbin.driveDamping;
+            l.driveMaxForce = lbin.driveMaxForce;
+            l.jointDamping = lbin.jointDamping;
+            l.jointFriction = lbin.jointFriction;
+            l.limitRestitution = lbin.limitRestitution;
+            l.screwPitch = lbin.screwPitch;
+            l.limitDofMask = lbin.limitDofMask;
+            l.driveDofMask = lbin.driveDofMask;
+            l.driveStiffness3 = lbin.driveStiffness3;
+            l.driveDamping3 = lbin.driveDamping3;
+            l.driveMaxForce3 = lbin.driveMaxForce3;
+            l.armature = lbin.armature;
+            l.driveTargetQuat = lbin.driveTargetQuat;
+            l.breakForce = lbin.breakForce;
+            l.breakTorque = lbin.breakTorque;
+            l.useFullInertiaTensor = (lbin.flags & s_ArticulationLinkFlagUseFullInertiaTensor) != 0u;
+            l.enableLimit = (lbin.flags & s_ArticulationLinkFlagEnableLimit) != 0u;
+            l.enableDrive = (lbin.flags & s_ArticulationLinkFlagEnableDrive) != 0u;
+            l.usePerDofLimits = (lbin.flags & s_ArticulationLinkFlagUsePerDofLimits) != 0u;
+            l.usePerDofDrives = (lbin.flags & s_ArticulationLinkFlagUsePerDofDrives) != 0u;
+            l.useImplicitDrive = (lbin.flags & s_ArticulationLinkFlagUseImplicitDrive) != 0u;
+            l.useEllipticConeLimit = (lbin.flags & s_ArticulationLinkFlagUseEllipticConeLimit) != 0u;
+            l.useQuatDrive = (lbin.flags & s_ArticulationLinkFlagUseQuatDrive) != 0u;
+            data.links.push_back(l);
+        }
+
+        data.mimicConstraints.reserve(hdr.mimicCount);
+        for(u32 mi = 0u; mi < hdr.mimicCount; ++mi){
+            const Expected<ArticulationMimicFullBinary> mRes = ReadPOD<ArticulationMimicFullBinary>(binary, cursor);
+            if(!mRes.has_value() || mRes.value().reserved0 != 0u || mRes.value().reserved1 != 0u || (mRes.value().flags & ~s_ArticulationConstraintFlagEnabled) != 0u)
+                return MakeUnexpected(Failure());
+            ArticulationMimicConstraint mc;
+            mc.linkIndex = mRes.value().linkIndex;
+            mc.dofIndex = mRes.value().dofIndex;
+            mc.targetLinkIndex = mRes.value().targetLinkIndex;
+            mc.targetDofIndex = mRes.value().targetDofIndex;
+            mc.gearRatio = mRes.value().gearRatio;
+            mc.offset = mRes.value().offset;
+            mc.compliance = mRes.value().compliance;
+            mc.enabled = (mRes.value().flags & s_ArticulationConstraintFlagEnabled) != 0u;
+            data.mimicConstraints.push_back(mc);
+        }
+
+        data.tendonConstraints.reserve(hdr.tendonCount);
+        for(u32 ti = 0u; ti < hdr.tendonCount; ++ti){
+            const Expected<ArticulationTendonFullBinary> tRes = ReadPOD<ArticulationTendonFullBinary>(binary, cursor);
+            if(!tRes.has_value())
+                return MakeUnexpected(Failure());
+            in ArticulationTendonFullBinary tbin = tRes.value();
+            if(tbin.reserved0 != 0u || tbin.reserved1 != 0u || tbin.reserved2 != 0u || tbin.entryCount > 8u || (tbin.flags & ~(s_ArticulationConstraintFlagEnabled | s_ArticulationConstraintFlagSecond)) != 0u)
+                return MakeUnexpected(Failure());
+            ArticulationTendonConstraint tc;
+            for(u32 ei = 0u; ei < tbin.entryCount; ++ei){
+                tc.linkIndices.push_back(tbin.linkIndices[ei]);
+                tc.dofIndices.push_back(tbin.dofIndices[ei]);
+                tc.coefficients.push_back(tbin.coefficients[ei]);
+            }
+            tc.restLength = tbin.restLength;
+            tc.lowerLimit = tbin.lowerLimit;
+            tc.upperLimit = tbin.upperLimit;
+            tc.compliance = tbin.compliance;
+            tc.enabled = (tbin.flags & s_ArticulationConstraintFlagEnabled) != 0u;
+            tc.isEquality = (tbin.flags & s_ArticulationConstraintFlagSecond) != 0u;
+            data.tendonConstraints.push_back(tc);
+        }
+
+        data.spatialTendons.reserve(hdr.spatialTendonCount);
+        for(u32 si = 0u; si < hdr.spatialTendonCount; ++si){
+            const Expected<ArticulationSpatialTendonBinary> sRes = ReadPOD<ArticulationSpatialTendonBinary>(binary, cursor);
+            if(!sRes.has_value())
+                return MakeUnexpected(Failure());
+            in ArticulationSpatialTendonBinary stbin = sRes.value();
+            if(stbin.reserved0 != 0u || stbin.reserved1 != 0u || stbin.attachmentCount > 8u || (stbin.flags & ~(s_ArticulationConstraintFlagEnabled | s_ArticulationConstraintFlagSecond)) != 0u)
+                return MakeUnexpected(Failure());
+            ArticulationSpatialTendon st;
+            for(u32 ai = 0u; ai < stbin.attachmentCount; ++ai){
+                ArticulationSpatialTendonAttachment att;
+                att.linkIndex = stbin.linkIndices[ai];
+                att.localPoint = stbin.localPoints[ai];
+                st.attachments.push_back(att);
+            }
+            st.restLength = stbin.restLength;
+            st.lowerLimit = stbin.lowerLimit;
+            st.upperLimit = stbin.upperLimit;
+            st.stiffness = stbin.stiffness;
+            st.damping = stbin.damping;
+            st.compliance = stbin.compliance;
+            st.enabled = (stbin.flags & s_ArticulationConstraintFlagEnabled) != 0u;
+            st.isEquality = (stbin.flags & s_ArticulationConstraintFlagSecond) != 0u;
+            data.spatialTendons.push_back(st);
+        }
+
+        data.loopConstraints.reserve(hdr.loopCount);
+        for(u32 lpi = 0u; lpi < hdr.loopCount; ++lpi){
+            const Expected<ArticulationLoopFullBinary> lpRes = ReadPOD<ArticulationLoopFullBinary>(binary, cursor);
+            if(!lpRes.has_value())
+                return MakeUnexpected(Failure());
+            in ArticulationLoopFullBinary lpbin = lpRes.value();
+            if(lpbin.reserved0 != 0u || lpbin.reserved1 != 0u || (lpbin.flags & ~(s_ArticulationConstraintFlagEnabled | s_ArticulationConstraintFlagSecond)) != 0u)
+                return MakeUnexpected(Failure());
+            ArticulationLoopConstraint lc;
+            lc.linkIndexA = lpbin.linkIndexA;
+            lc.linkIndexB = lpbin.linkIndexB;
+            lc.localAnchorA = lpbin.localAnchorA;
+            lc.localAnchorB = lpbin.localAnchorB;
+            lc.relOrientation = lpbin.relOrientation;
+            lc.compliance = lpbin.compliance;
+            lc.enabled = (lpbin.flags & s_ArticulationConstraintFlagEnabled) != 0u;
+            lc.lockOrientation = (lpbin.flags & s_ArticulationConstraintFlagSecond) != 0u;
+            data.loopConstraints.push_back(lc);
+        }
+
+        if(!ReadBinaryVectorPayload(binary, hdr.linkJointIndexCount, cursor, data.linkJointIndices).has_value())
+            return MakeUnexpected(Failure());
+
+        if(!this.validArticulationData(data, allowEmptyLinks))
+            return MakeUnexpected(Failure());
+        return data;
+    }
+
+    public b8 serializeArticulationUnchecked(in ArticulationAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(size_of<ArticulationAssetHeaderBinary>() == 16u);
+        outBinary.clear();
+        ArticulationAssetHeaderBinary hdr;
+        AppendPOD(outBinary, hdr);
+        return this.appendArticulationPayload(data, outBinary);
+    }
+
+    public b8 serializeArticulation(in ArticulationAssetData data, mut Vector<u8> outBinary)const{
+        if(!this.validArticulationData(data, false))
+            return false;
+        return this.serializeArticulationUnchecked(data, outBinary);
+    }
+
+    public Expected<ArticulationAssetData> deserializeArticulation(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<ArticulationAssetHeaderBinary> hdrRes = ReadPOD<ArticulationAssetHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("ArticulationAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in ArticulationAssetHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_ArticulationAssetMagic || hdr.version != s_ArticulationAssetVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("ArticulationAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<ArticulationAssetData> dataRes = this.readArticulationPayload(binary, cursor, false);
+        if(!dataRes.has_value() || cursor != binary.size()){
+            error("ArticulationAsset::loadBinary failed: invalid payload");
+            return MakeUnexpected(Failure());
+        }
+        return dataRes.value();
+    }
+
+    public b8 validVehicleData(in VehicleAssetData data, in b8 allowEmptyWheels)const{
+        in VehicleEngineDef e = data.engine;
+        if(
+            !this.validFilter(data.queryFilter)
+            || cast<u8>(e.archetype) >= cast<u8>(VehicleArchetype::kCount)
+            || cast<u8>(e.centerDifferentialMode) >= cast<u8>(VehicleDifferentialMode::kCount)
+            || cast<u8>(e.axleDifferentialMode) >= cast<u8>(VehicleDifferentialMode::kCount)
+            || e.gearCount < 1u || e.gearCount > 6u
+            || e.subSteps < 1u
+            || e.torqueCurvePoints.size() > 16u
+            || !IsFinite(VectorSingle(e.maxTorque, e.idleRpm, e.maxRpm, e.revLimiterRpm))
+            || !IsFinite(VectorSingle(e.shiftUpRpm, e.shiftDownRpm, e.finalDriveRatio, e.reverseRatio))
+            || !IsFinite(VectorSingle(e.differentialBias, e.torsenBiasRatio, e.centerDiffFrontSplit, e.differentialLockTorque))
+            || !IsFinite(VectorSingle(e.clutchStrength, e.torqueConverterStallRpm, e.torqueConverterMaxTorqueRatio, e.engineInertia))
+            || !IsFinite(VectorSingle(e.dragCoeff, e.downforceCoeff, e.frontalArea, e.airDensity))
+            || !IsFinite(VectorSingle(e.steerSlewRateRadPerSec, e.rearSteerRatio, e.motorcycleLeanGain, e.motorcycleLeanMaxRad))
+            || !IsFinite(VectorSingle(e.trackWidth, e.wheelbase, e.espStrength, e.espMaxBrakeTorque))
+            || !IsFinite(VectorSingle(e.steerSelfCenteringGain, e.trailerBrakeForce, e.motorcycleCasterAngleRad, e.motorcycleTrail))
+            || !IsFinite(VectorSingle(e.motorcycleCounterSteerGain, e.motorcycleGyroGain, data.wheelSlipEventThreshold, data.trailerSwingLimitRad))
+            || !IsFinite(VectorSingle(e.ambientWindVelocity))
+            || !ValidPhysicsVec3NonZero(VectorSingle(e.chassisForwardAxis))
+            || !ValidPhysicsVec3NonZero(VectorSingle(e.chassisUpAxis))
+            || !IsValidPositionVec3(VectorSingle(data.trailerLocalHitchChassis))
+            || !IsValidPositionVec3(VectorSingle(data.trailerLocalHitchTrailer))
+            || e.maxTorque < 0.0f || e.idleRpm < 0.0f || e.maxRpm <= 0.0f || e.revLimiterRpm < 0.0f
+            || e.engineInertia <= 0.0f || e.frontalArea < 0.0f || e.airDensity < 0.0f
+            || e.trackWidth <= 0.0f || e.wheelbase <= 0.0f
+            || data.wheelSlipEventThreshold < 0.0f
+        )
+            return false;
+        for(usize gi = 0u; gi < 6u; ++gi){
+            if(!IsFinite(VectorSingle(e.forwardGearRatios[gi])))
+                return false;
+        }
+        for(usize ti = 0u; ti < e.torqueCurvePoints.size(); ++ti){
+            const f32x2u pt = e.torqueCurvePoints[ti];
+            if(!IsFinite(VectorSingle(pt.x, pt.y, 0.0f, 0.0f)) || pt.x < 0.0f || pt.y < 0.0f)
+                return false;
+        }
+        if(data.wheels.empty())
+            return allowEmptyWheels;
+        if(data.wheels.size() > cast<usize>(u32.max))
+            return false;
+        for(usize wi = 0u; wi < data.wheels.size(); ++wi){
+            in VehicleWheelDef w = data.wheels[wi];
+            if(
+                cast<u8>(w.wheelCastMode) >= cast<u8>(VehicleWheelCastMode::kCount)
+                || !IsValidPositionVec3(VectorSingle(w.attachmentPoint))
+                || !ValidPhysicsVec3NonZero(VectorSingle(w.suspensionDirection))
+                || !ValidPhysicsVec3NonZero(VectorSingle(w.axleAxis))
+                || !ValidPhysicsVec3NonZero(VectorSingle(w.forwardAxis))
+                || !IsFinite(VectorSingle(w.suspensionRestLength, w.suspensionMaxTravel, w.suspensionStiffness, w.suspensionDamping))
+                || !IsFinite(VectorSingle(w.suspensionReboundDamping, w.bumpStopStiffness, w.bumpStopRestitution, w.wheelRadius))
+                || !IsFinite(VectorSingle(w.wheelWidth, w.wheelChamfer, w.wheelInertia, w.maxSteerAngleRad))
+                || !IsFinite(VectorSingle(w.rearSteerRatio, w.camberAngleRad, w.toeAngleRad, w.driveFraction))
+                || !IsFinite(VectorSingle(w.maxBrakeTorque, w.maxHandbrakeTorque, w.frictionMultiplier, w.loadSensitivity))
+                || !IsFinite(VectorSingle(w.nominalWheelLoad, w.rollingResistanceCoeff, w.longitudinalStiffness, w.lateralStiffness))
+                || !IsFinite(VectorSingle(w.pacejkaShapeC, w.pacejkaCurvatureE, w.pacejkaShapeCLat, w.pacejkaCurvatureELat))
+                || !IsFinite(VectorSingle(w.relaxationLengthLong, w.relaxationLengthLat, w.selfAligningTrail, w.antiRollStiffness))
+                || w.suspensionRestLength <= 0.0f || w.suspensionMaxTravel < 0.0f
+                || w.suspensionStiffness < 0.0f || w.suspensionDamping < 0.0f
+                || w.wheelRadius <= 0.0f || w.wheelWidth < 0.0f || w.wheelChamfer < 0.0f || w.wheelInertia <= 0.0f
+                || w.maxBrakeTorque < 0.0f || w.maxHandbrakeTorque < 0.0f || w.frictionMultiplier < 0.0f
+            )
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateVehicle(in VehicleAssetData data, in Name virtualPath)const{
+        if(this.validVehicleData(data, false))
+            return true;
+        error("VehicleAsset::validatePayload failed: invalid vehicle for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendVehiclePayload(in VehicleAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(size_of<VehiclePayloadHeaderBinary>() == 304u && size_of<VehicleWheelFullBinary>() == 224u && size_of<VehicleTorqueCurvePointBinary>() == 8u);
+        if(data.wheels.size() > cast<usize>(u32.max) || data.engine.torqueCurvePoints.size() > 16u)
+            return false;
+
+        in VehicleEngineDef e = data.engine;
+        VehiclePayloadHeaderBinary hdr;
+        hdr.ambientWindVelocity = e.ambientWindVelocity;
+        hdr.chassisForwardAxis = e.chassisForwardAxis;
+        hdr.chassisUpAxis = e.chassisUpAxis;
+        hdr.trailerLocalHitchChassis = data.trailerLocalHitchChassis;
+        hdr.trailerLocalHitchTrailer = data.trailerLocalHitchTrailer;
+        hdr.queryFilter = this.packFilter(data.queryFilter);
+        hdr.forwardGearRatios = e.forwardGearRatios;
+        hdr.wheelCount = cast<u32>(data.wheels.size());
+        hdr.torqueCurvePointCount = cast<u32>(e.torqueCurvePoints.size());
+        hdr.gearCount = e.gearCount;
+        hdr.subSteps = e.subSteps;
+        hdr.maxTorque = e.maxTorque;
+        hdr.idleRpm = e.idleRpm;
+        hdr.maxRpm = e.maxRpm;
+        hdr.revLimiterRpm = e.revLimiterRpm;
+        hdr.shiftUpRpm = e.shiftUpRpm;
+        hdr.shiftDownRpm = e.shiftDownRpm;
+        hdr.finalDriveRatio = e.finalDriveRatio;
+        hdr.reverseRatio = e.reverseRatio;
+        hdr.differentialBias = e.differentialBias;
+        hdr.torsenBiasRatio = e.torsenBiasRatio;
+        hdr.centerDiffFrontSplit = e.centerDiffFrontSplit;
+        hdr.differentialLockTorque = e.differentialLockTorque;
+        hdr.clutchStrength = e.clutchStrength;
+        hdr.torqueConverterStallRpm = e.torqueConverterStallRpm;
+        hdr.torqueConverterMaxTorqueRatio = e.torqueConverterMaxTorqueRatio;
+        hdr.engineInertia = e.engineInertia;
+        hdr.dragCoeff = e.dragCoeff;
+        hdr.downforceCoeff = e.downforceCoeff;
+        hdr.frontalArea = e.frontalArea;
+        hdr.airDensity = e.airDensity;
+        hdr.steerSlewRateRadPerSec = e.steerSlewRateRadPerSec;
+        hdr.rearSteerRatio = e.rearSteerRatio;
+        hdr.motorcycleLeanGain = e.motorcycleLeanGain;
+        hdr.motorcycleLeanMaxRad = e.motorcycleLeanMaxRad;
+        hdr.trackWidth = e.trackWidth;
+        hdr.wheelbase = e.wheelbase;
+        hdr.espStrength = e.espStrength;
+        hdr.espMaxBrakeTorque = e.espMaxBrakeTorque;
+        hdr.steerSelfCenteringGain = e.steerSelfCenteringGain;
+        hdr.trailerBrakeForce = e.trailerBrakeForce;
+        hdr.motorcycleCasterAngleRad = e.motorcycleCasterAngleRad;
+        hdr.motorcycleTrail = e.motorcycleTrail;
+        hdr.motorcycleCounterSteerGain = e.motorcycleCounterSteerGain;
+        hdr.motorcycleGyroGain = e.motorcycleGyroGain;
+        hdr.wheelSlipEventThreshold = data.wheelSlipEventThreshold;
+        hdr.trailerSwingLimitRad = data.trailerSwingLimitRad;
+        if(e.useAckermanSteering) hdr.flags |= s_VehicleFlagUseAckerman;
+        if(e.automaticTransmission) hdr.flags |= s_VehicleFlagAutomaticTransmission;
+        if(e.useTorqueConverter) hdr.flags |= s_VehicleFlagUseTorqueConverter;
+        if(e.useSolverImpulses) hdr.flags |= s_VehicleFlagUseSolverImpulses;
+        if(e.enableAbs) hdr.flags |= s_VehicleFlagEnableAbs;
+        if(e.enableTcs) hdr.flags |= s_VehicleFlagEnableTcs;
+        if(e.enableEsp) hdr.flags |= s_VehicleFlagEnableEsp;
+        hdr.archetype = cast<u8>(e.archetype);
+        hdr.centerDifferentialMode = cast<u8>(e.centerDifferentialMode);
+        hdr.axleDifferentialMode = cast<u8>(e.axleDifferentialMode);
+        AppendPOD(outBinary, hdr);
+
+        for(usize wi = 0u; wi < data.wheels.size(); ++wi){
+            in VehicleWheelDef w = data.wheels[wi];
+            VehicleWheelFullBinary wbin;
+            wbin.attachmentPoint = w.attachmentPoint;
+            wbin.suspensionDirection = w.suspensionDirection;
+            wbin.axleAxis = w.axleAxis;
+            wbin.forwardAxis = w.forwardAxis;
+            wbin.suspensionRestLength = w.suspensionRestLength;
+            wbin.suspensionMaxTravel = w.suspensionMaxTravel;
+            wbin.suspensionStiffness = w.suspensionStiffness;
+            wbin.suspensionDamping = w.suspensionDamping;
+            wbin.suspensionReboundDamping = w.suspensionReboundDamping;
+            wbin.bumpStopStiffness = w.bumpStopStiffness;
+            wbin.bumpStopRestitution = w.bumpStopRestitution;
+            wbin.wheelRadius = w.wheelRadius;
+            wbin.wheelWidth = w.wheelWidth;
+            wbin.wheelChamfer = w.wheelChamfer;
+            wbin.wheelInertia = w.wheelInertia;
+            wbin.maxSteerAngleRad = w.maxSteerAngleRad;
+            wbin.rearSteerRatio = w.rearSteerRatio;
+            wbin.camberAngleRad = w.camberAngleRad;
+            wbin.toeAngleRad = w.toeAngleRad;
+            wbin.driveFraction = w.driveFraction;
+            wbin.maxBrakeTorque = w.maxBrakeTorque;
+            wbin.maxHandbrakeTorque = w.maxHandbrakeTorque;
+            wbin.frictionMultiplier = w.frictionMultiplier;
+            wbin.loadSensitivity = w.loadSensitivity;
+            wbin.nominalWheelLoad = w.nominalWheelLoad;
+            wbin.rollingResistanceCoeff = w.rollingResistanceCoeff;
+            wbin.longitudinalStiffness = w.longitudinalStiffness;
+            wbin.lateralStiffness = w.lateralStiffness;
+            wbin.pacejkaShapeC = w.pacejkaShapeC;
+            wbin.pacejkaCurvatureE = w.pacejkaCurvatureE;
+            wbin.pacejkaShapeCLat = w.pacejkaShapeCLat;
+            wbin.pacejkaCurvatureELat = w.pacejkaCurvatureELat;
+            wbin.relaxationLengthLong = w.relaxationLengthLong;
+            wbin.relaxationLengthLat = w.relaxationLengthLat;
+            wbin.selfAligningTrail = w.selfAligningTrail;
+            wbin.antiRollStiffness = w.antiRollStiffness;
+            wbin.axleIndex = w.axleIndex;
+            wbin.antiRollPairIndex = w.antiRollPairIndex;
+            wbin.trackSide = w.trackSide;
+            wbin.wheelCastMode = cast<u8>(w.wheelCastMode);
+            if(w.isSteerable) wbin.flags |= s_VehicleWheelFullFlagSteerable;
+            if(w.isDriven) wbin.flags |= s_VehicleWheelFullFlagDriven;
+            if(w.handbrakeAffected) wbin.flags |= s_VehicleWheelFullFlagHandbrake;
+            if(w.useSweptCast) wbin.flags |= s_VehicleWheelFullFlagSweptCast;
+            if(w.attachedToTrailer) wbin.flags |= s_VehicleWheelFullFlagAttachedToTrailer;
+            AppendPOD(outBinary, wbin);
+        }
+
+        for(usize ti = 0u; ti < e.torqueCurvePoints.size(); ++ti){
+            VehicleTorqueCurvePointBinary pt;
+            pt.rpm = e.torqueCurvePoints[ti].x;
+            pt.torque = e.torqueCurvePoints[ti].y;
+            AppendPOD(outBinary, pt);
+        }
+        return true;
+    }
+
+    public Expected<VehicleAssetData> readVehiclePayload(in Span<u8> binary, mut usize cursor, in b8 allowEmptyWheels)const{
+        const Expected<VehiclePayloadHeaderBinary> hdrRes = ReadPOD<VehiclePayloadHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value())
+            return MakeUnexpected(Failure());
+        in VehiclePayloadHeaderBinary hdr = hdrRes.value();
+        if(
+            hdr.reserved0 != 0u
+            || hdr.reserved1 != 0u
+            || hdr.reserved2 != 0u
+            || hdr.torqueCurvePointCount > 16u
+            || (hdr.flags & ~s_VehicleAllFlagsMask) != 0u
+            || hdr.archetype >= cast<u8>(VehicleArchetype::kCount)
+            || hdr.centerDifferentialMode >= cast<u8>(VehicleDifferentialMode::kCount)
+            || hdr.axleDifferentialMode >= cast<u8>(VehicleDifferentialMode::kCount)
+        )
+            return MakeUnexpected(Failure());
+
+        const u64 expectedBytes =
+            cast<u64>(hdr.wheelCount) * cast<u64>(size_of<VehicleWheelFullBinary>())
+            + cast<u64>(hdr.torqueCurvePointCount) * cast<u64>(size_of<VehicleTorqueCurvePointBinary>());
+        if(expectedBytes > cast<u64>(binary.size() - cursor))
+            return MakeUnexpected(Failure());
+
+        const Expected<Filter> qFilterRes = this.unpackFilter(hdr.queryFilter);
+        if(!qFilterRes.has_value())
+            return MakeUnexpected(Failure());
+
+        VehicleAssetData data;
+        data.queryFilter = qFilterRes.value();
+        data.wheelSlipEventThreshold = hdr.wheelSlipEventThreshold;
+        data.trailerLocalHitchChassis = hdr.trailerLocalHitchChassis;
+        data.trailerLocalHitchTrailer = hdr.trailerLocalHitchTrailer;
+        data.trailerSwingLimitRad = hdr.trailerSwingLimitRad;
+
+        mut VehicleEngineDef e = data.engine;
+        e.ambientWindVelocity = hdr.ambientWindVelocity;
+        e.chassisForwardAxis = hdr.chassisForwardAxis;
+        e.chassisUpAxis = hdr.chassisUpAxis;
+        e.forwardGearRatios = hdr.forwardGearRatios;
+        e.gearCount = hdr.gearCount;
+        e.subSteps = hdr.subSteps;
+        e.maxTorque = hdr.maxTorque;
+        e.idleRpm = hdr.idleRpm;
+        e.maxRpm = hdr.maxRpm;
+        e.revLimiterRpm = hdr.revLimiterRpm;
+        e.shiftUpRpm = hdr.shiftUpRpm;
+        e.shiftDownRpm = hdr.shiftDownRpm;
+        e.finalDriveRatio = hdr.finalDriveRatio;
+        e.reverseRatio = hdr.reverseRatio;
+        e.differentialBias = hdr.differentialBias;
+        e.torsenBiasRatio = hdr.torsenBiasRatio;
+        e.centerDiffFrontSplit = hdr.centerDiffFrontSplit;
+        e.differentialLockTorque = hdr.differentialLockTorque;
+        e.clutchStrength = hdr.clutchStrength;
+        e.torqueConverterStallRpm = hdr.torqueConverterStallRpm;
+        e.torqueConverterMaxTorqueRatio = hdr.torqueConverterMaxTorqueRatio;
+        e.engineInertia = hdr.engineInertia;
+        e.dragCoeff = hdr.dragCoeff;
+        e.downforceCoeff = hdr.downforceCoeff;
+        e.frontalArea = hdr.frontalArea;
+        e.airDensity = hdr.airDensity;
+        e.steerSlewRateRadPerSec = hdr.steerSlewRateRadPerSec;
+        e.rearSteerRatio = hdr.rearSteerRatio;
+        e.motorcycleLeanGain = hdr.motorcycleLeanGain;
+        e.motorcycleLeanMaxRad = hdr.motorcycleLeanMaxRad;
+        e.trackWidth = hdr.trackWidth;
+        e.wheelbase = hdr.wheelbase;
+        e.espStrength = hdr.espStrength;
+        e.espMaxBrakeTorque = hdr.espMaxBrakeTorque;
+        e.steerSelfCenteringGain = hdr.steerSelfCenteringGain;
+        e.trailerBrakeForce = hdr.trailerBrakeForce;
+        e.motorcycleCasterAngleRad = hdr.motorcycleCasterAngleRad;
+        e.motorcycleTrail = hdr.motorcycleTrail;
+        e.motorcycleCounterSteerGain = hdr.motorcycleCounterSteerGain;
+        e.motorcycleGyroGain = hdr.motorcycleGyroGain;
+        e.useAckermanSteering = (hdr.flags & s_VehicleFlagUseAckerman) != 0u;
+        e.automaticTransmission = (hdr.flags & s_VehicleFlagAutomaticTransmission) != 0u;
+        e.useTorqueConverter = (hdr.flags & s_VehicleFlagUseTorqueConverter) != 0u;
+        e.useSolverImpulses = (hdr.flags & s_VehicleFlagUseSolverImpulses) != 0u;
+        e.enableAbs = (hdr.flags & s_VehicleFlagEnableAbs) != 0u;
+        e.enableTcs = (hdr.flags & s_VehicleFlagEnableTcs) != 0u;
+        e.enableEsp = (hdr.flags & s_VehicleFlagEnableEsp) != 0u;
+        e.archetype = cast<VehicleArchetype>(hdr.archetype);
+        e.centerDifferentialMode = cast<VehicleDifferentialMode>(hdr.centerDifferentialMode);
+        e.axleDifferentialMode = cast<VehicleDifferentialMode>(hdr.axleDifferentialMode);
+
+        data.wheels.reserve(hdr.wheelCount);
+        for(u32 wi = 0u; wi < hdr.wheelCount; ++wi){
+            const Expected<VehicleWheelFullBinary> wRes = ReadPOD<VehicleWheelFullBinary>(binary, cursor);
+            if(!wRes.has_value())
+                return MakeUnexpected(Failure());
+            in VehicleWheelFullBinary wbin = wRes.value();
+            if(
+                wbin.reserved0 != 0u || wbin.reserved1 != 0u || wbin.reserved2 != 0u
+                || (wbin.flags & ~s_VehicleWheelFullAllFlagsMask) != 0u
+                || wbin.wheelCastMode >= cast<u8>(VehicleWheelCastMode::kCount)
+            )
+                return MakeUnexpected(Failure());
+            VehicleWheelDef w;
+            w.attachmentPoint = wbin.attachmentPoint;
+            w.suspensionDirection = wbin.suspensionDirection;
+            w.axleAxis = wbin.axleAxis;
+            w.forwardAxis = wbin.forwardAxis;
+            w.suspensionRestLength = wbin.suspensionRestLength;
+            w.suspensionMaxTravel = wbin.suspensionMaxTravel;
+            w.suspensionStiffness = wbin.suspensionStiffness;
+            w.suspensionDamping = wbin.suspensionDamping;
+            w.suspensionReboundDamping = wbin.suspensionReboundDamping;
+            w.bumpStopStiffness = wbin.bumpStopStiffness;
+            w.bumpStopRestitution = wbin.bumpStopRestitution;
+            w.wheelRadius = wbin.wheelRadius;
+            w.wheelWidth = wbin.wheelWidth;
+            w.wheelChamfer = wbin.wheelChamfer;
+            w.wheelInertia = wbin.wheelInertia;
+            w.maxSteerAngleRad = wbin.maxSteerAngleRad;
+            w.rearSteerRatio = wbin.rearSteerRatio;
+            w.camberAngleRad = wbin.camberAngleRad;
+            w.toeAngleRad = wbin.toeAngleRad;
+            w.driveFraction = wbin.driveFraction;
+            w.maxBrakeTorque = wbin.maxBrakeTorque;
+            w.maxHandbrakeTorque = wbin.maxHandbrakeTorque;
+            w.frictionMultiplier = wbin.frictionMultiplier;
+            w.loadSensitivity = wbin.loadSensitivity;
+            w.nominalWheelLoad = wbin.nominalWheelLoad;
+            w.rollingResistanceCoeff = wbin.rollingResistanceCoeff;
+            w.longitudinalStiffness = wbin.longitudinalStiffness;
+            w.lateralStiffness = wbin.lateralStiffness;
+            w.pacejkaShapeC = wbin.pacejkaShapeC;
+            w.pacejkaCurvatureE = wbin.pacejkaCurvatureE;
+            w.pacejkaShapeCLat = wbin.pacejkaShapeCLat;
+            w.pacejkaCurvatureELat = wbin.pacejkaCurvatureELat;
+            w.relaxationLengthLong = wbin.relaxationLengthLong;
+            w.relaxationLengthLat = wbin.relaxationLengthLat;
+            w.selfAligningTrail = wbin.selfAligningTrail;
+            w.antiRollStiffness = wbin.antiRollStiffness;
+            w.axleIndex = wbin.axleIndex;
+            w.antiRollPairIndex = wbin.antiRollPairIndex;
+            w.trackSide = wbin.trackSide;
+            w.wheelCastMode = cast<VehicleWheelCastMode>(wbin.wheelCastMode);
+            w.isSteerable = (wbin.flags & s_VehicleWheelFullFlagSteerable) != 0u;
+            w.isDriven = (wbin.flags & s_VehicleWheelFullFlagDriven) != 0u;
+            w.handbrakeAffected = (wbin.flags & s_VehicleWheelFullFlagHandbrake) != 0u;
+            w.useSweptCast = (wbin.flags & s_VehicleWheelFullFlagSweptCast) != 0u;
+            w.attachedToTrailer = (wbin.flags & s_VehicleWheelFullFlagAttachedToTrailer) != 0u;
+            data.wheels.push_back(w);
+        }
+
+        for(u32 ti = 0u; ti < hdr.torqueCurvePointCount; ++ti){
+            const Expected<VehicleTorqueCurvePointBinary> ptRes = ReadPOD<VehicleTorqueCurvePointBinary>(binary, cursor);
+            if(!ptRes.has_value())
+                return MakeUnexpected(Failure());
+            e.torqueCurvePoints.push_back(f32x2u(ptRes.value().rpm, ptRes.value().torque));
+        }
+
+        if(!this.validVehicleData(data, allowEmptyWheels))
+            return MakeUnexpected(Failure());
+        return data;
+    }
+
+    public b8 serializeVehicleUnchecked(in VehicleAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(size_of<VehicleAssetHeaderBinary>() == 16u);
+        outBinary.clear();
+        VehicleAssetHeaderBinary hdr;
+        AppendPOD(outBinary, hdr);
+        return this.appendVehiclePayload(data, outBinary);
+    }
+
+    public b8 serializeVehicle(in VehicleAssetData data, mut Vector<u8> outBinary)const{
+        if(!this.validVehicleData(data, false))
+            return false;
+        return this.serializeVehicleUnchecked(data, outBinary);
+    }
+
+    public Expected<VehicleAssetData> deserializeVehicle(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<VehicleAssetHeaderBinary> hdrRes = ReadPOD<VehicleAssetHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("VehicleAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in VehicleAssetHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_VehicleAssetMagic || hdr.version != s_VehicleAssetVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u){
+            error("VehicleAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<VehicleAssetData> dataRes = this.readVehiclePayload(binary, cursor, false);
+        if(!dataRes.has_value() || cursor != binary.size()){
+            error("VehicleAsset::loadBinary failed: invalid payload");
+            return MakeUnexpected(Failure());
+        }
+        return dataRes.value();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

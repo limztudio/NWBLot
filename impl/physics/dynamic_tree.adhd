@@ -18,7 +18,8 @@ const u8 s_TreeNodeHasNonSensor = 0x04u;
 
 class TreeNode{
     public f32x3_u32 aabbMinUser(0.0f, 0.0f, 0.0f, s_NullIndex);
-    public f32x3_u32 aabbMaxCategory(0.0f, 0.0f, 0.0f, 0u);
+    public f32x3_u32 aabbMaxLayer(0.0f, 0.0f, 0.0f, 0u);
+    public u64 categoryBits = 0u;
     public u32 parentOrNext = s_NullIndex;
     public u32 child1 = s_NullIndex;
     public u32 child2 = s_NullIndex;
@@ -31,12 +32,12 @@ class TreeNode{
     }
 
     public Aabb3D aabb()const{
-        return Aabb3D(VectorSingle(this.aabbMinUser, 0.0f), VectorSingle(this.aabbMaxCategory, 0.0f));
+        return Aabb3D(VectorSingle(this.aabbMinUser, 0.0f), VectorSingle(this.aabbMaxLayer, 0.0f));
     }
 
     public void setAabbValues(in VectorSingle lower, in VectorSingle upper){
         this.aabbMinUser = f32x3_u32(lower, this.aabbMinUser.w);
-        this.aabbMaxCategory = f32x3_u32(upper, this.aabbMaxCategory.w);
+        this.aabbMaxLayer = f32x3_u32(upper, this.aabbMaxLayer.w);
     }
 
     public void setAabb(in Aabb3D box){
@@ -47,8 +48,8 @@ class TreeNode{
         return this.aabbMinUser.w;
     }
 
-    public u32 categoryBits()const{
-        return this.aabbMaxCategory.w;
+    public u32 broadPhaseLayerMask()const{
+        return this.aabbMaxLayer.w;
     }
 }
 
@@ -73,19 +74,20 @@ class DynamicTree{
             if(this.m_nodes[ni].height < 0)
                 continue;
             const VectorSingle curMin(this.m_nodes[ni].aabbMinUser, 0.0f);
-            const VectorSingle curMax(this.m_nodes[ni].aabbMaxCategory, 0.0f);
+            const VectorSingle curMax(this.m_nodes[ni].aabbMaxLayer, 0.0f);
             this.m_nodes[ni].setAabbValues(curMin + shift3, curMax + shift3);
         }
     }
 
-    public u32 createProxyWithFlags(in Aabb3D aabb, in u32 categoryBits, in u8 nodeFlags, in u32 userData){
+    public u32 createProxyWithFlags(in Aabb3D aabb, in u64 categoryBits, in u32 layerBits, in u8 nodeFlags, in u32 userData){
         const u32 proxyId = this.allocateNode();
         const VectorSingle lower(aabb.lowerBound);
         const VectorSingle upper(aabb.upperBound);
         const f32 margin = ComputeAabbMarginValues(lower, upper);
         const VectorSingle mVec(margin, margin, margin, 0.0f);
         this.m_nodes[proxyId].aabbMinUser = f32x3_u32(lower - mVec, userData);
-        this.m_nodes[proxyId].aabbMaxCategory = f32x3_u32(upper + mVec, categoryBits);
+        this.m_nodes[proxyId].aabbMaxLayer = f32x3_u32(upper + mVec, layerBits);
+        this.m_nodes[proxyId].categoryBits = categoryBits;
         this.m_nodes[proxyId].height = 0;
         this.m_nodes[proxyId].moved = false;
         this.m_nodes[proxyId].nodeFlags = nodeFlags;
@@ -124,7 +126,7 @@ class DynamicTree{
             return false;
         in TreeNode node = this.m_nodes[proxyId];
         const VectorSingle curMin(node.aabbMinUser, 0.0f);
-        const VectorSingle curMax(node.aabbMaxCategory, 0.0f);
+        const VectorSingle curMax(node.aabbMaxLayer, 0.0f);
         const VectorSingle lower(aabb.lowerBound);
         const VectorSingle upper(aabb.upperBound);
         if(!AabbContainsValues(curMin, curMax, lower, upper))
@@ -150,7 +152,7 @@ class DynamicTree{
             const VectorSingle hugeVec(4.0f * margin, 4.0f * margin, 4.0f * margin, 0.0f);
             in TreeNode curNode = this.m_nodes[proxyId];
             const VectorSingle curMin(curNode.aabbMinUser, 0.0f);
-            const VectorSingle curMax(curNode.aabbMaxCategory, 0.0f);
+            const VectorSingle curMax(curNode.aabbMaxLayer, 0.0f);
             if(AabbContainsValues(curMin, curMax, lower0, upper0) && AabbContainsValues(fattenedLower - hugeVec, fattenedUpper + hugeVec, curMin, curMax))
                 return false;
         }
@@ -269,11 +271,12 @@ class DynamicTree{
         other.m_nodeCount = tmpCount;
     }
 
-    public void queryAabbFiltered<Callback>(in Aabb3D queryBox, in u32 maskBits, in u8 requiredNodeFlags, in Callback callback)const{
+    public void queryAabbFiltered<Callback>(in Aabb3D queryBox, in u64 maskBits, in u32 layerMask, in u8 requiredNodeFlags, in Callback callback)const{
         Vector<u32> spillScratch;
         this.queryAabbFilteredMovedScratch(
             queryBox,
             maskBits,
+            layerMask,
             requiredNodeFlags,
             lambda[in callback](in u32 proxyId, in u32 userData, in b8 moved) -> b8{
                 return callback(proxyId, userData);
@@ -284,7 +287,8 @@ class DynamicTree{
 
     public void queryAabbFilteredScratch<Callback>(
         in Aabb3D queryBox,
-        in u32 maskBits,
+        in u64 maskBits,
+        in u32 layerMask,
         in u8 requiredNodeFlags,
         in Callback callback,
         mut Vector<u32> stackScratch
@@ -292,6 +296,7 @@ class DynamicTree{
         this.queryAabbFilteredMovedScratch(
             queryBox,
             maskBits,
+            layerMask,
             requiredNodeFlags,
             lambda[in callback](in u32 proxyId, in u32 userData, in b8 moved) -> b8{
                 return callback(proxyId, userData);
@@ -302,22 +307,25 @@ class DynamicTree{
 
     public void queryAabbFilteredMovedScratch<Callback>(
         in Aabb3D queryBox,
-        in u32 maskBits,
+        in u64 maskBits,
+        in u32 layerMask,
         in u8 requiredNodeFlags,
         in Callback callback,
         mut Vector<u32> stackScratch
     )const{
-        if(this.m_root == s_NullIndex || maskBits == 0u)
+        if(this.m_root == s_NullIndex || maskBits == 0u || layerMask == 0u)
             return;
 
         in TreeNode rootNode = this.m_nodes[this.m_root];
-        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+        if(maskBits != u64.max && (rootNode.categoryBits & maskBits) == 0u)
+            return;
+        if(layerMask != u32.max && (rootNode.aabbMaxLayer.w & layerMask) == 0u)
             return;
         if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
             return;
         const VectorSingle queryMin(queryBox.lowerBound);
         const VectorSingle queryMax(queryBox.upperBound);
-        if(!AabbOverlapsValues(VectorSingle(rootNode.aabbMinUser, 0.0f), VectorSingle(rootNode.aabbMaxCategory, 0.0f), queryMin, queryMax))
+        if(!AabbOverlapsValues(VectorSingle(rootNode.aabbMinUser, 0.0f), VectorSingle(rootNode.aabbMaxLayer, 0.0f), queryMin, queryMax))
             return;
         if(rootNode.isLeaf()){
             callback(this.m_root, rootNode.userData(), rootNode.moved);
@@ -348,9 +356,10 @@ class DynamicTree{
                     continue;
                 in TreeNode child = this.m_nodes[childIdx];
                 if(
-                    (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                    (maskBits == u64.max || (child.categoryBits & maskBits) != 0u)
+                    && (layerMask == u32.max || (child.aabbMaxLayer.w & layerMask) != 0u)
                     && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxCategory, 0.0f), queryMin, queryMax)
+                    && AabbOverlapsValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxLayer, 0.0f), queryMin, queryMax)
                 ){
                     if(child.isLeaf()){
                         if(!callback(childIdx, child.userData(), child.moved))
@@ -375,35 +384,39 @@ class DynamicTree{
         }
     }
 
-    public void queryAabb<Callback>(in Aabb3D queryBox, in u32 maskBits, in Callback callback)const{
-        this.queryAabbFiltered(queryBox, maskBits, 0u, callback);
+    public void queryAabb<Callback>(in Aabb3D queryBox, in u64 maskBits, in Callback callback)const{
+        this.queryAabbFiltered(queryBox, maskBits, u32.max, 0u, callback);
     }
 
     public void rayCastFiltered<Callback>(
         in VectorSingle origin,
         in VectorSingle translation,
-        in u32 maskBits,
+        in u64 maskBits,
+        in u32 layerMask,
         in f32 initialMaxFraction,
         in u8 requiredNodeFlags,
         in Callback callback
     )const{
-        this.shapeCastFiltered(origin, VectorSingle(0.0f), translation, maskBits, initialMaxFraction, requiredNodeFlags, callback);
+        this.shapeCastFiltered(origin, VectorSingle(0.0f), translation, maskBits, layerMask, initialMaxFraction, requiredNodeFlags, callback);
     }
 
     public void shapeCastFiltered<Callback>(
         in VectorSingle centerOrigin,
         in VectorSingle halfExtent,
         in VectorSingle translation,
-        in u32 maskBits,
+        in u64 maskBits,
+        in u32 layerMask,
         in f32 initialMaxFraction,
         in u8 requiredNodeFlags,
         in Callback callback
     )const{
-        if(this.m_root == s_NullIndex || maskBits == 0u || initialMaxFraction <= 0.0f)
+        if(this.m_root == s_NullIndex || maskBits == 0u || layerMask == 0u || initialMaxFraction <= 0.0f)
             return;
 
         in TreeNode rootNode = this.m_nodes[this.m_root];
-        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+        if(maskBits != u64.max && (rootNode.categoryBits & maskBits) == 0u)
+            return;
+        if(layerMask != u32.max && (rootNode.aabbMaxLayer.w & layerMask) == 0u)
             return;
         if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
             return;
@@ -413,7 +426,7 @@ class DynamicTree{
         u32 parallelMask = 0u;
         ComputeRayCastSlabValues(translation, invDir, parallelMask);
         f32 rootTMin = 0.0f;
-        if(!AabbRayCastValues(VectorSingle(rootNode.aabbMinUser, 0.0f) - halfExtent, VectorSingle(rootNode.aabbMaxCategory, 0.0f) + halfExtent, centerOrigin, invDir, parallelMask, maxFraction, rootTMin))
+        if(!AabbRayCastValues(VectorSingle(rootNode.aabbMinUser, 0.0f) - halfExtent, VectorSingle(rootNode.aabbMaxLayer, 0.0f) + halfExtent, centerOrigin, invDir, parallelMask, maxFraction, rootTMin))
             return;
         if(rootNode.isLeaf()){
             callback(this.m_root, rootNode.userData(), maxFraction);
@@ -447,10 +460,11 @@ class DynamicTree{
                     if(childIdx != s_NullIndex){
                         in TreeNode child = this.m_nodes[childIdx];
                         if(
-                            (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                            (maskBits == u64.max || (child.categoryBits & maskBits) != 0u)
+                            && (layerMask == u32.max || (child.aabbMaxLayer.w & layerMask) != 0u)
                             && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
                         )
-                            hits[ci] = AabbRayCastValues(VectorSingle(child.aabbMinUser, 0.0f) - halfExtent, VectorSingle(child.aabbMaxCategory, 0.0f) + halfExtent, centerOrigin, invDir, parallelMask, maxFraction, tMins[ci]);
+                            hits[ci] = AabbRayCastValues(VectorSingle(child.aabbMinUser, 0.0f) - halfExtent, VectorSingle(child.aabbMaxLayer, 0.0f) + halfExtent, centerOrigin, invDir, parallelMask, maxFraction, tMins[ci]);
                     }
                 }
                 stack.pushOrderedPair(node.child1, hits[0u], tMins[0u], node.child2, hits[1u], tMins[1u]);
@@ -461,21 +475,24 @@ class DynamicTree{
     public void closestPointFiltered<Callback>(
         in VectorSingle queryPoint,
         in f32 initialMaxDistance,
-        in u32 maskBits,
+        in u64 maskBits,
+        in u32 layerMask,
         in u8 requiredNodeFlags,
         in Callback callback
     )const{
-        if(this.m_root == s_NullIndex || maskBits == 0u || initialMaxDistance < 0.0f)
+        if(this.m_root == s_NullIndex || maskBits == 0u || layerMask == 0u || initialMaxDistance < 0.0f)
             return;
 
         in TreeNode rootNode = this.m_nodes[this.m_root];
-        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+        if(maskBits != u64.max && (rootNode.categoryBits & maskBits) == 0u)
+            return;
+        if(layerMask != u32.max && (rootNode.aabbMaxLayer.w & layerMask) == 0u)
             return;
         if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
             return;
 
         f32 maxDistSq = initialMaxDistance * initialMaxDistance;
-        const VectorSingle rootDiff = Max(Max(VectorSingle(rootNode.aabbMinUser, 0.0f) - queryPoint, queryPoint - VectorSingle(rootNode.aabbMaxCategory, 0.0f)), VectorSingle(0.0f));
+        const VectorSingle rootDiff = Max(Max(VectorSingle(rootNode.aabbMinUser, 0.0f) - queryPoint, queryPoint - VectorSingle(rootNode.aabbMaxLayer, 0.0f)), VectorSingle(0.0f));
         const f32 rootDistSq = Vector3LengthSq(rootDiff).x;
         if(rootDistSq > maxDistSq)
             return;
@@ -512,10 +529,11 @@ class DynamicTree{
                     if(childIdx != s_NullIndex){
                         in TreeNode child = this.m_nodes[childIdx];
                         if(
-                            (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                            (maskBits == u64.max || (child.categoryBits & maskBits) != 0u)
+                            && (layerMask == u32.max || (child.aabbMaxLayer.w & layerMask) != 0u)
                             && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
                         ){
-                            const VectorSingle cDiff = Max(Max(VectorSingle(child.aabbMinUser, 0.0f) - queryPoint, queryPoint - VectorSingle(child.aabbMaxCategory, 0.0f)), VectorSingle(0.0f));
+                            const VectorSingle cDiff = Max(Max(VectorSingle(child.aabbMinUser, 0.0f) - queryPoint, queryPoint - VectorSingle(child.aabbMaxLayer, 0.0f)), VectorSingle(0.0f));
                             const f32 dSq = Vector3LengthSq(cDiff).x;
                             if(dSq <= maxDistSq){
                                 hits[ci] = true;
@@ -566,7 +584,8 @@ class DynamicTree{
         this.m_nodes[nodeId].child1 = s_NullIndex;
         this.m_nodes[nodeId].child2 = s_NullIndex;
         this.m_nodes[nodeId].aabbMinUser.w = s_NullIndex;
-        this.m_nodes[nodeId].aabbMaxCategory.w = 0u;
+        this.m_nodes[nodeId].aabbMaxLayer.w = 0u;
+        this.m_nodes[nodeId].categoryBits = 0u;
         this.m_nodes[nodeId].moved = false;
         this.m_nodes[nodeId].nodeFlags = 0u;
         this.m_moveIndices[nodeId] = s_NullIndex;
@@ -583,17 +602,17 @@ class DynamicTree{
         }
 
         const VectorSingle leafMin(this.m_nodes[leaf].aabbMinUser, 0.0f);
-        const VectorSingle leafMax(this.m_nodes[leaf].aabbMaxCategory, 0.0f);
+        const VectorSingle leafMax(this.m_nodes[leaf].aabbMaxLayer, 0.0f);
         u32 index = this.m_root;
         while(!this.m_nodes[index].isLeaf()){
             const u32 c1 = this.m_nodes[index].child1;
             const u32 c2 = this.m_nodes[index].child2;
             const VectorSingle idxMin(this.m_nodes[index].aabbMinUser, 0.0f);
-            const VectorSingle idxMax(this.m_nodes[index].aabbMaxCategory, 0.0f);
+            const VectorSingle idxMax(this.m_nodes[index].aabbMaxLayer, 0.0f);
             const VectorSingle c1Min(this.m_nodes[c1].aabbMinUser, 0.0f);
-            const VectorSingle c1Max(this.m_nodes[c1].aabbMaxCategory, 0.0f);
+            const VectorSingle c1Max(this.m_nodes[c1].aabbMaxLayer, 0.0f);
             const VectorSingle c2Min(this.m_nodes[c2].aabbMinUser, 0.0f);
-            const VectorSingle c2Max(this.m_nodes[c2].aabbMaxCategory, 0.0f);
+            const VectorSingle c2Max(this.m_nodes[c2].aabbMaxLayer, 0.0f);
             const f32 area = AabbPerimeterValues(idxMin, idxMax);
 
             const f32 combinedArea = AabbPerimeterValues(Min(idxMin, leafMin), Max(idxMax, leafMax));
@@ -623,7 +642,7 @@ class DynamicTree{
         this.m_nodes[newParent].parentOrNext = oldParent;
         this.m_nodes[newParent].setAabbValues(
             Min(leafMin, VectorSingle(this.m_nodes[sibling].aabbMinUser, 0.0f)),
-            Max(leafMax, VectorSingle(this.m_nodes[sibling].aabbMaxCategory, 0.0f))
+            Max(leafMax, VectorSingle(this.m_nodes[sibling].aabbMaxLayer, 0.0f))
         );
         this.m_nodes[newParent].height = cast<i16>(cast<i32>(this.m_nodes[sibling].height) + 1);
 
@@ -639,7 +658,8 @@ class DynamicTree{
 
         this.m_nodes[newParent].child1 = sibling;
         this.m_nodes[newParent].child2 = leaf;
-        this.m_nodes[newParent].aabbMaxCategory.w = this.m_nodes[sibling].categoryBits() | this.m_nodes[leaf].categoryBits();
+        this.m_nodes[newParent].aabbMaxLayer.w = this.m_nodes[sibling].aabbMaxLayer.w | this.m_nodes[leaf].aabbMaxLayer.w;
+        this.m_nodes[newParent].categoryBits = this.m_nodes[sibling].categoryBits | this.m_nodes[leaf].categoryBits;
         this.m_nodes[newParent].nodeFlags = this.m_nodes[sibling].nodeFlags | this.m_nodes[leaf].nodeFlags;
         this.m_nodes[sibling].parentOrNext = newParent;
         this.m_nodes[leaf].parentOrNext = newParent;
@@ -688,9 +708,10 @@ class DynamicTree{
 
     private void syncNodePairBounds(in u32 parent, in u32 leftChild, in u32 rightChild){
         const VectorSingle lower = Min(VectorSingle(this.m_nodes[leftChild].aabbMinUser, 0.0f), VectorSingle(this.m_nodes[rightChild].aabbMinUser, 0.0f));
-        const VectorSingle upper = Max(VectorSingle(this.m_nodes[leftChild].aabbMaxCategory, 0.0f), VectorSingle(this.m_nodes[rightChild].aabbMaxCategory, 0.0f));
+        const VectorSingle upper = Max(VectorSingle(this.m_nodes[leftChild].aabbMaxLayer, 0.0f), VectorSingle(this.m_nodes[rightChild].aabbMaxLayer, 0.0f));
         this.m_nodes[parent].setAabbValues(lower, upper);
-        this.m_nodes[parent].aabbMaxCategory.w = this.m_nodes[leftChild].categoryBits() | this.m_nodes[rightChild].categoryBits();
+        this.m_nodes[parent].aabbMaxLayer.w = this.m_nodes[leftChild].aabbMaxLayer.w | this.m_nodes[rightChild].aabbMaxLayer.w;
+        this.m_nodes[parent].categoryBits = this.m_nodes[leftChild].categoryBits | this.m_nodes[rightChild].categoryBits;
         this.m_nodes[parent].nodeFlags = this.m_nodes[leftChild].nodeFlags | this.m_nodes[rightChild].nodeFlags;
         this.m_nodes[parent].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[leftChild].height), cast<i32>(this.m_nodes[rightChild].height)));
     }

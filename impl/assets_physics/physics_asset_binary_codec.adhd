@@ -121,9 +121,15 @@ class HeightfieldHeaderBinary{
     public u8 flags = 0u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
-    public u32 reserved2 = 0u;
-    public u32 reserved3 = 0u;
+    public u32 mipLevelCount = 0u;
+    public u32 triangleEdgeFlagCount = 0u;
     public u32 reserved4 = 0u;
+}
+
+[serialize]
+class HeightfieldMipLevelBinary{
+    public u32 cols = 0u;
+    public u32 rows = 0u;
 }
 
 const u8 s_HeightfieldFlagFlipDiagonal = 0x01u;
@@ -158,6 +164,79 @@ class CollisionMeshU16Binary{
 [serialize]
 class CollisionMeshU32Binary{
     public u32 value = 0u;
+}
+
+const u32 s_SdfFlagIsClosed = 0x01u;
+
+[serialize]
+class SdfHeaderBinary{
+    public u32 magic = s_SdfAssetMagic;
+    public u32 version = s_SdfAssetVersion;
+    public u32 dimX = 0u;
+    public u32 dimY = 0u;
+    public u32 dimZ = 0u;
+    public u32 flags = 0u;
+    public f32 margin = 0.0f;
+    public f32 cachedBuoyancyVolume = -1.0f;
+    public f32x4 boundsMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 boundsMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 cellSize(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 invCellSize(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+const u8 s_ChainFlagIsLoop = 0x01u;
+
+[serialize]
+class ChainShapeHeaderBinary{
+    public f32x4 ghostStart(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 ghostEnd(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAabbLower(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAabbUpper(0.0f, 0.0f, 0.0f, 0.0f);
+    public PhysicsSurfaceMaterialBinary defaultMaterial;
+    public u32 magic = s_ChainShapeMagic;
+    public u32 version = s_ChainShapeVersion;
+    public u32 vertexCount = 0u;
+    public u32 nodeCount = 0u;
+    public u32 bvhOrderCount = 0u;
+    public u32 materialCount = 0u;
+    public u32 segMatIndexCount = 0u;
+    public f32 radius = 0.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+    public u64 reserved3 = 0u;
+}
+
+const u8 s_CompoundChildFlagOverrideMaterial = 0x01u;
+
+[serialize]
+class CompoundShapeHeaderBinary{
+    public u32 magic = s_CompoundShapeMagic;
+    public u32 version = s_CompoundShapeVersion;
+    public u32 childCount = 0u;
+    public u32 hullCount = 0u;
+    public u32 meshCount = 0u;
+    public u32 heightfieldCount = 0u;
+    public u32 chainCount = 0u;
+    public u32 sdfCount = 0u;
+}
+
+[serialize]
+class CompoundAssetChildBinary{
+    public f32x4 localPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 geom0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 geom1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scale(1.0f, 1.0f, 1.0f, 1.0f);
+    public PhysicsSurfaceMaterialBinary material;
+    public u32 geometryPoolIndex = s_NullIndex;
+    public f32 density = 1.0f;
+    public u8 type = cast<u8>(ShapeType::Sphere);
+    public u8 scaledChildType = cast<u8>(ShapeType::Sphere);
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u32 reserved1 = 0u;
 }
 
 
@@ -386,7 +465,7 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    private usize hullSerializedBytes(in HullShape hull)const{
+    public usize convexHullSerializedBytes(in HullShape hull)const{
         return size_of<ConvexHullHeaderBinary>()
             + hull.vertices.size() * size_of<ConvexHullVertexBinary>()
             + hull.facePlanes.size() * size_of<ConvexHullPlaneBinary>()
@@ -394,7 +473,7 @@ class PhysicsAssetBinaryCodec{
             + hull.halfEdges.size() * size_of<ConvexHullHalfEdgeBinary>();
     }
 
-    private b8 appendConvexHullUnchecked(in HullShape hull, mut Vector<u8> outBinary)const{
+    public b8 appendConvexHullBinary(in HullShape hull, mut Vector<u8> outBinary)const{
         if(
             hull.vertices.size() > cast<usize>(u32.max)
             || hull.faceTopologies.size() > cast<usize>(u32.max)
@@ -440,13 +519,13 @@ class PhysicsAssetBinaryCodec{
         )
             return false;
 
-        const usize totalBytes = this.hullSerializedBytes(hull);
+        const usize totalBytes = this.convexHullSerializedBytes(hull);
         if(!CanStoreValueCount(outBinary, totalBytes))
             return false;
 
         outBinary.clear();
         outBinary.reserve(totalBytes);
-        return this.appendConvexHullUnchecked(hull, outBinary);
+        return this.appendConvexHullBinary(hull, outBinary);
     }
 
     public b8 serializeConvexHull(in HullShape hull, mut Vector<u8> outBinary)const{
@@ -455,7 +534,7 @@ class PhysicsAssetBinaryCodec{
         return this.serializeConvexHullUnchecked(hull, outBinary);
     }
 
-    private Expected<HullShape> readConvexHullPayload(in Span<u8> binary, mut usize cursor)const{
+    public Expected<HullShape> readConvexHullPayload(in Span<u8> binary, mut usize cursor)const{
         const Expected<ConvexHullHeaderBinary> hdrRes = ReadPOD<ConvexHullHeaderBinary>(binary, cursor);
         if(!hdrRes.has_value()){
             error("ConvexHullAsset::loadBinary failed: truncated header");
@@ -551,7 +630,7 @@ class PhysicsAssetBinaryCodec{
             return false;
         usize totalBytes = size_of<CompoundHullHeaderBinary>();
         for(usize i = 0u; i < hulls.size(); ++i){
-            const usize hullBytes = this.hullSerializedBytes(hulls[i]);
+            const usize hullBytes = this.convexHullSerializedBytes(hulls[i]);
             if(hullBytes > cast<usize>(usize.max) - totalBytes)
                 return false;
             totalBytes += hullBytes;
@@ -565,7 +644,7 @@ class PhysicsAssetBinaryCodec{
         hdr.hullCount = cast<u32>(hulls.size());
         AppendPOD(outBinary, hdr);
         for(usize i = 0u; i < hulls.size(); ++i){
-            if(!this.appendConvexHullUnchecked(hulls[i], outBinary))
+            if(!this.appendConvexHullBinary(hulls[i], outBinary))
                 return false;
         }
         return true;
@@ -681,7 +760,16 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializeCollisionMeshUnchecked(in MeshShape mesh, mut Vector<u8> outBinary)const{
+    public usize collisionMeshSerializedBytes(in MeshShape mesh)const{
+        return size_of<CollisionMeshHeaderBinary>()
+            + mesh.triangles.size() * size_of<CollisionMeshTriangleBinary>()
+            + mesh.nodes.size() * size_of<CollisionMeshBvhNodeBinary>()
+            + mesh.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
+            + mesh.triangleMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
+            + mesh.triangleUserData.size() * size_of<CollisionMeshU32Binary>();
+    }
+
+    public b8 appendCollisionMeshBinary(in MeshShape mesh, mut Vector<u8> outBinary)const{
         if(
             mesh.triangles.size() > cast<usize>(u32.max)
             || mesh.nodes.size() > cast<usize>(u32.max)
@@ -703,18 +791,6 @@ class PhysicsAssetBinaryCodec{
         );
         static_assert(size_of<CollisionMeshU16Binary>() == size_of<u16>() && size_of<CollisionMeshU32Binary>() == size_of<u32>());
 
-        const usize totalBytes =
-            size_of<CollisionMeshHeaderBinary>()
-            + mesh.triangles.size() * size_of<CollisionMeshTriangleBinary>()
-            + mesh.nodes.size() * size_of<CollisionMeshBvhNodeBinary>()
-            + mesh.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
-            + mesh.triangleMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
-            + mesh.triangleUserData.size() * size_of<CollisionMeshU32Binary>();
-        if(!CanStoreValueCount(outBinary, totalBytes))
-            return false;
-
-        outBinary.clear();
-        outBinary.reserve(totalBytes);
         CollisionMeshHeaderBinary hdr;
         hdr.triangleCount = cast<u32>(mesh.triangles.size());
         hdr.nodeCount = cast<u32>(mesh.nodes.size());
@@ -735,14 +811,32 @@ class PhysicsAssetBinaryCodec{
             && AppendBinaryVectorPayload(outBinary, mesh.triangleUserData).has_value();
     }
 
+    public b8 serializeCollisionMeshUnchecked(in MeshShape mesh, mut Vector<u8> outBinary)const{
+        if(
+            mesh.triangles.size() > cast<usize>(u32.max)
+            || mesh.nodes.size() > cast<usize>(u32.max)
+            || mesh.materials.size() > cast<usize>(u32.max)
+            || mesh.triangleMaterialIndices.size() > cast<usize>(u32.max)
+            || mesh.triangleUserData.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        const usize totalBytes = this.collisionMeshSerializedBytes(mesh);
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        return this.appendCollisionMeshBinary(mesh, outBinary);
+    }
+
     public b8 serializeCollisionMesh(in MeshShape mesh, mut Vector<u8> outBinary)const{
         if(!this.validMeshShapeData(mesh))
             return false;
         return this.serializeCollisionMeshUnchecked(mesh, outBinary);
     }
 
-    public Expected<MeshShape> deserializeCollisionMesh(in Span<u8> binary)const{
-        usize cursor = 0u;
+    public Expected<MeshShape> readCollisionMeshPayload(in Span<u8> binary, mut usize cursor)const{
         const Expected<CollisionMeshHeaderBinary> hdrRes = ReadPOD<CollisionMeshHeaderBinary>(binary, cursor);
         if(!hdrRes.has_value()){
             error("CollisionMeshAsset::loadBinary failed: truncated header");
@@ -760,7 +854,7 @@ class PhysicsAssetBinaryCodec{
             + cast<u64>(hdr.materialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
             + cast<u64>(hdr.triMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>())
             + cast<u64>(hdr.triUserDataCount) * cast<u64>(size_of<CollisionMeshU32Binary>());
-        if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
+        if(expectedDataBytes > cast<u64>(binary.size() - cursor)){
             error("CollisionMeshAsset::loadBinary failed: payload size mismatch");
             return MakeUnexpected(Failure());
         }
@@ -801,6 +895,18 @@ class PhysicsAssetBinaryCodec{
         return mesh;
     }
 
+    public Expected<MeshShape> deserializeCollisionMesh(in Span<u8> binary)const{
+        usize cursor = 0u;
+        Expected<MeshShape> meshRes = this.readCollisionMeshPayload(binary, cursor);
+        if(!meshRes.has_value())
+            return MakeUnexpected(Failure());
+        if(cursor != binary.size()){
+            error("CollisionMeshAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        return meshRes;
+    }
+
     private b8 validHeightfieldCellMaterialIndices(in HeightfieldShape hf)const{
         if(!hf.cellMaterialIndices.empty()){
             if(hf.materials.empty())
@@ -825,6 +931,54 @@ class PhysicsAssetBinaryCodec{
         return hf.cellHoles.size() == expectedBytes;
     }
 
+    private b8 validHeightfieldAccelerationData(in HeightfieldShape hf)const{
+        if(!hf.hierarchy.empty()){
+            if(hf.hierarchy.size() > 32u)
+                return false;
+            u32 expCols = ((hf.cols - 1u) + 1u) >> 1u;
+            u32 expRows = ((hf.rows - 1u) + 1u) >> 1u;
+            usize levelIdx = 0u;
+            b8 expectingMore = true;
+            while(expectingMore){
+                if(levelIdx >= hf.hierarchy.size())
+                    return false;
+                in HeightfieldMipLevel lvl = hf.hierarchy[levelIdx];
+                if(lvl.cols != expCols || lvl.rows != expRows)
+                    return false;
+                if(lvl.minMaxY.size() != cast<usize>(expCols) * cast<usize>(expRows))
+                    return false;
+                for(usize bi = 0u; bi < lvl.minMaxY.size(); ++bi){
+                    const f32x2u mm = lvl.minMaxY[bi];
+                    if(!IsFinite(VectorSingle(mm.x, mm.y, 0.0f, 0.0f)))
+                        return false;
+                    const b8 emptySentinel = (mm.x == s_MaxF32 && mm.y == -s_MaxF32);
+                    if(!emptySentinel && mm.x > mm.y)
+                        return false;
+                }
+                ++levelIdx;
+                if(expCols > 2u || expRows > 2u){
+                    expCols = (expCols + 1u) >> 1u;
+                    expRows = (expRows + 1u) >> 1u;
+                }
+                else{
+                    expectingMore = false;
+                }
+            }
+            if(levelIdx != hf.hierarchy.size())
+                return false;
+        }
+        if(!hf.triangleEdgeFlags.empty()){
+            const usize expFlags = cast<usize>(hf.cols - 1u) * cast<usize>(hf.rows - 1u) * 2u;
+            if(hf.triangleEdgeFlags.size() != expFlags)
+                return false;
+            for(usize fi = 0u; fi < hf.triangleEdgeFlags.size(); ++fi){
+                if((hf.triangleEdgeFlags[fi] & 0xc0u) != 0u)
+                    return false;
+            }
+        }
+        return true;
+    }
+
     public b8 validHeightfieldShapeData(in HeightfieldShape hf)const{
         if(!hf.isValid())
             return false;
@@ -838,7 +992,7 @@ class PhysicsAssetBinaryCodec{
             if(!this.validSurfaceMaterial(hf.materials[i]))
                 return false;
         }
-        return this.validHeightfieldCellMaterialIndices(hf) && this.validHeightfieldCellHoles(hf);
+        return this.validHeightfieldCellMaterialIndices(hf) && this.validHeightfieldCellHoles(hf) && this.validHeightfieldAccelerationData(hf);
     }
 
     public b8 validateHeightfield(in HeightfieldShape hf, in Name virtualPath)const{
@@ -848,7 +1002,7 @@ class PhysicsAssetBinaryCodec{
         return false;
     }
 
-    public b8 serializeHeightfieldUnchecked(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
+    public Expected<usize> heightfieldSerializedBytes(in HeightfieldShape hf)const{
         if(
             hf.cols < 2u
             || hf.rows < 2u
@@ -856,27 +1010,40 @@ class PhysicsAssetBinaryCodec{
             || hf.materials.size() > cast<usize>(u32.max)
             || hf.cellMaterialIndices.size() > cast<usize>(u32.max)
             || hf.cellHoles.size() > cast<usize>(u32.max)
+            || hf.hierarchy.size() > 32u
+            || hf.triangleEdgeFlags.size() > cast<usize>(u32.max)
         )
-            return false;
+            return MakeUnexpected(Failure());
 
-        static_assert(
-            size_of<HeightfieldHeaderBinary>() == 80u
-            && offset_of<HeightfieldHeaderBinary>(reserved4) == 76u
-            && size_of<f32>() == size_of<u32>()
-            && size_of<CollisionMeshU16Binary>() == size_of<u16>()
-        );
+        usize mipBytes = 0u;
+        for(usize li = 0u; li < hf.hierarchy.size(); ++li){
+            in HeightfieldMipLevel lvl = hf.hierarchy[li];
+            if(lvl.minMaxY.size() > cast<usize>(u32.max))
+                return MakeUnexpected(Failure());
+            mipBytes += size_of<HeightfieldMipLevelBinary>() + lvl.minMaxY.size() * size_of<f32x2u>();
+        }
 
-        const usize totalBytes =
-            size_of<HeightfieldHeaderBinary>()
+        return size_of<HeightfieldHeaderBinary>()
             + hf.heights.size() * size_of<f32>()
             + hf.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
             + hf.cellMaterialIndices.size() * size_of<CollisionMeshU16Binary>()
-            + hf.cellHoles.size();
-        if(!CanStoreValueCount(outBinary, totalBytes))
+            + hf.cellHoles.size()
+            + mipBytes
+            + hf.triangleEdgeFlags.size();
+    }
+
+    public b8 appendHeightfieldBinary(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
+        static_assert(
+            size_of<HeightfieldHeaderBinary>() == 80u
+            && offset_of<HeightfieldHeaderBinary>(reserved4) == 76u
+            && size_of<HeightfieldMipLevelBinary>() == 8u
+            && size_of<f32x2u>() == 8u
+            && size_of<f32>() == size_of<u32>()
+            && size_of<CollisionMeshU16Binary>() == size_of<u16>()
+        );
+        if(!this.heightfieldSerializedBytes(hf).has_value())
             return false;
 
-        outBinary.clear();
-        outBinary.reserve(totalBytes);
         HeightfieldHeaderBinary hdr;
         hdr.originMaxY = hf.originMaxY;
         hdr.scaleMinMaxY = hf.scaleMinMaxY;
@@ -886,6 +1053,8 @@ class PhysicsAssetBinaryCodec{
         hdr.cellMaterialCount = cast<u32>(hf.cellMaterialIndices.size());
         hdr.thickness = hf.thickness;
         hdr.cellHoleByteCount = cast<u32>(hf.cellHoles.size());
+        hdr.mipLevelCount = cast<u32>(hf.hierarchy.size());
+        hdr.triangleEdgeFlagCount = cast<u32>(hf.triangleEdgeFlags.size());
         if(hf.flipDiagonal)
             hdr.flags = s_HeightfieldFlagFlipDiagonal;
         AppendPOD(outBinary, hdr);
@@ -896,7 +1065,28 @@ class PhysicsAssetBinaryCodec{
             AppendPOD(outBinary, this.packSurfaceMaterialFields(hf.materials[i]));
         if(!AppendBinaryVectorPayload(outBinary, hf.cellMaterialIndices).has_value())
             return false;
-        return AppendBinaryVectorPayload(outBinary, hf.cellHoles).has_value();
+        if(!AppendBinaryVectorPayload(outBinary, hf.cellHoles).has_value())
+            return false;
+        for(usize li = 0u; li < hf.hierarchy.size(); ++li){
+            in HeightfieldMipLevel lvl = hf.hierarchy[li];
+            HeightfieldMipLevelBinary lvlHdr;
+            lvlHdr.cols = lvl.cols;
+            lvlHdr.rows = lvl.rows;
+            AppendPOD(outBinary, lvlHdr);
+            if(!AppendBinaryVectorPayload(outBinary, lvl.minMaxY).has_value())
+                return false;
+        }
+        return AppendBinaryVectorPayload(outBinary, hf.triangleEdgeFlags).has_value();
+    }
+
+    public b8 serializeHeightfieldUnchecked(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
+        const Expected<usize> bytesRes = this.heightfieldSerializedBytes(hf);
+        if(!bytesRes.has_value() || !CanStoreValueCount(outBinary, bytesRes.value()))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(bytesRes.value());
+        return this.appendHeightfieldBinary(hf, outBinary);
     }
 
     public b8 serializeHeightfield(in HeightfieldShape hf, mut Vector<u8> outBinary)const{
@@ -905,8 +1095,7 @@ class PhysicsAssetBinaryCodec{
         return this.serializeHeightfieldUnchecked(hf, outBinary);
     }
 
-    public Expected<HeightfieldShape> deserializeHeightfield(in Span<u8> binary)const{
-        usize cursor = 0u;
+    public Expected<HeightfieldShape> readHeightfieldPayload(in Span<u8> binary, mut usize cursor)const{
         const Expected<HeightfieldHeaderBinary> hdrRes = ReadPOD<HeightfieldHeaderBinary>(binary, cursor);
         if(!hdrRes.has_value()){
             error("HeightfieldAsset::loadBinary failed: truncated header");
@@ -918,9 +1107,8 @@ class PhysicsAssetBinaryCodec{
             || hdr.version != s_HeightfieldVersion
             || hdr.reserved0 != 0u
             || hdr.reserved1 != 0u
-            || hdr.reserved2 != 0u
-            || hdr.reserved3 != 0u
             || hdr.reserved4 != 0u
+            || hdr.mipLevelCount > 32u
             || (hdr.flags & 0xfeu) != 0u
         ){
             error("HeightfieldAsset::loadBinary failed: invalid header or unsupported version");
@@ -936,12 +1124,20 @@ class PhysicsAssetBinaryCodec{
             error("HeightfieldAsset::loadBinary failed: height count overflow");
             return MakeUnexpected(Failure());
         }
-        const u64 expectedDataBytes =
+        const u64 expectedTriFlags = cast<u64>(hdr.cols - 1u) * cast<u64>(hdr.rows - 1u) * 2u;
+        if(hdr.triangleEdgeFlagCount != 0u && cast<u64>(hdr.triangleEdgeFlagCount) != expectedTriFlags){
+            error("HeightfieldAsset::loadBinary failed: triangle edge flag count mismatch");
+            return MakeUnexpected(Failure());
+        }
+        const u64 fixedDataBytes =
             heightCount * cast<u64>(size_of<f32>())
             + cast<u64>(hdr.materialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
             + cast<u64>(hdr.cellMaterialCount) * cast<u64>(size_of<CollisionMeshU16Binary>())
-            + cast<u64>(hdr.cellHoleByteCount);
-        if(expectedDataBytes != cast<u64>(binary.size() - cursor)){
+            + cast<u64>(hdr.cellHoleByteCount)
+            + cast<u64>(hdr.triangleEdgeFlagCount)
+            + cast<u64>(hdr.mipLevelCount) * cast<u64>(size_of<HeightfieldMipLevelBinary>());
+        const u64 remainingBytes = cast<u64>(binary.size() - cursor);
+        if(fixedDataBytes > remainingBytes){
             error("HeightfieldAsset::loadBinary failed: payload size mismatch");
             return MakeUnexpected(Failure());
         }
@@ -973,7 +1169,51 @@ class PhysicsAssetBinaryCodec{
         if(!ReadBinaryVectorPayload(binary, hdr.cellHoleByteCount, cursor, hf.cellHoles).has_value())
             return MakeUnexpected(Failure());
 
-        if(!hf.isValid() || !IsValidPositionVec3(hf.origin()) || !this.validHeightfieldCellMaterialIndices(hf) || !this.validHeightfieldCellHoles(hf)){
+        if(hdr.mipLevelCount > 0u){
+            hf.hierarchy.reserve(hdr.mipLevelCount);
+            u32 expCols = ((hdr.cols - 1u) + 1u) >> 1u;
+            u32 expRows = ((hdr.rows - 1u) + 1u) >> 1u;
+            for(u32 li = 0u; li < hdr.mipLevelCount; ++li){
+                const Expected<HeightfieldMipLevelBinary> lvlHdrRes = ReadPOD<HeightfieldMipLevelBinary>(binary, cursor);
+                if(!lvlHdrRes.has_value())
+                    return MakeUnexpected(Failure());
+                in HeightfieldMipLevelBinary lvlHdr = lvlHdrRes.value();
+                if(lvlHdr.cols == 0u || lvlHdr.rows == 0u || lvlHdr.cols != expCols || lvlHdr.rows != expRows){
+                    error("HeightfieldAsset::loadBinary failed: invalid heightfield mip dimensions");
+                    return MakeUnexpected(Failure());
+                }
+                const u64 minMaxCount = cast<u64>(lvlHdr.cols) * cast<u64>(lvlHdr.rows);
+                if(minMaxCount > cast<u64>(u32.max) || minMaxCount * cast<u64>(size_of<f32x2u>()) > cast<u64>(binary.size() - cursor))
+                    return MakeUnexpected(Failure());
+                HeightfieldMipLevel lvl;
+                lvl.cols = lvlHdr.cols;
+                lvl.rows = lvlHdr.rows;
+                if(!ReadBinaryVectorPayload(binary, cast<u32>(minMaxCount), cursor, lvl.minMaxY).has_value())
+                    return MakeUnexpected(Failure());
+                hf.hierarchy.push_back(lvl);
+                if(li + 1u < hdr.mipLevelCount){
+                    if(expCols <= 2u && expRows <= 2u){
+                        error("HeightfieldAsset::loadBinary failed: unexpected extra heightfield mip levels");
+                        return MakeUnexpected(Failure());
+                    }
+                    expCols = (expCols + 1u) >> 1u;
+                    expRows = (expRows + 1u) >> 1u;
+                }
+                else if(expCols > 2u || expRows > 2u){
+                    error("HeightfieldAsset::loadBinary failed: incomplete heightfield mip pyramid");
+                    return MakeUnexpected(Failure());
+                }
+            }
+        }
+
+        if(cast<u64>(hdr.triangleEdgeFlagCount) > cast<u64>(binary.size() - cursor)){
+            error("HeightfieldAsset::loadBinary failed: trailing payload mismatch");
+            return MakeUnexpected(Failure());
+        }
+        if(!ReadBinaryVectorPayload(binary, hdr.triangleEdgeFlagCount, cursor, hf.triangleEdgeFlags).has_value())
+            return MakeUnexpected(Failure());
+
+        if(!hf.isValid() || !IsValidPositionVec3(hf.origin()) || !this.validHeightfieldCellMaterialIndices(hf) || !this.validHeightfieldCellHoles(hf) || !this.validHeightfieldAccelerationData(hf)){
             error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
             return MakeUnexpected(Failure());
         }
@@ -985,8 +1225,737 @@ class PhysicsAssetBinaryCodec{
         }
         hf.scaleMinMaxY.w = loY;
         hf.originMaxY.w = hiY;
-        hf.buildHierarchy();
+        if(hdr.mipLevelCount == 0u)
+            hf.buildHierarchy();
+        else if(hdr.triangleEdgeFlagCount == 0u)
+            hf.rebuildTriangleEdgeFlags();
         return hf;
+    }
+
+    public Expected<HeightfieldShape> deserializeHeightfield(in Span<u8> binary)const{
+        usize cursor = 0u;
+        Expected<HeightfieldShape> hfRes = this.readHeightfieldPayload(binary, cursor);
+        if(!hfRes.has_value())
+            return MakeUnexpected(Failure());
+        if(cursor != binary.size()){
+            error("HeightfieldAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        return hfRes;
+    }
+
+    public b8 validSdfShapeData(in SdfShape sdf)const{
+        if(!sdf.isValid())
+            return false;
+        const u64 total = cast<u64>(sdf.dimX) * cast<u64>(sdf.dimY) * cast<u64>(sdf.dimZ);
+        if(total > 1048576u || sdf.distances.size() != cast<usize>(total))
+            return false;
+        const VectorSingle bMin(sdf.boundsMin, 0.0f);
+        const VectorSingle bMax(sdf.boundsMax, 0.0f);
+        const VectorSingle cell(sdf.cellSize, 0.0f);
+        const VectorSingle invCell(sdf.invCellSize, 0.0f);
+        if(
+            !IsValidPositionVec3(bMin)
+            || !IsValidPositionVec3(bMax)
+            || !IsFinite(cell)
+            || !IsFinite(invCell)
+            || !IsFinite(VectorSingle(sdf.margin, sdf.cachedBuoyancyVolume, 0.0f, 0.0f))
+        )
+            return false;
+        if(bMax.x <= bMin.x || bMax.y <= bMin.y || bMax.z <= bMin.z)
+            return false;
+        if(cell.x <= 0.0f || cell.y <= 0.0f || cell.z <= 0.0f)
+            return false;
+        if(invCell.x <= 0.0f || invCell.y <= 0.0f || invCell.z <= 0.0f)
+            return false;
+        if(sdf.cachedBuoyancyVolume < 0.0f && sdf.cachedBuoyancyVolume != -1.0f)
+            return false;
+        const VectorSingle spanVec = bMax - bMin;
+        const VectorSingle expectedCell(
+            spanVec.x / cast<f32>(sdf.dimX - 1u),
+            spanVec.y / cast<f32>(sdf.dimY - 1u),
+            spanVec.z / cast<f32>(sdf.dimZ - 1u),
+            0.0f
+        );
+        const VectorSingle cellTol = Max(expectedCell * 1.0e-3f, VectorSingle(1.0e-4f));
+        if(!Vector3LessOrEqual(Abs(cell - expectedCell), cellTol))
+            return false;
+        const VectorSingle expectedInvCell(
+            1.0f / Max(cell.x, 1.0e-6f),
+            1.0f / Max(cell.y, 1.0e-6f),
+            1.0f / Max(cell.z, 1.0e-6f),
+            0.0f
+        );
+        const VectorSingle invTol = Max(expectedInvCell * 1.0e-2f, VectorSingle(1.0e-4f));
+        if(!Vector3LessOrEqual(Abs(invCell - expectedInvCell), invTol))
+            return false;
+        for(usize i = 0u; i < sdf.distances.size(); ++i){
+            if(!IsFinite(VectorSingle(sdf.distances[i])))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateSdf(in SdfShape sdf, in Name virtualPath)const{
+        if(this.validSdfShapeData(sdf))
+            return true;
+        error("SdfAsset::validatePayload failed: invalid SDF for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public usize sdfSerializedBytes(in SdfShape sdf)const{
+        return size_of<SdfHeaderBinary>() + sdf.distances.size() * size_of<f32>();
+    }
+
+    public b8 appendSdfBinary(in SdfShape sdf, mut Vector<u8> outBinary)const{
+        static_assert(size_of<SdfHeaderBinary>() == 96u);
+        if(sdf.distances.size() > cast<usize>(u32.max))
+            return false;
+        SdfHeaderBinary hdr;
+        hdr.dimX = sdf.dimX;
+        hdr.dimY = sdf.dimY;
+        hdr.dimZ = sdf.dimZ;
+        if(sdf.isClosed)
+            hdr.flags = s_SdfFlagIsClosed;
+        hdr.margin = sdf.margin;
+        hdr.cachedBuoyancyVolume = sdf.cachedBuoyancyVolume;
+        hdr.boundsMin = sdf.boundsMin;
+        hdr.boundsMax = sdf.boundsMax;
+        hdr.cellSize = sdf.cellSize;
+        hdr.invCellSize = sdf.invCellSize;
+        AppendPOD(outBinary, hdr);
+        return AppendBinaryVectorPayload(outBinary, sdf.distances).has_value();
+    }
+
+    public b8 serializeSdfUnchecked(in SdfShape sdf, mut Vector<u8> outBinary)const{
+        const usize totalBytes = this.sdfSerializedBytes(sdf);
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        return this.appendSdfBinary(sdf, outBinary);
+    }
+
+    public b8 serializeSdf(in SdfShape sdf, mut Vector<u8> outBinary)const{
+        if(!this.validSdfShapeData(sdf))
+            return false;
+        return this.serializeSdfUnchecked(sdf, outBinary);
+    }
+
+    public Expected<SdfShape> readSdfPayload(in Span<u8> binary, mut usize cursor)const{
+        const Expected<SdfHeaderBinary> hdrRes = ReadPOD<SdfHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("SdfAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in SdfHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_SdfAssetMagic || hdr.version != s_SdfAssetVersion || (hdr.flags & ~s_SdfFlagIsClosed) != 0u){
+            error("SdfAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        if(hdr.dimX < 2u || hdr.dimY < 2u || hdr.dimZ < 2u){
+            error("SdfAsset::loadBinary failed: invalid SDF dimensions");
+            return MakeUnexpected(Failure());
+        }
+        const u64 cellCount = cast<u64>(hdr.dimX) * cast<u64>(hdr.dimY) * cast<u64>(hdr.dimZ);
+        if(cellCount > 1048576u || cellCount * cast<u64>(size_of<f32>()) > cast<u64>(binary.size() - cursor)){
+            error("SdfAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        SdfShape sdf;
+        sdf.dimX = hdr.dimX;
+        sdf.dimY = hdr.dimY;
+        sdf.dimZ = hdr.dimZ;
+        sdf.isClosed = (hdr.flags & s_SdfFlagIsClosed) != 0u;
+        sdf.margin = hdr.margin;
+        sdf.cachedBuoyancyVolume = hdr.cachedBuoyancyVolume;
+        sdf.boundsMin = hdr.boundsMin;
+        sdf.boundsMax = hdr.boundsMax;
+        sdf.cellSize = hdr.cellSize;
+        sdf.invCellSize = hdr.invCellSize;
+        if(!ReadBinaryVectorPayload(binary, cast<u32>(cellCount), cursor, sdf.distances).has_value())
+            return MakeUnexpected(Failure());
+        if(!this.validSdfShapeData(sdf)){
+            error("SdfAsset::loadBinary failed: invalid SDF payload data");
+            return MakeUnexpected(Failure());
+        }
+        return sdf;
+    }
+
+    public Expected<SdfShape> deserializeSdf(in Span<u8> binary)const{
+        usize cursor = 0u;
+        Expected<SdfShape> sdfRes = this.readSdfPayload(binary, cursor);
+        if(!sdfRes.has_value())
+            return MakeUnexpected(Failure());
+        if(cursor != binary.size()){
+            error("SdfAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        return sdfRes;
+    }
+
+    public b8 validChainShapeNonMaterialData(in ChainShape chain)const{
+        if(!chain.isValid() || !IsFinite(VectorSingle(chain.radius)))
+            return false;
+        for(usize i = 0u; i < chain.vertices.size(); ++i){
+            if(!IsValidPositionVec3(VectorSingle(chain.vertices[i], 0.0f)))
+                return false;
+        }
+        if(chain.ghostStart.w != 0.0f && !IsValidPositionVec3(VectorSingle(chain.ghostStart, 0.0f)))
+            return false;
+        if(chain.ghostEnd.w != 0.0f && !IsValidPositionVec3(VectorSingle(chain.ghostEnd, 0.0f)))
+            return false;
+        if(!IsFinite(VectorSingle(chain.localAabb.lowerBound)) || !IsFinite(VectorSingle(chain.localAabb.upperBound)))
+            return false;
+        const usize segCount = chain.segmentCount();
+        for(usize si = 0u; si < segCount; ++si){
+            const VectorSingle a(chain.vertices[si], 0.0f);
+            const VectorSingle b(chain.vertices[(si + 1u) % chain.vertices.size()], 0.0f);
+            if(Vector3LengthSq(b - a).x < s_MinCapsuleLength * s_MinCapsuleLength)
+                return false;
+        }
+        if(!chain.segmentMaterialIndices.empty()){
+            if(chain.segmentMaterialIndices.size() != segCount || chain.materials.empty())
+                return false;
+            const usize matCount = chain.materials.size();
+            for(usize i = 0u; i < segCount; ++i){
+                if(cast<usize>(chain.segmentMaterialIndices[i]) >= matCount)
+                    return false;
+            }
+        }
+        if(!chain.nodes.empty()){
+            if(chain.bvhSegmentOrder.size() != segCount)
+                return false;
+            const u32 nodeCount = cast<u32>(chain.nodes.size());
+            const u32 segCountU32 = cast<u32>(segCount);
+            for(u32 ni = 0u; ni < nodeCount; ++ni){
+                in MeshBvhNode node = chain.nodes[ni];
+                const Aabb3D box = node.aabb();
+                if(!IsFinite(VectorSingle(box.lowerBound)) || !IsFinite(VectorSingle(box.upperBound)))
+                    return false;
+                if(node.isLeaf()){
+                    const u32 first = node.leftOrFirst();
+                    const u32 cnt = node.rightOrCount();
+                    if(cnt == 0u || cast<u64>(first) + cast<u64>(cnt) > cast<u64>(segCountU32))
+                        return false;
+                }
+                else{
+                    if(node.leftOrFirst() >= nodeCount || node.rightOrCount() >= nodeCount)
+                        return false;
+                }
+            }
+            for(usize oi = 0u; oi < chain.bvhSegmentOrder.size(); ++oi){
+                if(chain.bvhSegmentOrder[oi] >= segCountU32)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 validChainShapeData(in ChainShape chain)const{
+        if(!this.validChainShapeNonMaterialData(chain))
+            return false;
+        if(!this.validSurfaceMaterial(chain.material))
+            return false;
+        for(usize i = 0u; i < chain.materials.size(); ++i){
+            if(!this.validSurfaceMaterial(chain.materials[i]))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateChainShape(in ChainShape chain, in Name virtualPath)const{
+        if(this.validChainShapeData(chain))
+            return true;
+        error("ChainShapeAsset::validatePayload failed: invalid chain shape for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public usize chainShapeSerializedBytes(in ChainShape chain)const{
+        return size_of<ChainShapeHeaderBinary>()
+            + chain.vertices.size() * size_of<f32x4>()
+            + chain.nodes.size() * size_of<CollisionMeshBvhNodeBinary>()
+            + chain.bvhSegmentOrder.size() * size_of<CollisionMeshU32Binary>()
+            + chain.materials.size() * size_of<PhysicsSurfaceMaterialBinary>()
+            + chain.segmentMaterialIndices.size() * size_of<CollisionMeshU16Binary>();
+    }
+
+    public b8 appendChainShapeBinary(in ChainShape chain, mut Vector<u8> outBinary)const{
+        static_assert(size_of<ChainShapeHeaderBinary>() == 192u);
+        if(
+            chain.vertices.size() > cast<usize>(u32.max)
+            || chain.nodes.size() > cast<usize>(u32.max)
+            || chain.bvhSegmentOrder.size() > cast<usize>(u32.max)
+            || chain.materials.size() > cast<usize>(u32.max)
+            || chain.segmentMaterialIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        ChainShapeHeaderBinary hdr;
+        hdr.ghostStart = chain.ghostStart;
+        hdr.ghostEnd = chain.ghostEnd;
+        hdr.localAabbLower = chain.localAabb.lowerBound;
+        hdr.localAabbUpper = chain.localAabb.upperBound;
+        hdr.defaultMaterial = this.packSurfaceMaterialFields(chain.material);
+        hdr.vertexCount = cast<u32>(chain.vertices.size());
+        hdr.nodeCount = cast<u32>(chain.nodes.size());
+        hdr.bvhOrderCount = cast<u32>(chain.bvhSegmentOrder.size());
+        hdr.materialCount = cast<u32>(chain.materials.size());
+        hdr.segMatIndexCount = cast<u32>(chain.segmentMaterialIndices.size());
+        hdr.radius = chain.radius;
+        if(chain.isLoop)
+            hdr.flags = s_ChainFlagIsLoop;
+        AppendPOD(outBinary, hdr);
+
+        if(!AppendBinaryVectorPayload(outBinary, chain.vertices).has_value())
+            return false;
+        if(!AppendBinaryVectorPayload(outBinary, chain.nodes).has_value())
+            return false;
+        if(!AppendBinaryVectorPayload(outBinary, chain.bvhSegmentOrder).has_value())
+            return false;
+        for(usize i = 0u; i < chain.materials.size(); ++i)
+            AppendPOD(outBinary, this.packSurfaceMaterialFields(chain.materials[i]));
+        return AppendBinaryVectorPayload(outBinary, chain.segmentMaterialIndices).has_value();
+    }
+
+    public b8 serializeChainShapeUnchecked(in ChainShape chain, mut Vector<u8> outBinary)const{
+        const usize totalBytes = this.chainShapeSerializedBytes(chain);
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        return this.appendChainShapeBinary(chain, outBinary);
+    }
+
+    public b8 serializeChainShape(in ChainShape chain, mut Vector<u8> outBinary)const{
+        if(!this.validChainShapeData(chain))
+            return false;
+        return this.serializeChainShapeUnchecked(chain, outBinary);
+    }
+
+    public Expected<ChainShape> readChainShapePayload(in Span<u8> binary, mut usize cursor)const{
+        const Expected<ChainShapeHeaderBinary> hdrRes = ReadPOD<ChainShapeHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("ChainShapeAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in ChainShapeHeaderBinary hdr = hdrRes.value();
+        if(
+            hdr.magic != s_ChainShapeMagic
+            || hdr.version != s_ChainShapeVersion
+            || (hdr.flags & ~s_ChainFlagIsLoop) != 0u
+            || hdr.reserved0 != 0u
+            || hdr.reserved1 != 0u
+            || hdr.reserved2 != 0u
+            || hdr.reserved3 != 0u
+        ){
+            error("ChainShapeAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+
+        const u64 expectedDataBytes =
+            cast<u64>(hdr.vertexCount) * cast<u64>(size_of<f32x4>())
+            + cast<u64>(hdr.nodeCount) * cast<u64>(size_of<CollisionMeshBvhNodeBinary>())
+            + cast<u64>(hdr.bvhOrderCount) * cast<u64>(size_of<CollisionMeshU32Binary>())
+            + cast<u64>(hdr.materialCount) * cast<u64>(size_of<PhysicsSurfaceMaterialBinary>())
+            + cast<u64>(hdr.segMatIndexCount) * cast<u64>(size_of<CollisionMeshU16Binary>());
+        if(expectedDataBytes > cast<u64>(binary.size() - cursor)){
+            error("ChainShapeAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        const Expected<SurfaceMaterial> defMatRes = this.unpackSurfaceMaterialFields(hdr.defaultMaterial);
+        if(!defMatRes.has_value())
+            return MakeUnexpected(Failure());
+
+        ChainShape chain;
+        chain.ghostStart = hdr.ghostStart;
+        chain.ghostEnd = hdr.ghostEnd;
+        chain.localAabb = Aabb3D(VectorSingle(hdr.localAabbLower, 0.0f), VectorSingle(hdr.localAabbUpper, 0.0f));
+        chain.material = defMatRes.value();
+        chain.radius = hdr.radius;
+        chain.isLoop = (hdr.flags & s_ChainFlagIsLoop) != 0u;
+
+        if(!ReadBinaryVectorPayload(binary, hdr.vertexCount, cursor, chain.vertices).has_value())
+            return MakeUnexpected(Failure());
+        if(!ReadBinaryVectorPayload(binary, hdr.nodeCount, cursor, chain.nodes).has_value())
+            return MakeUnexpected(Failure());
+        if(!ReadBinaryVectorPayload(binary, hdr.bvhOrderCount, cursor, chain.bvhSegmentOrder).has_value())
+            return MakeUnexpected(Failure());
+
+        chain.materials.reserve(hdr.materialCount);
+        for(u32 i = 0u; i < hdr.materialCount; ++i){
+            const Expected<PhysicsSurfaceMaterialBinary> matFieldsRes = ReadPOD<PhysicsSurfaceMaterialBinary>(binary, cursor);
+            if(!matFieldsRes.has_value())
+                return MakeUnexpected(Failure());
+            const Expected<SurfaceMaterial> matRes = this.unpackSurfaceMaterialFields(matFieldsRes.value());
+            if(!matRes.has_value())
+                return MakeUnexpected(Failure());
+            chain.materials.push_back(matRes.value());
+        }
+        if(!ReadBinaryVectorPayload(binary, hdr.segMatIndexCount, cursor, chain.segmentMaterialIndices).has_value())
+            return MakeUnexpected(Failure());
+
+        if(!this.validChainShapeNonMaterialData(chain)){
+            error("ChainShapeAsset::loadBinary failed: invalid chain shape data");
+            return MakeUnexpected(Failure());
+        }
+        if(chain.nodes.empty()){
+            const Expected<ChainShape> rebuilt = MakeChainShape(
+                Span<f32x4>(chain.vertices.data(), chain.vertices.size()),
+                chain.radius,
+                chain.isLoop,
+                chain.material,
+                Span<SurfaceMaterial>(chain.materials.data(), chain.materials.size()),
+                Span<u16>(chain.segmentMaterialIndices.data(), chain.segmentMaterialIndices.size()),
+                VectorSingle(chain.ghostStart),
+                VectorSingle(chain.ghostEnd)
+            );
+            if(!rebuilt.has_value()){
+                error("ChainShapeAsset::loadBinary failed: failed to rebuild chain BVH");
+                return MakeUnexpected(Failure());
+            }
+            return rebuilt.value();
+        }
+        return chain;
+    }
+
+    public Expected<ChainShape> deserializeChainShape(in Span<u8> binary)const{
+        usize cursor = 0u;
+        Expected<ChainShape> chainRes = this.readChainShapePayload(binary, cursor);
+        if(!chainRes.has_value())
+            return MakeUnexpected(Failure());
+        if(cursor != binary.size()){
+            error("ChainShapeAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        return chainRes;
+    }
+
+    private b8 validCompoundPrimitiveParams(in ShapeType leafType, in VectorSingle g0, in VectorSingle g1)const{
+        if(!IsFinite(g0) || !IsFinite(g1))
+            return false;
+        if(leafType == ShapeType::Sphere)
+            return IsValidPositionVec3(g0) && g0.w > 0.0f;
+        if(leafType == ShapeType::Capsule){
+            const f32 lenSq = Vector3LengthSq(VectorSingle(g1 - g0, 0.0f)).x;
+            return IsValidPositionVec3(g0) && IsValidPositionVec3(g1) && g0.w > 0.0f && lenSq >= s_MinCapsuleLength * s_MinCapsuleLength;
+        }
+        if(leafType == ShapeType::Cylinder || leafType == ShapeType::Cone)
+            return IsValidPositionVec3(g0) && g0.w > 0.0f && g1.x > 0.0f && g1.y >= 0.0f;
+        if(leafType == ShapeType::TaperedCapsule){
+            const f32 lenSq = Vector3LengthSq(VectorSingle(g1 - g0, 0.0f)).x;
+            return IsValidPositionVec3(g0) && IsValidPositionVec3(g1) && g0.w > 0.0f && g1.w > 0.0f && lenSq >= s_MinCapsuleLength * s_MinCapsuleLength;
+        }
+        if(leafType == ShapeType::Plane){
+            const f32 nLenSq = Vector3LengthSq(VectorSingle(g0, 0.0f)).x;
+            return nLenSq > s_NormalizeEpsilonSq && Abs(VectorSingle(g0.w)).x <= s_HugeCoordinate && g1.x >= 0.0f && g1.z >= 0.0f;
+        }
+        if(leafType == ShapeType::Segment){
+            const f32 lenSq = Vector3LengthSq(VectorSingle(g1 - g0, 0.0f)).x;
+            return IsValidPositionVec3(g0) && IsValidPositionVec3(g1) && g0.w >= 0.0f && lenSq >= s_MinCapsuleLength * s_MinCapsuleLength;
+        }
+        return true;
+    }
+
+    public b8 validCompoundShapeData(in CompoundShapeAssetData data)const{
+        if(
+            data.children.empty()
+            || data.children.size() > cast<usize>(u32.max)
+            || data.hulls.size() > cast<usize>(u32.max)
+            || data.meshes.size() > cast<usize>(u32.max)
+            || data.heightfields.size() > cast<usize>(u32.max)
+            || data.chains.size() > cast<usize>(u32.max)
+            || data.sdfs.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        for(usize i = 0u; i < data.hulls.size(); ++i){
+            if(!this.validHullShapeData(data.hulls[i]))
+                return false;
+        }
+        for(usize i = 0u; i < data.meshes.size(); ++i){
+            if(!this.validMeshShapeData(data.meshes[i]))
+                return false;
+        }
+        for(usize i = 0u; i < data.heightfields.size(); ++i){
+            if(!this.validHeightfieldShapeData(data.heightfields[i]))
+                return false;
+        }
+        for(usize i = 0u; i < data.chains.size(); ++i){
+            if(!this.validChainShapeData(data.chains[i]))
+                return false;
+        }
+        for(usize i = 0u; i < data.sdfs.size(); ++i){
+            if(!this.validSdfShapeData(data.sdfs[i]))
+                return false;
+        }
+
+        for(usize ci = 0u; ci < data.children.size(); ++ci){
+            in CompoundAssetChild ch = data.children[ci];
+            if(
+                !IsValidPositionVec3(VectorSingle(ch.localTransform.position))
+                || !IsFinite(VectorSingle(ch.localTransform.rotation))
+                || Vector4LengthSq(VectorSingle(ch.localTransform.rotation)).x <= s_NormalizeEpsilonSq
+                || !IsFinite(VectorSingle(ch.density))
+                || ch.density < 0.0f
+                || !this.validSurfaceMaterial(ch.material)
+            )
+                return false;
+
+            if(cast<u8>(ch.type) >= cast<u8>(ShapeType::kCount) || ch.type == ShapeType::Compound)
+                return false;
+
+            ShapeType leafType = ch.type;
+            if(ch.type == ShapeType::Scaled){
+                const VectorSingle s(ch.scale);
+                const VectorSingle absS = Abs(s);
+                if(!IsFinite(s.xyz) || absS.x <= 1.0e-4f || absS.y <= 1.0e-4f || absS.z <= 1.0e-4f)
+                    return false;
+                if(
+                    cast<u8>(ch.scaledChildType) >= cast<u8>(ShapeType::kCount)
+                    || ch.scaledChildType == ShapeType::Compound
+                    || ch.scaledChildType == ShapeType::Scaled
+                )
+                    return false;
+                leafType = ch.scaledChildType;
+            }
+
+            if(!this.validCompoundPrimitiveParams(leafType, VectorSingle(ch.geom0), VectorSingle(ch.geom1)))
+                return false;
+
+            const usize poolIdx = cast<usize>(ch.geometryPoolIndex);
+            if(leafType == ShapeType::Hull){
+                if(poolIdx >= data.hulls.size())
+                    return false;
+            }
+            else if(leafType == ShapeType::Mesh){
+                if(poolIdx >= data.meshes.size())
+                    return false;
+            }
+            else if(leafType == ShapeType::Heightfield){
+                if(poolIdx >= data.heightfields.size())
+                    return false;
+            }
+            else if(leafType == ShapeType::Chain){
+                if(poolIdx >= data.chains.size())
+                    return false;
+            }
+            else if(leafType == ShapeType::Sdf){
+                if(poolIdx >= data.sdfs.size())
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 validateCompoundShape(in CompoundShapeAssetData data, in Name virtualPath)const{
+        if(this.validCompoundShapeData(data))
+            return true;
+        error("CompoundShapeAsset::validatePayload failed: invalid compound shape for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeCompoundShapeUnchecked(in CompoundShapeAssetData data, mut Vector<u8> outBinary)const{
+        static_assert(size_of<CompoundShapeHeaderBinary>() == 32u && size_of<CompoundAssetChildBinary>() == 176u);
+        if(
+            data.children.empty()
+            || data.children.size() > cast<usize>(u32.max)
+            || data.hulls.size() > cast<usize>(u32.max)
+            || data.meshes.size() > cast<usize>(u32.max)
+            || data.heightfields.size() > cast<usize>(u32.max)
+            || data.chains.size() > cast<usize>(u32.max)
+            || data.sdfs.size() > cast<usize>(u32.max)
+        )
+            return false;
+
+        usize totalBytes = size_of<CompoundShapeHeaderBinary>() + data.children.size() * size_of<CompoundAssetChildBinary>();
+        for(usize i = 0u; i < data.hulls.size(); ++i){
+            const usize sz = this.convexHullSerializedBytes(data.hulls[i]);
+            if(sz > cast<usize>(usize.max) - totalBytes)
+                return false;
+            totalBytes += sz;
+        }
+        for(usize i = 0u; i < data.meshes.size(); ++i){
+            const usize sz = this.collisionMeshSerializedBytes(data.meshes[i]);
+            if(sz > cast<usize>(usize.max) - totalBytes)
+                return false;
+            totalBytes += sz;
+        }
+        for(usize i = 0u; i < data.heightfields.size(); ++i){
+            const Expected<usize> szRes = this.heightfieldSerializedBytes(data.heightfields[i]);
+            if(!szRes.has_value() || szRes.value() > cast<usize>(usize.max) - totalBytes)
+                return false;
+            totalBytes += szRes.value();
+        }
+        for(usize i = 0u; i < data.chains.size(); ++i){
+            const usize sz = this.chainShapeSerializedBytes(data.chains[i]);
+            if(sz > cast<usize>(usize.max) - totalBytes)
+                return false;
+            totalBytes += sz;
+        }
+        for(usize i = 0u; i < data.sdfs.size(); ++i){
+            const usize sz = this.sdfSerializedBytes(data.sdfs[i]);
+            if(sz > cast<usize>(usize.max) - totalBytes)
+                return false;
+            totalBytes += sz;
+        }
+        if(!CanStoreValueCount(outBinary, totalBytes))
+            return false;
+
+        outBinary.clear();
+        outBinary.reserve(totalBytes);
+        CompoundShapeHeaderBinary hdr;
+        hdr.childCount = cast<u32>(data.children.size());
+        hdr.hullCount = cast<u32>(data.hulls.size());
+        hdr.meshCount = cast<u32>(data.meshes.size());
+        hdr.heightfieldCount = cast<u32>(data.heightfields.size());
+        hdr.chainCount = cast<u32>(data.chains.size());
+        hdr.sdfCount = cast<u32>(data.sdfs.size());
+        AppendPOD(outBinary, hdr);
+
+        for(usize ci = 0u; ci < data.children.size(); ++ci){
+            in CompoundAssetChild ch = data.children[ci];
+            CompoundAssetChildBinary cbin;
+            cbin.localPosition = ch.localTransform.position;
+            cbin.localRotation = ch.localTransform.rotation;
+            cbin.geom0 = ch.geom0;
+            cbin.geom1 = ch.geom1;
+            cbin.scale = ch.scale;
+            cbin.material = this.packSurfaceMaterialFields(ch.material);
+            cbin.geometryPoolIndex = ch.geometryPoolIndex;
+            cbin.density = ch.density;
+            cbin.type = cast<u8>(ch.type);
+            cbin.scaledChildType = cast<u8>(ch.scaledChildType);
+            if(ch.overrideMaterial)
+                cbin.flags = s_CompoundChildFlagOverrideMaterial;
+            AppendPOD(outBinary, cbin);
+        }
+
+        for(usize i = 0u; i < data.hulls.size(); ++i){
+            if(!this.appendConvexHullBinary(data.hulls[i], outBinary))
+                return false;
+        }
+        for(usize i = 0u; i < data.meshes.size(); ++i){
+            if(!this.appendCollisionMeshBinary(data.meshes[i], outBinary))
+                return false;
+        }
+        for(usize i = 0u; i < data.heightfields.size(); ++i){
+            if(!this.appendHeightfieldBinary(data.heightfields[i], outBinary))
+                return false;
+        }
+        for(usize i = 0u; i < data.chains.size(); ++i){
+            if(!this.appendChainShapeBinary(data.chains[i], outBinary))
+                return false;
+        }
+        for(usize i = 0u; i < data.sdfs.size(); ++i){
+            if(!this.appendSdfBinary(data.sdfs[i], outBinary))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 serializeCompoundShape(in CompoundShapeAssetData data, mut Vector<u8> outBinary)const{
+        if(!this.validCompoundShapeData(data))
+            return false;
+        return this.serializeCompoundShapeUnchecked(data, outBinary);
+    }
+
+    public Expected<CompoundShapeAssetData> deserializeCompoundShape(in Span<u8> binary)const{
+        usize cursor = 0u;
+        const Expected<CompoundShapeHeaderBinary> hdrRes = ReadPOD<CompoundShapeHeaderBinary>(binary, cursor);
+        if(!hdrRes.has_value()){
+            error("CompoundShapeAsset::loadBinary failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in CompoundShapeHeaderBinary hdr = hdrRes.value();
+        if(hdr.magic != s_CompoundShapeMagic || hdr.version != s_CompoundShapeVersion || hdr.childCount == 0u){
+            error("CompoundShapeAsset::loadBinary failed: invalid header or unsupported version");
+            return MakeUnexpected(Failure());
+        }
+        const u64 childrenBytes = cast<u64>(hdr.childCount) * cast<u64>(size_of<CompoundAssetChildBinary>());
+        if(childrenBytes > cast<u64>(binary.size() - cursor)){
+            error("CompoundShapeAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        CompoundShapeAssetData data;
+        data.children.reserve(hdr.childCount);
+        for(u32 ci = 0u; ci < hdr.childCount; ++ci){
+            const Expected<CompoundAssetChildBinary> childRes = ReadPOD<CompoundAssetChildBinary>(binary, cursor);
+            if(!childRes.has_value())
+                return MakeUnexpected(Failure());
+            in CompoundAssetChildBinary cbin = childRes.value();
+            if(cbin.reserved0 != 0u || cbin.reserved1 != 0u || (cbin.flags & ~s_CompoundChildFlagOverrideMaterial) != 0u)
+                return MakeUnexpected(Failure());
+            if(cast<u32>(cbin.type) >= cast<u32>(ShapeType::kCount) || cast<u32>(cbin.scaledChildType) >= cast<u32>(ShapeType::kCount))
+                return MakeUnexpected(Failure());
+            const Expected<SurfaceMaterial> matRes = this.unpackSurfaceMaterialFields(cbin.material);
+            if(!matRes.has_value())
+                return MakeUnexpected(Failure());
+            CompoundAssetChild ch;
+            ch.type = cast<ShapeType>(cbin.type);
+            ch.scaledChildType = cast<ShapeType>(cbin.scaledChildType);
+            ch.localTransform = Transform3D(VectorSingle(cbin.localPosition), VectorSingle(cbin.localRotation));
+            ch.geom0 = cbin.geom0;
+            ch.geom1 = cbin.geom1;
+            ch.scale = cbin.scale;
+            ch.geometryPoolIndex = cbin.geometryPoolIndex;
+            ch.density = cbin.density;
+            ch.material = matRes.value();
+            ch.overrideMaterial = (cbin.flags & s_CompoundChildFlagOverrideMaterial) != 0u;
+            data.children.push_back(ch);
+        }
+
+        data.hulls.reserve(hdr.hullCount);
+        for(u32 i = 0u; i < hdr.hullCount; ++i){
+            const Expected<HullShape> res = this.readConvexHullPayload(binary, cursor);
+            if(!res.has_value())
+                return MakeUnexpected(Failure());
+            data.hulls.push_back(res.value());
+        }
+
+        data.meshes.reserve(hdr.meshCount);
+        for(u32 i = 0u; i < hdr.meshCount; ++i){
+            const Expected<MeshShape> res = this.readCollisionMeshPayload(binary, cursor);
+            if(!res.has_value())
+                return MakeUnexpected(Failure());
+            data.meshes.push_back(res.value());
+        }
+
+        data.heightfields.reserve(hdr.heightfieldCount);
+        for(u32 i = 0u; i < hdr.heightfieldCount; ++i){
+            const Expected<HeightfieldShape> res = this.readHeightfieldPayload(binary, cursor);
+            if(!res.has_value())
+                return MakeUnexpected(Failure());
+            data.heightfields.push_back(res.value());
+        }
+
+        data.chains.reserve(hdr.chainCount);
+        for(u32 i = 0u; i < hdr.chainCount; ++i){
+            const Expected<ChainShape> res = this.readChainShapePayload(binary, cursor);
+            if(!res.has_value())
+                return MakeUnexpected(Failure());
+            data.chains.push_back(res.value());
+        }
+
+        data.sdfs.reserve(hdr.sdfCount);
+        for(u32 i = 0u; i < hdr.sdfCount; ++i){
+            const Expected<SdfShape> res = this.readSdfPayload(binary, cursor);
+            if(!res.has_value())
+                return MakeUnexpected(Failure());
+            data.sdfs.push_back(res.value());
+        }
+
+        if(cursor != binary.size()){
+            error("CompoundShapeAsset::loadBinary failed: payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        if(!this.validCompoundShapeData(data)){
+            error("CompoundShapeAsset::loadBinary failed: invalid compound shape payload data");
+            return MakeUnexpected(Failure());
+        }
+        return data;
     }
 }
 

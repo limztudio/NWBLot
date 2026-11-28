@@ -74,6 +74,7 @@ class VehicleWheelDef{
     public b8 isDriven = true;
     public b8 handbrakeAffected = false;
     public b8 useSweptCast = false;
+    public b8 attachedToTrailer = false;
 }
 
 class VehicleWheelState{
@@ -148,6 +149,12 @@ class VehicleEngineDef{
     public b8 enableAbs = false;
     public b8 enableTcs = false;
     public b8 enableEsp = false;
+    public f32 steerSelfCenteringGain = 0.05f;
+    public f32 trailerBrakeForce = 3000.0f;
+    public f32 motorcycleCasterAngleRad = 0.42f;
+    public f32 motorcycleTrail = 0.10f;
+    public f32 motorcycleCounterSteerGain = 0.35f;
+    public f32 motorcycleGyroGain = 1.0f;
 
     public VehicleEngineDef(){
         this.forwardGearRatios[0u] = 3.5f;
@@ -192,6 +199,7 @@ class VehicleWheelCastResult{
     public f32x4 hitNormal(0.0f, 1.0f, 0.0f, 0.0f);
     public ShapeId hitShape;
     public u32 hitTriangleIndex = s_NullIndex;
+    public u32 hitSubShapeIndex = s_NullIndex;
     public f32 hitFraction = 1.0f;
     public b8 hitOk = false;
 }
@@ -199,6 +207,7 @@ class VehicleWheelCastResult{
 VehicleWheelCastResult CastSingleVehicleWheel(
     in PhysicsWorld worldRef,
     in BodyId chassisBodyId,
+    in BodyId trailerBodyId,
     in Filter queryFilter,
     in VectorSingle wheelRot,
     in VectorSingle axleLocal,
@@ -207,6 +216,17 @@ VehicleWheelCastResult CastSingleVehicleWheel(
     in VectorSingle suspDirW
 ){
     VehicleWheelCastResult outRes;
+    BodyId ownerBodyId = chassisBodyId;
+    BodyId otherIgnoreId = trailerBodyId;
+    if(wDef.attachedToTrailer){
+        ownerBodyId = trailerBodyId;
+        otherIgnoreId = chassisBodyId;
+    }
+    if(!ownerBodyId.valid() || !worldRef.isValidBody(ownerBodyId))
+        return outRes;
+
+    const b8 hasOtherIgnore = otherIgnoreId.valid() && worldRef.isValidBody(otherIgnoreId);
+    const u32 otherBodyIdx = otherIgnoreId.index;
     const f32 maxLen = wDef.suspensionRestLength + wDef.suspensionMaxTravel;
     VehicleWheelCastMode effMode = wDef.wheelCastMode;
     if(effMode == VehicleWheelCastMode::Raycast && wDef.useSweptCast){
@@ -215,6 +235,7 @@ VehicleWheelCastResult CastSingleVehicleWheel(
         else
             effMode = VehicleWheelCastMode::SphereCast;
     }
+    const Span<Shape> shapes = worldRef.m_shapes;
     if(effMode != VehicleWheelCastMode::Raycast){
         Array<f32x3u, 1u> ptPts;
         ptPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
@@ -244,8 +265,20 @@ VehicleWheelCastResult CastSingleVehicleWheel(
         sc.originTransform = Transform3D(attachW, castRot);
         sc.translation = f32x4(suspDirW * maxLen, 0.0f);
         sc.filter = queryFilter;
-        sc.ignoreBodyId = chassisBodyId;
-        const ShapeCastHit scHit = worldRef.shapeCastClosestView(wheelView, sc);
+        sc.ignoreBodyId = ownerBodyId;
+        ShapeCastHit scHit;
+        if(hasOtherIgnore){
+            scHit = worldRef.shapeCastClosestView(
+                wheelView,
+                sc,
+                lambda[in shapes, in otherBodyIdx](in ShapeId sId) -> b8{
+                    return !(sId.index < shapes.size() && shapes[sId.index].bodyId == otherBodyIdx);
+                }
+            );
+        }
+        else{
+            scHit = worldRef.shapeCastClosestView(wheelView, sc);
+        }
         if(scHit.hit){
             outRes.hitOk = true;
             outRes.hitFraction = scHit.fraction;
@@ -253,6 +286,7 @@ VehicleWheelCastResult CastSingleVehicleWheel(
             outRes.hitNormal = f32x4(SafeNormalizeVec3(VectorSingle(scHit.normal), -suspDirW), 0.0f);
             outRes.hitShape = scHit.shapeId;
             outRes.hitTriangleIndex = scHit.triangleIndex;
+            outRes.hitSubShapeIndex = scHit.subShapeIndex;
         }
     }
     else{
@@ -260,8 +294,19 @@ VehicleWheelCastResult CastSingleVehicleWheel(
         ray.origin = f32x4(attachW, 0.0f);
         ray.translation = f32x4(suspDirW * (maxLen + wDef.wheelRadius), 0.0f);
         ray.filter = queryFilter;
-        ray.ignoreBodyId = chassisBodyId;
-        const RayCastHit rayHit = worldRef.rayCastClosest(ray);
+        ray.ignoreBodyId = ownerBodyId;
+        RayCastHit rayHit;
+        if(hasOtherIgnore){
+            rayHit = worldRef.rayCastClosest(
+                ray,
+                lambda[in shapes, in otherBodyIdx](in ShapeId sId) -> b8{
+                    return !(sId.index < shapes.size() && shapes[sId.index].bodyId == otherBodyIdx);
+                }
+            );
+        }
+        else{
+            rayHit = worldRef.rayCastClosest(ray);
+        }
         if(rayHit.hit){
             outRes.hitOk = true;
             const f32 rayLen = maxLen + wDef.wheelRadius;
@@ -271,9 +316,43 @@ VehicleWheelCastResult CastSingleVehicleWheel(
             outRes.hitNormal = f32x4(SafeNormalizeVec3(VectorSingle(rayHit.normal), -suspDirW), 0.0f);
             outRes.hitShape = rayHit.shapeId;
             outRes.hitTriangleIndex = rayHit.triangleIndex;
+            outRes.hitSubShapeIndex = rayHit.subShapeIndex;
         }
     }
     return outRes;
+}
+
+f32 ComputeVehicleSurfaceAnisotropicScale(
+    in SurfaceMaterial mat,
+    in VectorSingle shapeRot,
+    in VectorSingle hitN,
+    in VectorSingle tangentDir
+){
+    if(mat.anisotropicFriction.w == 0.0f || !IsFinite(VectorSingle(mat.anisotropicFriction).xyz) || !IsFinite(VectorSingle(mat.frictionDirection).xyz))
+        return 1.0f;
+    const VectorSingle tDir = SafeNormalizeVec3(tangentDir - hitN * Vector3Dot(tangentDir, hitN).x, VectorSingle(0.0f));
+    if(Vector3LengthSq(tDir).x <= 1.0e-10f)
+        return 1.0f;
+    const VectorSingle dirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(mat.frictionDirection, 0.0f), shapeRot), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle proj = dirW - hitN * Vector3Dot(dirW, hitN).x;
+    const b8 hasTanProj = Vector3LengthSq(proj).x > 1.0e-10f;
+    const VectorSingle afVec = Max(VectorSingle(mat.anisotropicFriction.x, mat.anisotropicFriction.y, mat.anisotropicFriction.z, 0.0f), VectorSingle(0.0f));
+    if(Abs(VectorSingle(afVec.z - 1.0f)).x <= 1.0e-6f && hasTanProj){
+        const VectorSingle t1 = SafeNormalizeVec3(proj, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+        const VectorSingle t2 = SafeNormalizeVec3(Cross(hitN, t1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        const f32 c1 = Vector3Dot(tDir, t1).x;
+        const f32 c2 = Vector3Dot(tDir, t2).x;
+        return Sqrt(afVec.x * afVec.x * c1 * c1 + afVec.y * afVec.y * c2 * c2);
+    }
+    VectorSingle refUp(0.0f, 1.0f, 0.0f, 0.0f);
+    if(Abs(Vector3Dot(dirW, refUp)).x > 0.99f)
+        refUp = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+    const VectorSingle e2 = SafeNormalizeVec3(Cross(dirW, refUp), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+    const VectorSingle e1 = SafeNormalizeVec3(Cross(e2, dirW), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const f32 c0 = Vector3Dot(tDir, dirW).x;
+    const f32 c1 = Vector3Dot(tDir, e1).x;
+    const f32 c2 = Vector3Dot(tDir, e2).x;
+    return Sqrt(afVec.x * afVec.x * c0 * c0 + afVec.y * afVec.y * c1 * c1 + afVec.z * afVec.z * c2 * c2);
 }
 
 f32 ComputeVehiclePointInvEffMass(
@@ -348,8 +427,10 @@ class VehicleController{
     public i32 currentGear = 1;
     public f32 shiftCooldown = 0.0f;
     public f32 currentSpeedMps = 0.0f;
+    public f32 steeringFeedbackTorque = 0.0f;
     public f32 wheelSlipEventThreshold = 0.35f;
     public Vector<VehicleTelemetryEvent> stepEvents;
+    private f32x4 m_envWindVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     private Vector<f32> m_suspComp;
     private Vector<f32> m_normalLoads;
     private Vector<f32> m_prevWheelSlipMags;
@@ -358,7 +439,8 @@ class VehicleController{
     private Vector<f32> m_stepFrcLong;
     private Vector<f32> m_stepFrcLat;
     private Vector<f32> m_stepNormLoad;
-    private Vector<f32> m_stepPeakFric;
+    private Vector<f32> m_stepPeakFricLong;
+    private Vector<f32> m_stepPeakFricLat;
     private Vector<f32> m_stepInvEffLong;
     private Vector<f32> m_stepInvEffLat;
     private Vector<f32> m_stepVLong;
@@ -366,6 +448,7 @@ class VehicleController{
     private Vector<f32x4> m_stepFwdTan;
     private Vector<f32x4> m_stepSideTan;
     private Vector<f32x4> m_stepContactPt;
+    private Vector<f32x4> m_stepGroundShapeRot;
     private Vector<u8> m_stepStaticHold;
     private Vector<u8> m_stepHasDynGround;
     private Vector<f32x4> m_stepGbCenter;
@@ -376,6 +459,11 @@ class VehicleController{
     private Vector<f32x4> m_wheelRots;
     private Vector<f32x4> m_axleAxisNorm;
     private Vector<VehicleWheelCastResult> m_castResults;
+    private Vector<f32> m_frameStartPrevSuspLen;
+    private Vector<f32> m_frameStartPrevSteer;
+    private Vector<f32> m_frameStartPrevRot;
+    private Vector<f32> m_frameRotWrapAccum;
+    private Vector<f32> m_substepPrevSteer;
 
     public b8 attachTrailer(mut PhysicsWorld world, in BodyId inTrailerBodyId, in VectorSingle localHitchChassis, in VectorSingle localHitchTrailer, in f32 swingLimitRad){
         this.detachTrailer(world);
@@ -422,7 +510,8 @@ class VehicleController{
         this.m_stepFrcLong.resize(n, 0.0f);
         this.m_stepFrcLat.resize(n, 0.0f);
         this.m_stepNormLoad.resize(n, 0.0f);
-        this.m_stepPeakFric.resize(n, 0.0f);
+        this.m_stepPeakFricLong.resize(n, 0.0f);
+        this.m_stepPeakFricLat.resize(n, 0.0f);
         this.m_stepInvEffLong.resize(n, 0.0f);
         this.m_stepInvEffLat.resize(n, 0.0f);
         this.m_stepVLong.resize(n, 0.0f);
@@ -430,6 +519,7 @@ class VehicleController{
         this.m_stepFwdTan.resize(n, f32x4(0.0f, 0.0f, 1.0f, 0.0f));
         this.m_stepSideTan.resize(n, f32x4(1.0f, 0.0f, 0.0f, 0.0f));
         this.m_stepContactPt.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        this.m_stepGroundShapeRot.resize(n, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
         this.m_stepStaticHold.resize(n, 0u);
         this.m_stepHasDynGround.resize(n, 0u);
         this.m_stepGbCenter.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -439,6 +529,11 @@ class VehicleController{
         this.m_suspDirW.resize(n);
         this.m_wheelRots.resize(n);
         this.m_castResults.resize(n);
+        this.m_frameStartPrevSuspLen.resize(n, 0.0f);
+        this.m_frameStartPrevSteer.resize(n, 0.0f);
+        this.m_frameStartPrevRot.resize(n, 0.0f);
+        this.m_frameRotWrapAccum.resize(n, 0.0f);
+        this.m_substepPrevSteer.resize(n, 0.0f);
     }
 
     public void init(in BodyId chassis, in VehicleEngineDef inEngine, in Span<VehicleWheelDef> wheels){
@@ -461,10 +556,20 @@ class VehicleController{
         this.currentGear = 1;
         this.shiftCooldown = 0.0f;
         this.currentSpeedMps = 0.0f;
+        this.steeringFeedbackTorque = 0.0f;
+        this.m_envWindVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.stepEvents.clear();
     }
 
-    public void finalizeSnapshotRestore(){
+    public VectorSingle snapshotEnvWindVelocity()const{
+        return VectorSingle(this.m_envWindVelocity);
+    }
+
+    public Span<f32> snapshotPrevWheelSlipMags()const{
+        return Span<f32>(this.m_prevWheelSlipMags);
+    }
+
+    public void finalizeSnapshotRestore(in VectorSingle envWindVel, in Span<f32> prevSlipMags){
         const usize n = this.wheelDefs.size();
         this.m_axleAxisNorm.resize(n);
         for(usize i = 0u; i < n; ++i){
@@ -474,6 +579,10 @@ class VehicleController{
             );
         }
         this.resizeRuntimeScratch(n);
+        this.m_envWindVelocity = f32x4(envWindVel, 0.0f);
+        this.m_prevWheelSlipMags.resize(prevSlipMags.size(), 0.0f);
+        for(usize i = 0u; i < prevSlipMags.size(); ++i)
+            this.m_prevWheelSlipMags[i] = prevSlipMags[i];
         this.stepEvents.clear();
     }
 
@@ -525,6 +634,12 @@ class VehicleController{
         return this.engine.maxTorque * Clamp(peak, 0.35f, 1.05f);
     }
 
+    private VectorSingle computeLocalChassisSideAxis()const{
+        const VectorSingle localFwd = SafeNormalizeVec3(VectorSingle(this.engine.chassisForwardAxis), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        const VectorSingle localUp = SafeNormalizeVec3(VectorSingle(this.engine.chassisUpAxis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        return SafeNormalizeVec3(Cross(localUp, localFwd), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    }
+
     public f32 computeAckermanAngle(in usize wheelIndex, in f32 steerInput)const{
         in VehicleWheelDef wDef = this.wheelDefs[wheelIndex];
         f32 rearRatio = wDef.rearSteerRatio;
@@ -544,7 +659,7 @@ class VehicleController{
             return baseAngle;
         const f32 turnRadius = this.engine.wheelbase / tanBase;
         const f32 halfTrack = 0.5f * this.engine.trackWidth;
-        const f32 latSign = wDef.attachmentPoint.x;
+        const f32 latSign = Vector3Dot(VectorSingle(wDef.attachmentPoint), this.computeLocalChassisSideAxis()).x;
         const b8 isInner = (effInput > 0.0f && latSign > 0.0f) || (effInput < 0.0f && latSign < 0.0f);
         f32 denom = turnRadius + halfTrack;
         if(isInner)
@@ -558,7 +673,14 @@ class VehicleController{
     private void ensureWheelScratch(in usize wheelCount){
         if(this.wheelStates.size() != wheelCount)
             this.wheelStates.resize(wheelCount);
-        if(this.m_suspComp.size() != wheelCount || this.m_bumpPens.size() != wheelCount || this.m_stepFrcLong.size() != wheelCount)
+        if(
+            this.m_suspComp.size() != wheelCount
+            || this.m_prevWheelSlipMags.size() != wheelCount
+            || this.m_bumpPens.size() != wheelCount
+            || this.m_stepFrcLong.size() != wheelCount
+            || this.m_stepGroundShapeRot.size() != wheelCount
+            || this.m_frameStartPrevSuspLen.size() != wheelCount
+        )
             this.resizeRuntimeScratch(wheelCount);
         if(this.m_axleAxisNorm.size() != wheelCount)
             this.m_axleAxisNorm.resize(wheelCount);
@@ -566,46 +688,107 @@ class VehicleController{
             this.m_axleAxisNorm[i] = f32x4(SafeNormalizeVec3(VectorSingle(this.wheelDefs[i].axleAxis), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)), 0.0f);
     }
 
-    private void updateSteerAngles(in usize wheelCount, in f32 steerInput, in f32 dt){
+    private void updateSteerAngles(
+        in VectorSingle chassisUp,
+        in VectorSingle chassisSide,
+        in VectorSingle worldUp,
+        in f32 gravMag,
+        in usize wheelCount,
+        in f32 steerInput,
+        in f32 dt
+    ){
         const b8 zeroSteer = Abs(VectorSingle(steerInput)).x < 1.0e-5f;
         const f32 maxDelta = this.engine.steerSlewRateRadPerSec * Max(0.0f, dt);
+        f32 totalAlignFeedback = 0.0f;
         for(usize i = 0u; i < wheelCount; ++i){
-            f32 targetAngle = 0.0f;
+            if(this.wheelDefs[i].isSteerable && this.wheelStates[i].isGrounded)
+                totalAlignFeedback += this.wheelStates[i].aligningTorque;
+        }
+        this.steeringFeedbackTorque = totalAlignFeedback;
+
+        const b8 isMoto = (this.engine.archetype == VehicleArchetype::Motorcycle);
+        f32 curLean = 0.0f;
+        f32 desiredLean = 0.0f;
+        f32 speedBlend = 0.0f;
+        if(isMoto){
+            curLean = ATan2(VectorSingle(Vector3Dot(chassisSide, worldUp).x), VectorSingle(Vector3Dot(chassisUp, worldUp).x)).x;
+            const f32 vFwdAbs = Abs(VectorSingle(this.currentSpeedMps)).x;
+            speedBlend = Clamp((vFwdAbs - 2.0f) / 4.0f, 0.0f, 1.0f);
+            if(!zeroSteer){
+                const f32 gravScale = 9.81f / Max(0.5f, gravMag);
+                desiredLean = Clamp(
+                    -Clamp(steerInput, -1.0f, 1.0f) * vFwdAbs * this.engine.motorcycleLeanGain * 0.12f * gravScale,
+                    -this.engine.motorcycleLeanMaxRad,
+                    this.engine.motorcycleLeanMaxRad
+                );
+            }
+        }
+
+        for(usize i = 0u; i < wheelCount; ++i){
+            in VehicleWheelDef wDef = this.wheelDefs[i];
+            in VehicleWheelState wState = this.wheelStates[i];
+            f32 directSteer = 0.0f;
             if(!zeroSteer)
-                targetAngle = this.computeAckermanAngle(i, steerInput);
-            if(maxDelta > 0.0f){
-                const f32 curAngle = this.wheelStates[i].steerAngle;
+                directSteer = this.computeAckermanAngle(i, steerInput);
+
+            f32 targetAngle = directSteer;
+            if(isMoto && wDef.isSteerable && speedBlend > 1.0e-4f){
+                const f32 maxAng = Max(0.0f, wDef.maxSteerAngleRad);
+                const f32 rakeSin = Sin(VectorSingle(Clamp(this.engine.motorcycleCasterAngleRad, 0.0f, 1.2f))).x;
+                const f32 casterGain = rakeSin * (1.0f + Max(0.0f, this.engine.motorcycleTrail) / Max(0.05f, wDef.wheelRadius));
+                const f32 casterSteer = -curLean * casterGain;
+                const f32 counterSteer = this.engine.motorcycleCounterSteerGain * (desiredLean - curLean);
+                const f32 alignBias = Clamp(wState.aligningTorque * Max(0.0f, this.engine.steerSelfCenteringGain) * 0.05f, -0.25f, 0.25f);
+                const f32 bikeSteer = Clamp(casterSteer + counterSteer + alignBias, -maxAng, maxAng);
+                targetAngle = Lerp(VectorSingle(directSteer), VectorSingle(bikeSteer), VectorSingle(speedBlend)).x;
+            }
+
+            f32 effMaxDelta = maxDelta;
+            if(
+                !isMoto
+                && zeroSteer
+                && effMaxDelta > 0.0f
+                && wDef.isSteerable
+                && wState.isGrounded
+                && wDef.selfAligningTrail > 0.0f
+                && this.engine.steerSelfCenteringGain > 0.0f
+            ){
+                effMaxDelta += Abs(VectorSingle(wState.aligningTorque)).x * this.engine.steerSelfCenteringGain * Max(0.0f, dt);
+            }
+            if(effMaxDelta > 0.0f){
+                const f32 curAngle = wState.steerAngle;
                 const f32 diff = targetAngle - curAngle;
-                if(Abs(VectorSingle(diff)).x > maxDelta){
+                if(Abs(VectorSingle(diff)).x > effMaxDelta){
                     if(diff > 0.0f)
-                        targetAngle = curAngle + maxDelta;
+                        targetAngle = curAngle + effMaxDelta;
                     else
-                        targetAngle = curAngle - maxDelta;
+                        targetAngle = curAngle - effMaxDelta;
                 }
             }
             this.wheelStates[i].steerAngle = targetAngle;
         }
     }
 
-    private VectorSingle buildWheelSteerCamberQuat(in VectorSingle chassisRot, in VectorSingle suspDirW, in VehicleWheelDef wDef, in f32 steerAngle)const{
+    private VectorSingle buildWheelSteerCamberQuat(in VectorSingle bodyRot, in VectorSingle suspDirW, in VehicleWheelDef wDef, in f32 steerAngle)const{
+        const f32 latCoord = Vector3Dot(VectorSingle(wDef.attachmentPoint), this.computeLocalChassisSideAxis()).x;
         f32 toeSigned = 0.0f;
         if(wDef.toeAngleRad != 0.0f){
-            if(wDef.attachmentPoint.x < -1.0e-4f)
+            if(latCoord < -1.0e-4f)
                 toeSigned = wDef.toeAngleRad;
-            else if(wDef.attachmentPoint.x > 1.0e-4f)
+            else if(latCoord > 1.0e-4f)
                 toeSigned = -wDef.toeAngleRad;
             else
                 toeSigned = wDef.toeAngleRad;
         }
         const f32 totalYaw = steerAngle + toeSigned;
-        VectorSingle wheelRot = chassisRot;
+        VectorSingle wheelRot = bodyRot;
         if(Abs(VectorSingle(totalYaw)).x >= 1.0e-5f){
             const VectorSingle steerQ = QuaternionRotationNormal(-suspDirW, totalYaw);
             wheelRot = SafeNormalizeQuat(QuaternionMultiply(steerQ, wheelRot));
         }
         if(Abs(VectorSingle(wDef.camberAngleRad)).x >= 1.0e-5f){
             f32 cambSign = 1.0f;
-            if(wDef.attachmentPoint.x < -1.0e-4f)
+            if(latCoord < -1.0e-4f)
                 cambSign = -1.0f;
             const VectorSingle fwdW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.forwardAxis), wheelRot), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
             const VectorSingle camberQ = QuaternionRotationNormal(fwdW, cambSign * wDef.camberAngleRad);
@@ -615,17 +798,17 @@ class VehicleController{
     }
 
     private Transform3D computeWheelTransformValues(
-        in VectorSingle chassisPos,
-        in VectorSingle chassisRot,
+        in VectorSingle bodyPos,
+        in VectorSingle bodyRot,
         in usize wheelIndex,
         in f32 suspLength,
         in f32 steerAngle,
         in f32 rotationAngle
     )const{
         in VehicleWheelDef wDef = this.wheelDefs[wheelIndex];
-        const VectorSingle attachW = TransformPointValues(chassisPos, chassisRot, VectorSingle(wDef.attachmentPoint));
-        const VectorSingle suspDirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.suspensionDirection), chassisRot), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
-        const VectorSingle wheelRot = this.buildWheelSteerCamberQuat(chassisRot, suspDirW, wDef, steerAngle);
+        const VectorSingle attachW = TransformPointValues(bodyPos, bodyRot, VectorSingle(wDef.attachmentPoint));
+        const VectorSingle suspDirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.suspensionDirection), bodyRot), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+        const VectorSingle wheelRot = this.buildWheelSteerCamberQuat(bodyRot, suspDirW, wDef, steerAngle);
         const VectorSingle axleNorm = SafeNormalizeVec3(VectorSingle(wDef.axleAxis), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
         return BuildVehicleWheelWorldTransformVectors(attachW, suspDirW, wheelRot, axleNorm, suspLength, rotationAngle);
     }
@@ -679,22 +862,76 @@ class VehicleController{
         }
     }
 
-    private void prepareWheelTransformsAndSteer(in VectorSingle chassisPos, in VectorSingle chassisRot, in usize wheelCount, in f32 steerInput, in f32 dt){
+    private void updateWheelWorldTransformsWithTrailer(in PhysicsWorld world, in Transform3D chassisXf){
+        const usize n = Min(this.wheelDefs.size(), this.wheelStates.size());
+        const VectorSingle chassisPos = VectorSingle(chassisXf.position);
+        const VectorSingle chassisRot = SafeNormalizeQuat(VectorSingle(chassisXf.rotation));
+        VectorSingle trailerPos = chassisPos;
+        VectorSingle trailerRot = chassisRot;
+        b8 hasTrailerXf = false;
+        if(this.trailerBodyId.valid() && world.isValidBody(this.trailerBodyId)){
+            const Expected<Transform3D> tXf = world.tryGetBodyTransform(this.trailerBodyId);
+            if(tXf.has_value()){
+                trailerPos = VectorSingle(tXf.value().position);
+                trailerRot = SafeNormalizeQuat(VectorSingle(tXf.value().rotation));
+                hasTrailerXf = true;
+            }
+        }
+        for(usize i = 0u; i < n; ++i){
+            mut VehicleWheelState wState = this.wheelStates[i];
+            VectorSingle usePos = chassisPos;
+            VectorSingle useRot = chassisRot;
+            if(this.wheelDefs[i].attachedToTrailer && hasTrailerXf){
+                usePos = trailerPos;
+                useRot = trailerRot;
+            }
+            wState.worldTransform = this.computeWheelTransformValues(
+                usePos,
+                useRot,
+                i,
+                wState.suspensionLength,
+                wState.steerAngle,
+                wState.rotationAngle
+            );
+        }
+    }
+
+    private void prepareWheelTransformsAndSteer(
+        in VectorSingle chassisPos,
+        in VectorSingle chassisRot,
+        in b8 hasTrailer,
+        in VectorSingle trailerPos,
+        in VectorSingle trailerRot,
+        in VectorSingle chassisUp,
+        in VectorSingle chassisSide,
+        in VectorSingle worldUp,
+        in f32 gravMag,
+        in usize wheelCount,
+        in f32 steerInput,
+        in f32 dt
+    ){
         this.ensureWheelScratch(wheelCount);
         for(usize i = 0u; i < wheelCount; ++i){
             mut VehicleWheelState wPrev = this.wheelStates[i];
+            this.m_substepPrevSteer[i] = wPrev.steerAngle;
             wPrev.prevSteerAngle = wPrev.steerAngle;
             wPrev.prevRotationAngle = wPrev.rotationAngle;
         }
-        this.updateSteerAngles(wheelCount, steerInput, dt);
+        this.updateSteerAngles(chassisUp, chassisSide, worldUp, gravMag, wheelCount, steerInput, dt);
         for(usize i = 0u; i < wheelCount; ++i){
             in VehicleWheelDef wDef = this.wheelDefs[i];
             mut VehicleWheelState wState = this.wheelStates[i];
             wState.prevSuspensionLength = wState.suspensionLength;
-            this.m_attachW[i] = f32x4(TransformPointValues(chassisPos, chassisRot, VectorSingle(wDef.attachmentPoint)), 0.0f);
-            const VectorSingle suspDirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.suspensionDirection), chassisRot), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+            VectorSingle bPos = chassisPos;
+            VectorSingle bRot = chassisRot;
+            if(wDef.attachedToTrailer && hasTrailer){
+                bPos = trailerPos;
+                bRot = trailerRot;
+            }
+            this.m_attachW[i] = f32x4(TransformPointValues(bPos, bRot, VectorSingle(wDef.attachmentPoint)), 0.0f);
+            const VectorSingle suspDirW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.suspensionDirection), bRot), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
             this.m_suspDirW[i] = f32x4(suspDirW, 0.0f);
-            this.m_wheelRots[i] = f32x4(this.buildWheelSteerCamberQuat(chassisRot, suspDirW, wDef, wState.steerAngle));
+            this.m_wheelRots[i] = f32x4(this.buildWheelSteerCamberQuat(bRot, suspDirW, wDef, wState.steerAngle));
         }
     }
 
@@ -707,10 +944,10 @@ class VehicleController{
         return 1;
     }
 
-    private b8 extractDynamicBodyInertia(in PhysicsWorld world, in BodyId bodyId, mut VectorSingle outCenter, mut f32 outInvMass, mut SymMat3 outInvI)const{
+    private b8 extractDynamicBodyInertia(in PhysicsWorld world, in BodyId bodyId, mut VectorSingle outCenter, mut f32 outInvMass, mut MatrixSingle outInvI)const{
         outCenter = VectorSingle(0.0f);
         outInvMass = 0.0f;
-        outInvI = SymMat3();
+        outInvI = Matrix3FromSymMat3(SymMat3());
         if(!bodyId.valid() || !world.isValidBody(bodyId))
             return false;
         in Body gb = world.m_bodies[bodyId.index];
@@ -719,41 +956,131 @@ class VehicleController{
         in BodySim gsim = world.m_solverSets[gb.setIndex].sims[gb.localIndex];
         outCenter = gsim.center();
         outInvMass = gsim.invMass();
-        outInvI = gsim.invInertiaWorld;
+        outInvI = Matrix3MaskAngularLocks(Matrix3FromSymMat3(gsim.invInertiaWorld), gb.flags);
         return outInvMass > 0.0f;
     }
 
-    private void finishVehicleStep(
-        mut PhysicsWorld world,
-        in VehicleInput input,
-        in f32 dt,
-        in Transform3D chassisXf,
-        in VectorSingle chassisLinVel,
-        in VectorSingle chassisAngVel,
-        in VectorSingle chassisFwd,
-        in usize wheelCount
-    ){
-        f32 chassisMass = 1000.0f;
-        f32 chassisInvMass = 0.001f;
-        VectorSingle chassisCenter = VectorSingle(chassisXf.position);
-        MatrixSingle chassisInvI = Matrix3FromSymMat3(SymMat3());
-        if(this.chassisBodyId.index < world.m_bodies.size()){
-            in Body cb = world.m_bodies[this.chassisBodyId.index];
-            if(cb.alive && cb.setIndex < world.m_solverSets.size() && cb.localIndex < world.m_solverSets[cb.setIndex].sims.size()){
-                in BodySim csim = world.m_solverSets[cb.setIndex].sims[cb.localIndex];
-                if(csim.invMass() > 0.0f){
-                    chassisInvMass = csim.invMass();
-                    chassisMass = 1.0f / chassisInvMass;
-                }
-                chassisCenter = csim.center();
-                chassisInvI = Matrix3FromSymMat3(csim.invInertiaWorld);
+    private i32 resolveWheelTrackSide(in VehicleWheelDef wDef, in VectorSingle localSideAxis)const{
+        if(wDef.trackSide > 0)
+            return 1;
+        if(wDef.trackSide < 0)
+            return -1;
+        const f32 latCoord = Vector3Dot(VectorSingle(wDef.attachmentPoint), localSideAxis).x;
+        if(latCoord > 1.0e-4f)
+            return 1;
+        if(latCoord < -1.0e-4f)
+            return -1;
+        return 0;
+    }
+
+    private void coupleTrackedBeltSpeeds(in usize wheelCount, in VectorSingle localSideAxis){
+        if(this.engine.archetype != VehicleArchetype::Tracked)
+            return;
+        for(i32 pass = 0; pass < 2; ++pass){
+            i32 targetSide = -1;
+            if(pass == 1)
+                targetSide = 1;
+            f32 num = 0.0f;
+            f32 den = 0.0f;
+            for(usize i = 0u; i < wheelCount; ++i){
+                in VehicleWheelDef wDef = this.wheelDefs[i];
+                if(this.resolveWheelTrackSide(wDef, localSideAxis) != targetSide)
+                    continue;
+                const f32 r = Max(0.05f, wDef.wheelRadius);
+                const f32 safeI = Max(0.1f, wDef.wheelInertia);
+                num += (safeI / r) * this.wheelStates[i].angularVelocity;
+                den += safeI / (r * r);
             }
-            if(cb.alive && cb.mass > 0.0f){
-                chassisMass = cb.mass;
-                if(chassisInvMass <= 0.0f)
-                    chassisInvMass = 1.0f / chassisMass;
+            if(den > 1.0e-6f){
+                const f32 vBelt = num / den;
+                for(usize i = 0u; i < wheelCount; ++i){
+                    in VehicleWheelDef wDef = this.wheelDefs[i];
+                    if(this.resolveWheelTrackSide(wDef, localSideAxis) != targetSide)
+                        continue;
+                    const f32 r = Max(0.05f, wDef.wheelRadius);
+                    this.wheelStates[i].angularVelocity = Clamp(vBelt / r, -400.0f, 400.0f);
+                }
             }
         }
+    }
+
+    private void applyBodyLinearVecAtPoint(
+        in BodyId targetBody,
+        in b8 accumulateForChassis,
+        in VectorSingle bodyCenter,
+        in VectorSingle worldPt,
+        in VectorSingle forceVec,
+        in f32 dt,
+        in f32 invSteps,
+        mut VectorSingle ioChassisImpLin,
+        mut VectorSingle ioChassisImpAng,
+        mut PhysicsWorld world
+    ){
+        if(this.engine.useSolverImpulses){
+            const VectorSingle imp = forceVec * dt;
+            world.applyLinearImpulseAtPoint(targetBody, imp, worldPt, true);
+            if(accumulateForChassis){
+                ioChassisImpLin = ioChassisImpLin + imp;
+                ioChassisImpAng = ioChassisImpAng + Cross(worldPt - bodyCenter, imp);
+            }
+        }
+        else{
+            world.applyForceAtPoint(targetBody, forceVec * invSteps, worldPt, true);
+        }
+    }
+
+    private void applyBodyAngularVec(
+        in BodyId targetBody,
+        in b8 accumulateForChassis,
+        in VectorSingle torqueVec,
+        in f32 dt,
+        in f32 invSteps,
+        mut VectorSingle ioChassisImpAng,
+        mut PhysicsWorld world
+    ){
+        if(this.engine.useSolverImpulses){
+            const VectorSingle imp = torqueVec * dt;
+            world.applyAngularImpulse(targetBody, imp, true);
+            if(accumulateForChassis)
+                ioChassisImpAng = ioChassisImpAng + imp;
+        }
+        else{
+            world.applyTorque(targetBody, torqueVec * invSteps, true);
+        }
+    }
+
+    private void finishVehicleStep(
+        in VehicleInput input,
+        in f32 dt,
+        in f32 invSteps,
+        in VectorSingle chassisCenter,
+        in VectorSingle chassisLinVel,
+        in VectorSingle chassisAngVel,
+        in MatrixSingle chassisInvI,
+        in f32 chassisMass,
+        in f32 chassisInvMass,
+        in VectorSingle chassisUp,
+        in VectorSingle chassisFwd,
+        in VectorSingle chassisSide,
+        in b8 hasTrailer,
+        in VectorSingle trailerCenter,
+        in VectorSingle trailerLinVel,
+        in VectorSingle trailerAngVel,
+        in MatrixSingle trailerInvI,
+        in f32 trailerMass,
+        in f32 trailerInvMass,
+        in VectorSingle localSideAxis,
+        in VectorSingle worldUp,
+        in f32 gravMag,
+        in usize wheelCount,
+        mut VectorSingle outSubImpLin,
+        mut VectorSingle outSubImpAng,
+        mut PhysicsWorld world
+    ){
+        outSubImpLin = VectorSingle(0.0f);
+        outSubImpAng = VectorSingle(0.0f);
+        const b8 isTracked = (this.engine.archetype == VehicleArchetype::Tracked);
+        const f32 safeDt = Max(dt, 1.0e-4f);
 
         u32 groundedCount = 0u;
         u32 bumpGroundedCount = 0u;
@@ -764,9 +1091,15 @@ class VehicleController{
         this.m_stepFrcLong.assign(wheelCount, 0.0f);
         this.m_stepFrcLat.assign(wheelCount, 0.0f);
         this.m_stepNormLoad.assign(wheelCount, 0.0f);
-        this.m_stepPeakFric.assign(wheelCount, 0.0f);
+        this.m_stepPeakFricLong.assign(wheelCount, 0.0f);
+        this.m_stepPeakFricLat.assign(wheelCount, 0.0f);
+        this.m_stepGroundShapeRot.assign(wheelCount, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
+        Vector<u8> stepTouchdown;
+        stepTouchdown.assign(wheelCount, 0u);
+        Vector<f32> stepBrakeTorques;
+        stepBrakeTorques.assign(wheelCount, 0.0f);
 
-        b8 anyStaticHold = false;
+        b8 anyChassisStaticHold = false;
         const f32 slipThr = Max(0.01f, this.wheelSlipEventThreshold);
         for(usize i = 0u; i < wheelCount; ++i){
             in VehicleWheelDef wDef = this.wheelDefs[i];
@@ -777,9 +1110,38 @@ class VehicleController{
             const f32 prevSlipMag = Max(Abs(VectorSingle(wState.longitudinalSlip)).x, Abs(VectorSingle(wState.lateralSlip)).x);
             this.m_prevWheelSlipMags[i] = prevSlipMag;
 
+            if(wDef.attachedToTrailer && !hasTrailer){
+                wState.isGrounded = false;
+                wState.suspensionLength = maxLen;
+                wState.suspensionForce = 0.0f;
+                wState.longitudinalForce = 0.0f;
+                wState.lateralForce = 0.0f;
+                wState.longitudinalSlip = 0.0f;
+                wState.lateralSlip = 0.0f;
+                wState.aligningTorque = 0.0f;
+                wState.groundBodyId = BodyId();
+                wState.groundShapeId = ShapeId();
+                wState.groundMaterial = SurfaceMaterial();
+                wState.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                this.m_suspComp[i] = 0.0f;
+                this.m_normalLoads[i] = 0.0f;
+                continue;
+            }
+
+            VectorSingle ownerCenter = chassisCenter;
+            VectorSingle ownerLinVel = chassisLinVel;
+            VectorSingle ownerAngVel = chassisAngVel;
+            if(wDef.attachedToTrailer && hasTrailer){
+                ownerCenter = trailerCenter;
+                ownerLinVel = trailerLinVel;
+                ownerAngVel = trailerAngVel;
+            }
+
             if(castRes.hitOk){
                 ++groundedCount;
                 wState.isGrounded = true;
+                if(!wasGrounded)
+                    stepTouchdown[i] = 1u;
                 wState.suspensionLength = Clamp(castRes.hitFraction * maxLen, 0.0f, maxLen);
                 wState.contactPoint = castRes.hitPoint;
                 wState.contactNormal = castRes.hitNormal;
@@ -810,7 +1172,7 @@ class VehicleController{
                     else{
                         wState.groundBodyId = BodyId();
                     }
-                    wState.groundMaterial = world.resolveShapeContactMaterial(gShape, castRes.hitTriangleIndex);
+                    wState.groundMaterial = world.resolveShapeContactMaterial(gShape, castRes.hitTriangleIndex, castRes.hitSubShapeIndex);
                     if(gShape.hasLocalTransform())
                         gShapeRot = SafeNormalizeQuat(QuaternionMultiply(gShapeRot, VectorSingle(gShape.localTransform.rotation)));
                     if(wState.groundMaterial.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(wState.groundMaterial.surfaceVelocity).xyz))
@@ -820,17 +1182,18 @@ class VehicleController{
                     wState.groundBodyId = BodyId();
                     wState.groundMaterial = SurfaceMaterial();
                 }
+                this.m_stepGroundShapeRot[i] = f32x4(gShapeRot);
                 wState.groundVelocity = f32x4(gVel, 0.0f);
 
                 const f32 compression = maxLen - wState.suspensionLength;
                 this.m_suspComp[i] = compression;
                 f32 suspVel = 0.0f;
                 if(wasGrounded){
-                    suspVel = (wState.suspensionLength - wState.prevSuspensionLength) / Max(dt, 1.0e-4f);
+                    suspVel = (wState.suspensionLength - wState.prevSuspensionLength) / safeDt;
                 }
                 else{
                     const VectorSingle hubPos = VectorSingle(this.m_attachW[i]) + VectorSingle(this.m_suspDirW[i]) * wState.suspensionLength;
-                    const VectorSingle velHub = (chassisLinVel + Cross(chassisAngVel, hubPos - chassisCenter)) - gVel;
+                    const VectorSingle velHub = (ownerLinVel + Cross(ownerAngVel, hubPos - ownerCenter)) - gVel;
                     suspVel = -Vector3Dot(velHub, VectorSingle(this.m_suspDirW[i])).x;
                 }
                 f32 activeDamping = wDef.suspensionDamping;
@@ -896,39 +1259,92 @@ class VehicleController{
                 continue;
             VectorSingle gbCenter(0.0f);
             f32 gbInvMass = 0.0f;
-            SymMat3 gbInvI;
+            MatrixSingle gbInvI = Matrix3FromSymMat3(SymMat3());
             if(this.extractDynamicBodyInertia(world, wState.groundBodyId, gbCenter, gbInvMass, gbInvI)){
                 this.m_stepHasDynGround[i] = 1u;
                 this.m_stepGbCenter[i] = f32x4(gbCenter, 0.0f);
                 this.m_stepGbInvMass[i] = gbInvMass;
-                this.m_stepGbInvI[i] = gbInvI;
+                this.m_stepGbInvI[i] = SymMat3FromMatrix3(gbInvI);
             }
         }
 
         if(bumpGroundedCount > 0u){
-            const f32 safeDt = Max(dt, 1.0e-4f);
             for(usize i = 0u; i < wheelCount; ++i){
                 if(this.m_bumpPens[i] <= 0.0f)
                     continue;
                 in VehicleWheelDef wDef = this.wheelDefs[i];
                 in VehicleWheelState wState = this.wheelStates[i];
+                VectorSingle ownerCenter = chassisCenter;
+                VectorSingle ownerLinVel = chassisLinVel;
+                VectorSingle ownerAngVel = chassisAngVel;
+                MatrixSingle ownerInvI = chassisInvI;
+                f32 ownerInvMass = chassisInvMass;
+                f32 ownerMass = chassisMass;
+                if(wDef.attachedToTrailer && hasTrailer){
+                    ownerCenter = trailerCenter;
+                    ownerLinVel = trailerLinVel;
+                    ownerAngVel = trailerAngVel;
+                    ownerInvI = trailerInvI;
+                    ownerInvMass = trailerInvMass;
+                    ownerMass = trailerMass;
+                }
                 const VectorSingle hitN = VectorSingle(wState.contactNormal);
                 const VectorSingle hubPos = VectorSingle(this.m_attachW[i]) + VectorSingle(this.m_suspDirW[i]) * wState.suspensionLength;
                 const VectorSingle contactPt = VectorSingle(wState.contactPoint);
-                const VectorSingle velHub = (chassisLinVel + Cross(chassisAngVel, hubPos - chassisCenter)) - VectorSingle(wState.groundVelocity);
+                const VectorSingle velHub = (ownerLinVel + Cross(ownerAngVel, hubPos - ownerCenter)) - VectorSingle(wState.groundVelocity);
                 const f32 vAlongN = Vector3Dot(velHub, hitN).x;
                 const b8 hasDynGround = (this.m_stepHasDynGround[i] != 0u);
                 const VectorSingle gbCenter(this.m_stepGbCenter[i]);
                 const f32 gbInvMass = this.m_stepGbInvMass[i];
                 const MatrixSingle gbInvI = Matrix3FromSymMat3(this.m_stepGbInvI[i]);
-                const f32 invEffN = ComputeVehiclePointInvEffMass(hitN, hubPos - chassisCenter, chassisInvMass, chassisInvI, hasDynGround, contactPt - gbCenter, gbInvMass, gbInvI);
-                const f32 bumpRest = Clamp(wDef.bumpStopRestitution, 0.0f, 1.0f);
+                const f32 invEffN = ComputeVehiclePointInvEffMass(hitN, hubPos - ownerCenter, ownerInvMass, ownerInvI, hasDynGround, contactPt - gbCenter, gbInvMass, gbInvI);
+                const MaterialCombineMode restMode = ResolveMaterialCombineMode(MaterialCombineMode::Max, wState.groundMaterial.restitutionCombineMode, MaterialCombineMode::Max);
+                const f32 bumpRest = Clamp(CombineMaterialWithMode(Clamp(wDef.bumpStopRestitution, 0.0f, 1.0f), Max(0.0f, wState.groundMaterial.restitution), restMode), 0.0f, 1.0f);
                 const f32 closingVel = Min(0.0f, vAlongN);
                 const f32 denomEff = Max(invEffN * cast<f32>(bumpGroundedCount), 1.0e-6f);
                 const f32 stopTerm = (-(1.0f + bumpRest) * closingVel + (this.m_bumpPens[i] * 0.4f / safeDt)) / denomEff;
-                const f32 springTerm = Min(Max(0.0f, wDef.bumpStopStiffness) * this.m_bumpPens[i] * dt, chassisMass * 40.0f * dt);
+                const f32 springTerm = Min(Max(0.0f, wDef.bumpStopStiffness) * this.m_bumpPens[i] * dt, ownerMass * 40.0f * dt);
                 this.m_bumpImpulses[i] = Max(0.0f, stopTerm + springTerm);
                 this.wheelStates[i].suspensionForce += this.m_bumpImpulses[i] / safeDt;
+            }
+        }
+
+        for(usize i = 0u; i < wheelCount; ++i){
+            in VehicleWheelDef wDef = this.wheelDefs[i];
+            mut VehicleWheelState wState = this.wheelStates[i];
+            if(!wState.isGrounded || stepTouchdown[i] == 0u || this.m_bumpPens[i] > 0.0f)
+                continue;
+            const f32 groundRest = Clamp(Max(0.0f, wState.groundMaterial.restitution), 0.0f, 1.0f);
+            if(groundRest <= 0.0f)
+                continue;
+            VectorSingle ownerCenter = chassisCenter;
+            VectorSingle ownerLinVel = chassisLinVel;
+            VectorSingle ownerAngVel = chassisAngVel;
+            MatrixSingle ownerInvI = chassisInvI;
+            f32 ownerInvMass = chassisInvMass;
+            if(wDef.attachedToTrailer && hasTrailer){
+                ownerCenter = trailerCenter;
+                ownerLinVel = trailerLinVel;
+                ownerAngVel = trailerAngVel;
+                ownerInvI = trailerInvI;
+                ownerInvMass = trailerInvMass;
+            }
+            const VectorSingle hitN = VectorSingle(wState.contactNormal);
+            const VectorSingle hubPos = VectorSingle(this.m_attachW[i]) + VectorSingle(this.m_suspDirW[i]) * wState.suspensionLength;
+            const VectorSingle contactPt = VectorSingle(wState.contactPoint);
+            const VectorSingle velHub = (ownerLinVel + Cross(ownerAngVel, hubPos - ownerCenter)) - VectorSingle(wState.groundVelocity);
+            const f32 vAlongN = Vector3Dot(velHub, hitN).x;
+            if(-vAlongN > world.m_def.restitutionThreshold){
+                const b8 hasDynGround = (this.m_stepHasDynGround[i] != 0u);
+                const VectorSingle gbCenter(this.m_stepGbCenter[i]);
+                const f32 gbInvMass = this.m_stepGbInvMass[i];
+                const MatrixSingle gbInvI = Matrix3FromSymMat3(this.m_stepGbInvI[i]);
+                const f32 invEffN = ComputeVehiclePointInvEffMass(hitN, hubPos - ownerCenter, ownerInvMass, ownerInvI, hasDynGround, contactPt - gbCenter, gbInvMass, gbInvI);
+                const f32 jBounce = (groundRest * (-vAlongN)) / Max(invEffN * Max(1.0f, cast<f32>(groundedCount)), 1.0e-6f);
+                if(jBounce > 1.0e-5f){
+                    this.m_bumpImpulses[i] += jBounce;
+                    wState.suspensionForce += jBounce / safeDt;
+                }
             }
         }
 
@@ -948,16 +1364,28 @@ class VehicleController{
         f32 sumDrivenOmega = 0.0f;
         f32 drivenCountF = 0.0f;
         f32 drivenFractionSum = 0.0f;
+        f32 leftTrackDrivenCountF = 0.0f;
+        f32 rightTrackDrivenCountF = 0.0f;
         for(usize i = 0u; i < wheelCount; ++i){
-            if(this.wheelDefs[i].isDriven){
-                const f32 df = Max(0.0f, this.wheelDefs[i].driveFraction);
+            in VehicleWheelDef wDef = this.wheelDefs[i];
+            if(wDef.attachedToTrailer)
+                continue;
+            if(wDef.isDriven){
+                const f32 df = Max(0.0f, wDef.driveFraction);
                 sumDrivenOmega += this.wheelStates[i].angularVelocity;
                 drivenCountF += 1.0f;
                 drivenFractionSum += df;
-                const usize ax = cast<usize>(this.resolveWheelAxleIndex(this.wheelDefs[i]));
+                const usize ax = cast<usize>(this.resolveWheelAxleIndex(wDef));
                 axleSumOmega[ax] += this.wheelStates[i].angularVelocity;
                 axleDrivenCountF[ax] += 1.0f;
                 axleFracSum[ax] += df;
+                if(isTracked){
+                    const i32 ts = this.resolveWheelTrackSide(wDef, localSideAxis);
+                    if(ts < 0)
+                        leftTrackDrivenCountF += 1.0f;
+                    else if(ts > 0)
+                        rightTrackDrivenCountF += 1.0f;
+                }
             }
         }
         const f32 avgDrivenOmega = sumDrivenOmega / Max(1.0f, drivenCountF);
@@ -1029,9 +1457,16 @@ class VehicleController{
             effThrottle = 0.0f;
         const f32 absEffThrottle = Clamp(Abs(VectorSingle(effThrottle)).x, 0.0f, 1.0f);
         const f32 clutchEngagement = 1.0f - Clamp(input.clutch, 0.0f, 1.0f);
+        const f32 steerNorm = Clamp(input.steer, -1.0f, 1.0f);
+        const f32 absSteer = Abs(VectorSingle(steerNorm)).x;
+        f32 pivotBlend = 0.0f;
+        if(isTracked && absEffThrottle < 0.05f && absSteer > 1.0e-3f && driverBrakeInput < 0.5f && clutchEngagement > 0.0f && drivenCountF > 0.0f)
+            pivotBlend = Clamp(1.0f - absEffThrottle / 0.05f, 0.0f, 1.0f);
+
+        const f32 rpmThrottleDemand = Max(absEffThrottle, absSteer * 0.6f * pivotBlend);
         const f32 ratioAbs = Abs(VectorSingle(gearRatio * this.engine.finalDriveRatio)).x;
         const f32 wheelMappedRpm = (Abs(VectorSingle(avgDrivenOmega)).x * ratioAbs * 60.0f) / (2.0f * s_Pi);
-        const f32 freeRevRpm = Lerp(VectorSingle(this.engine.idleRpm), VectorSingle(this.engine.maxRpm), VectorSingle(absEffThrottle)).x;
+        const f32 freeRevRpm = Lerp(VectorSingle(this.engine.idleRpm), VectorSingle(this.engine.maxRpm), VectorSingle(rpmThrottleDemand)).x;
 
         f32 targetRpm = this.engine.idleRpm;
         f32 totalDriveTorque = 0.0f;
@@ -1043,7 +1478,7 @@ class VehicleController{
         }
         else if(this.engine.useTorqueConverter && clutchEngagement > 0.0f){
             const f32 stallRpm = Clamp(this.engine.torqueConverterStallRpm, this.engine.idleRpm, this.engine.maxRpm);
-            const f32 tcRevRpm = Lerp(VectorSingle(this.engine.idleRpm), VectorSingle(stallRpm), VectorSingle(absEffThrottle)).x;
+            const f32 tcRevRpm = Lerp(VectorSingle(this.engine.idleRpm), VectorSingle(stallRpm), VectorSingle(rpmThrottleDemand)).x;
             targetRpm = Max(wheelMappedRpm, tcRevRpm);
             const f32 speedRatio = Clamp(wheelMappedRpm / Max(Max(1.0f, this.engine.idleRpm), this.engineRpm), 0.0f, 1.0f);
             const f32 tcMult = Lerp(
@@ -1065,13 +1500,28 @@ class VehicleController{
                 totalDriveTorque = Clamp(totalDriveTorque, -maxClutchT, maxClutchT);
             }
         }
+        f32 rpmTorqueCmd = rawEngineTorque;
+        if(pivotBlend > 0.0f)
+            rpmTorqueCmd = Max(rpmTorqueCmd, absSteer * 0.6f * pivotBlend * this.evaluateTorqueCurve(this.engineRpm));
         const f32 safeEngineI = Max(0.05f, this.engine.engineInertia);
         const f32 engineFrictionT = 18.0f * ((this.engineRpm - this.engine.idleRpm) / Max(1.0f, this.engine.maxRpm - this.engine.idleRpm));
-        const f32 netEngineT = rawEngineTorque - engineFrictionT;
+        const f32 netEngineT = rpmTorqueCmd - engineFrictionT;
         const f32 rpmOde = this.engineRpm + (netEngineT / safeEngineI) * (60.0f / (2.0f * s_Pi)) * dt;
         const f32 rpmRate = Clamp(10.0f * (0.35f / safeEngineI), 2.0f, 35.0f);
         const f32 blendedRpm = this.engineRpm + (targetRpm - this.engineRpm) * Min(1.0f, dt * rpmRate);
         this.engineRpm = Clamp(0.5f * (rpmOde + blendedRpm), this.engine.idleRpm, this.engine.maxRpm);
+
+        f32 pivotLeftTorque = 0.0f;
+        f32 pivotRightTorque = 0.0f;
+        if(pivotBlend > 0.0f && leftTrackDrivenCountF > 0.0f && rightTrackDrivenCountF > 0.0f){
+            const f32 pivotGear = Max(1.0f, Abs(VectorSingle(this.engine.forwardGearRatios[0u])).x);
+            const f32 pivotTotal = this.evaluateTorqueCurve(this.engineRpm) * pivotGear * Abs(VectorSingle(this.engine.finalDriveRatio)).x * clutchEngagement * absSteer * pivotBlend;
+            f32 steerSign = 1.0f;
+            if(steerNorm < 0.0f)
+                steerSign = -1.0f;
+            pivotLeftTorque = (0.5f * pivotTotal * steerSign) / leftTrackDrivenCountF;
+            pivotRightTorque = (-0.5f * pivotTotal * steerSign) / rightTrackDrivenCountF;
+        }
 
         if(drivenFractionSum > 1.0e-5f){
             const b8 frontRearOnly = (
@@ -1091,23 +1541,23 @@ class VehicleController{
                         axleTotalTorque[ax] = totalDriveTorque * (axleFracSum[ax] / drivenFractionSum);
                 }
             }
-            for(usize ax = 0u; ax < 4u; ++ax){
-                if(axleDrivenCountF[ax] > 0.0f && axleFracSum[ax] > 1.0e-5f){
-                    axleTotalTorque[ax] += ComputeVehicleDiffCoupling(
-                        this.engine.centerDifferentialMode,
-                        avgDrivenOmega - axleAvgOmega[ax],
-                        this.engine.differentialBias,
-                        this.engine.differentialLockTorque,
-                        40.0f,
-                        this.engine.torsenBiasRatio,
-                        Abs(VectorSingle(totalDriveTorque)).x
-                    );
+            if(!isTracked){
+                for(usize ax = 0u; ax < 4u; ++ax){
+                    if(axleDrivenCountF[ax] > 0.0f && axleFracSum[ax] > 1.0e-5f){
+                        axleTotalTorque[ax] += ComputeVehicleDiffCoupling(
+                            this.engine.centerDifferentialMode,
+                            avgDrivenOmega - axleAvgOmega[ax],
+                            this.engine.differentialBias,
+                            this.engine.differentialLockTorque,
+                            40.0f,
+                            this.engine.torsenBiasRatio,
+                            Abs(VectorSingle(totalDriveTorque)).x
+                        );
+                    }
                 }
             }
         }
 
-        const VectorSingle chassisRot = VectorSingle(chassisXf.rotation);
-        const VectorSingle chassisUp = SafeNormalizeVec3(Vector3Rotate(SafeNormalizeVec3(VectorSingle(this.engine.chassisUpAxis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), chassisRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         f32 steerSum = 0.0f;
         f32 steerCountF = 0.0f;
         for(usize i = 0u; i < wheelCount; ++i){
@@ -1118,7 +1568,7 @@ class VehicleController{
         }
         const f32 deltaAvg = steerSum / Max(1.0f, steerCountF);
         const f32 vFwdAbs = Abs(VectorSingle(this.currentSpeedMps)).x;
-        const f32 maxGripYaw = (0.85f * 9.81f) / Max(1.0f, vFwdAbs);
+        const f32 maxGripYaw = (0.85f * Max(0.1f, gravMag)) / Max(1.0f, vFwdAbs);
         const f32 desiredYawRate = Clamp(
             (this.currentSpeedMps / Max(0.5f, this.engine.wheelbase)) * Tan(VectorSingle(Clamp(deltaAvg, -1.2f, 1.2f))).x,
             -maxGripYaw,
@@ -1128,61 +1578,62 @@ class VehicleController{
         const f32 yawError = actualYawRate - desiredYawRate;
         const b8 espActive = this.engine.enableEsp && vFwdAbs > 2.0f && Abs(VectorSingle(yawError)).x > 0.08f;
 
-        const f32 safeDt = Max(dt, 1.0e-4f);
         const f32 groundedShareF = Max(1.0f, cast<f32>(groundedCount));
         for(usize i = 0u; i < wheelCount; ++i){
             in VehicleWheelDef wDef = this.wheelDefs[i];
             mut VehicleWheelState wState = this.wheelStates[i];
+            if(wDef.attachedToTrailer && !hasTrailer)
+                continue;
 
-            const VectorSingle suspDirW = VectorSingle(this.m_suspDirW[i]);
             const VectorSingle wheelRot = VectorSingle(this.m_wheelRots[i]);
             const usize ax = cast<usize>(this.resolveWheelAxleIndex(wDef));
+            const b8 useTrailer = wDef.attachedToTrailer && hasTrailer;
+            VectorSingle ownerCenter = chassisCenter;
+            VectorSingle ownerLinVel = chassisLinVel;
+            VectorSingle ownerAngVel = chassisAngVel;
+            MatrixSingle ownerInvI = chassisInvI;
+            f32 ownerInvMass = chassisInvMass;
+            if(useTrailer){
+                ownerCenter = trailerCenter;
+                ownerLinVel = trailerLinVel;
+                ownerAngVel = trailerAngVel;
+                ownerInvI = trailerInvI;
+                ownerInvMass = trailerInvMass;
+            }
 
             f32 wheelDriveTorque = 0.0f;
-            if(wDef.isDriven && axleFracSum[ax] > 1.0e-5f){
+            if(!wDef.attachedToTrailer && wDef.isDriven && axleFracSum[ax] > 1.0e-5f){
                 const f32 axleShare = Max(0.0f, wDef.driveFraction) / axleFracSum[ax];
-                const f32 axleDiffT = ComputeVehicleDiffCoupling(
-                    this.engine.axleDifferentialMode,
-                    axleAvgOmega[ax] - wState.angularVelocity,
-                    this.engine.differentialBias,
-                    this.engine.differentialLockTorque,
-                    (Max(1.0f, wDef.wheelInertia) / safeDt) * 0.5f,
-                    this.engine.torsenBiasRatio,
-                    Abs(VectorSingle(axleTotalTorque[ax])).x
-                );
-                wheelDriveTorque = axleTotalTorque[ax] * axleShare + axleDiffT;
-                if(this.engine.archetype == VehicleArchetype::Tracked){
-                    i32 side = wDef.trackSide;
-                    if(side == 0){
-                        if(wDef.attachmentPoint.x > 1.0e-4f)
-                            side = 1;
-                        else if(wDef.attachmentPoint.x < -1.0e-4f)
-                            side = -1;
-                    }
-                    if(side != 0){
-                        const f32 steerNorm = Clamp(input.steer, -1.0f, 1.0f);
-                        f32 scaleT = 1.0f;
-                        if(side > 0)
-                            scaleT = 1.0f - 1.3f * steerNorm;
-                        else
-                            scaleT = 1.0f + 1.3f * steerNorm;
-                        wheelDriveTorque *= scaleT;
-                    }
+                if(isTracked){
+                    wheelDriveTorque = axleTotalTorque[ax] * axleShare;
+                    const i32 side = this.resolveWheelTrackSide(wDef, localSideAxis);
+                    if(side > 0)
+                        wheelDriveTorque = wheelDriveTorque * (1.0f - 1.3f * steerNorm) + pivotRightTorque;
+                    else if(side < 0)
+                        wheelDriveTorque = wheelDriveTorque * (1.0f + 1.3f * steerNorm) + pivotLeftTorque;
+                }
+                else{
+                    const f32 axleDiffT = ComputeVehicleDiffCoupling(
+                        this.engine.axleDifferentialMode,
+                        axleAvgOmega[ax] - wState.angularVelocity,
+                        this.engine.differentialBias,
+                        this.engine.differentialLockTorque,
+                        (Max(1.0f, wDef.wheelInertia) / safeDt) * 0.5f,
+                        this.engine.torsenBiasRatio,
+                        Abs(VectorSingle(axleTotalTorque[ax])).x
+                    );
+                    wheelDriveTorque = axleTotalTorque[ax] * axleShare + axleDiffT;
                 }
             }
 
             if(wState.isGrounded){
                 const VectorSingle hitN = VectorSingle(wState.contactNormal);
-                const VectorSingle baseSuspForceVec = (-suspDirW) * this.m_normalLoads[i];
-                const f32 normalLoad = Max(0.0f, Vector3Dot(baseSuspForceVec, hitN).x) + (this.m_bumpImpulses[i] / safeDt);
-
                 const VectorSingle forwardW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.forwardAxis), wheelRot), chassisFwd);
                 const VectorSingle fwdTan = SafeNormalizeVec3(forwardW - hitN * Vector3Dot(forwardW, hitN).x, chassisFwd);
                 const VectorSingle sideTan = SafeNormalizeVec3(Cross(hitN, fwdTan), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-
                 const VectorSingle contactPt = VectorSingle(wState.contactPoint);
-                const VectorSingle arm = contactPt - chassisCenter;
-                const VectorSingle velAtPatch = (chassisLinVel + Cross(chassisAngVel, arm)) - VectorSingle(wState.groundVelocity);
+                const VectorSingle arm = contactPt - ownerCenter;
+                const VectorSingle velAtPatch = (ownerLinVel + Cross(ownerAngVel, arm)) - VectorSingle(wState.groundVelocity);
                 const f32 vLong = Vector3Dot(velAtPatch, fwdTan).x;
                 const f32 vLat = Vector3Dot(velAtPatch, sideTan).x;
 
@@ -1191,11 +1642,19 @@ class VehicleController{
                 const f32 gbInvMass = this.m_stepGbInvMass[i];
                 const MatrixSingle gbInvI = Matrix3FromSymMat3(this.m_stepGbInvI[i]);
                 const VectorSingle gbArm = contactPt - gbCenter;
-                const f32 invEffLong = ComputeVehiclePointInvEffMass(fwdTan, arm, chassisInvMass, chassisInvI, hasDynGround, gbArm, gbInvMass, gbInvI);
-                const f32 invEffLat = ComputeVehiclePointInvEffMass(sideTan, arm, chassisInvMass, chassisInvI, hasDynGround, gbArm, gbInvMass, gbInvI);
+                const f32 invEffLong = ComputeVehiclePointInvEffMass(fwdTan, arm, ownerInvMass, ownerInvI, hasDynGround, gbArm, gbInvMass, gbInvI);
+                const f32 invEffLat = ComputeVehiclePointInvEffMass(sideTan, arm, ownerInvMass, ownerInvI, hasDynGround, gbArm, gbInvMass, gbInvI);
+
+                this.m_stepFwdTan[i] = f32x4(fwdTan, 0.0f);
+                this.m_stepSideTan[i] = f32x4(sideTan, 0.0f);
+                this.m_stepContactPt[i] = f32x4(contactPt, 0.0f);
+                this.m_stepVLong[i] = vLong;
+                this.m_stepVLat[i] = vLat;
+                this.m_stepInvEffLong[i] = invEffLong;
+                this.m_stepInvEffLat[i] = invEffLat;
 
                 const f32 prevSlipMag = Abs(VectorSingle(wState.longitudinalSlip)).x;
-                if(this.engine.enableTcs && wDef.isDriven && prevSlipMag > 0.18f && wheelDriveTorque * wState.longitudinalSlip > 0.0f){
+                if(!useTrailer && this.engine.enableTcs && wDef.isDriven && prevSlipMag > 0.18f && wheelDriveTorque * wState.longitudinalSlip > 0.0f){
                     const f32 slipExcess = Clamp((prevSlipMag - 0.18f) / 0.5f, 0.0f, 0.85f);
                     wheelDriveTorque *= (1.0f - slipExcess);
                 }
@@ -1204,7 +1663,7 @@ class VehicleController{
                 f32 handbrakeTorque = 0.0f;
                 if(wDef.handbrakeAffected)
                     handbrakeTorque = Clamp(input.handbrake, 0.0f, 1.0f) * wDef.maxHandbrakeTorque;
-                if(espActive){
+                if(!useTrailer && espActive){
                     f32 brakeForceDir = -1.0f;
                     if(vLong < 0.0f)
                         brakeForceDir = 1.0f;
@@ -1226,22 +1685,19 @@ class VehicleController{
                         if(vLong > 0.0f){
                             if(wState.angularVelocity <= targetOmega)
                                 serviceBrakeTorque = 0.0f;
-                            else{
-                                const f32 maxAbsTorque = (wState.angularVelocity - targetOmega) * wheelI / safeDt;
-                                serviceBrakeTorque = Min(serviceBrakeTorque, maxAbsTorque);
-                            }
+                            else
+                                serviceBrakeTorque = Min(serviceBrakeTorque, (wState.angularVelocity - targetOmega) * wheelI / safeDt);
                         }
                         else{
                             if(wState.angularVelocity >= targetOmega)
                                 serviceBrakeTorque = 0.0f;
-                            else{
-                                const f32 maxAbsTorque = (targetOmega - wState.angularVelocity) * wheelI / safeDt;
-                                serviceBrakeTorque = Min(serviceBrakeTorque, maxAbsTorque);
-                            }
+                            else
+                                serviceBrakeTorque = Min(serviceBrakeTorque, (targetOmega - wState.angularVelocity) * wheelI / safeDt);
                         }
                     }
                 }
                 const f32 brakeTorque = serviceBrakeTorque + handbrakeTorque;
+                stepBrakeTorques[i] = brakeTorque;
 
                 wState.angularVelocity += (wheelDriveTorque / Max(0.1f, wDef.wheelInertia)) * dt;
                 if(brakeTorque > 0.0f){
@@ -1253,152 +1709,9 @@ class VehicleController{
                     else
                         wState.angularVelocity += dBrake;
                 }
-
-                const f32 vWheel = wState.angularVelocity * wDef.wheelRadius;
-                const VectorSingle vAbs = Abs(VectorSingle(vLong, vWheel, vLat, effThrottle));
-                const f32 denomV = Max(1.5f, Max(vAbs.x, vAbs.y));
-                const f32 rawLongSlip = Clamp((vWheel - vLong) / denomV, -1.0f, 1.0f);
-                const f32 rawLatSlip = ATan2(VectorSingle(-vLat), VectorSingle(Max(0.5f, vAbs.x))).x;
-                const f32 travelDist = vAbs.x * dt;
-                f32 longSlip = rawLongSlip;
-                f32 latSlip = rawLatSlip;
-                if(wDef.relaxationLengthLong > 1.0e-4f){
-                    const f32 aL = Clamp(travelDist / Max(travelDist, wDef.relaxationLengthLong), 0.1f, 1.0f);
-                    longSlip = wState.prevSlipLong + (rawLongSlip - wState.prevSlipLong) * aL;
-                }
-                if(wDef.relaxationLengthLat > 1.0e-4f){
-                    const f32 aS = Clamp(travelDist / Max(travelDist, wDef.relaxationLengthLat), 0.1f, 1.0f);
-                    latSlip = wState.prevSlipLat + (rawLatSlip - wState.prevSlipLat) * aS;
-                }
-                wState.prevSlipLong = longSlip;
-                wState.prevSlipLat = latSlip;
-                wState.longitudinalSlip = longSlip;
-                wState.lateralSlip = latSlip;
-
-                const f32 curSlipMag = Max(Abs(VectorSingle(longSlip)).x, Abs(VectorSingle(latSlip)).x);
-                const b8 wasSlipping = (this.m_prevWheelSlipMags[i] >= slipThr);
-                const b8 isSlipping = (curSlipMag >= slipThr);
-                if(!wasSlipping && isSlipping){
-                    VehicleTelemetryEvent slipStartEv;
-                    slipStartEv.type = VehicleTelemetryEventType::WheelSlipStarted;
-                    slipStartEv.wheelIndex = cast<u32>(i);
-                    slipStartEv.slipRatio = curSlipMag;
-                    slipStartEv.contactPoint = wState.contactPoint;
-                    slipStartEv.contactNormal = wState.contactNormal;
-                    this.stepEvents.push_back(slipStartEv);
-                }
-                else if(wasSlipping && !isSlipping){
-                    VehicleTelemetryEvent slipEndEv;
-                    slipEndEv.type = VehicleTelemetryEventType::WheelSlipStopped;
-                    slipEndEv.wheelIndex = cast<u32>(i);
-                    slipEndEv.slipRatio = curSlipMag;
-                    slipEndEv.contactPoint = wState.contactPoint;
-                    slipEndEv.contactNormal = wState.contactNormal;
-                    this.stepEvents.push_back(slipEndEv);
-                }
-
-                f32 loadScale = 1.0f;
-                if(wDef.loadSensitivity > 0.0f)
-                    loadScale = Clamp(1.0f - wDef.loadSensitivity * ((normalLoad / Max(1.0f, wDef.nominalWheelLoad)) - 1.0f), 0.35f, 1.35f);
-                const f32 groundFric = Max(0.0f, wState.groundMaterial.friction);
-                f32 groundStaticFric = groundFric;
-                if(wState.groundMaterial.staticFriction >= 0.0f)
-                    groundStaticFric = wState.groundMaterial.staticFriction;
-                const f32 peakFric = normalLoad * groundFric * wDef.frictionMultiplier * loadScale;
-                const f32 staticPeakFric = normalLoad * Max(groundFric, groundStaticFric) * wDef.frictionMultiplier * loadScale;
-
-                const b8 useStaticHold = (vAbs.x < 0.5f && vAbs.y < 0.5f && brakeTorque > 0.0f);
-                f32 fLong = 0.0f;
-                f32 fLat = 0.0f;
-                if(useStaticHold){
-                    this.m_stepStaticHold[i] = 1u;
-                    anyStaticHold = true;
-                    const f32 holdInvScale = groundedShareF * safeDt;
-                    if(this.engine.useSolverImpulses){
-                        fLong = -vLong / Max(invEffLong * holdInvScale, 1.0e-6f);
-                        fLat = -vLat / Max(invEffLat * holdInvScale, 1.0e-6f);
-                    }
-                    else{
-                        const f32 wheelShareMass = chassisMass / groundedShareF;
-                        const f32 holdGain = (wheelShareMass / Max(dt, 1.0e-3f)) * 0.65f;
-                        fLong = -vLong * holdGain;
-                        fLat = -vLat * holdGain;
-                    }
-                    wState.angularVelocity *= Max(0.0f, 1.0f - Min(1.0f, dt * 20.0f));
-                    const f32 holdSq = fLong * fLong + fLat * fLat;
-                    if(holdSq > staticPeakFric * staticPeakFric && holdSq > 1.0e-8f){
-                        const f32 holdScale = staticPeakFric * Rsqrt(VectorSingle(holdSq)).x;
-                        fLong *= holdScale;
-                        fLat *= holdScale;
-                    }
-                    wState.aligningTorque = 0.0f;
-                }
-                else{
-                    const f32 bxL = wDef.longitudinalStiffness * longSlip;
-                    const f32 bxS = wDef.lateralStiffness * latSlip;
-                    const VectorSingle bx(bxL, bxS, 0.0f, 0.0f);
-                    const VectorSingle atanBx = ATan2(bx, VectorSingle(1.0f));
-                    const f32 shapeCLong = Max(0.1f, wDef.pacejkaShapeC);
-                    f32 shapeCLat = shapeCLong;
-                    if(wDef.pacejkaShapeCLat > 0.0f)
-                        shapeCLat = Max(0.1f, wDef.pacejkaShapeCLat);
-                    const f32 curvELong = Clamp(wDef.pacejkaCurvatureE, -2.0f, 1.0f);
-                    f32 curvELat = Clamp(wDef.pacejkaCurvatureELat, -2.0f, 1.0f);
-                    if(wDef.pacejkaShapeCLat <= 0.0f && wDef.pacejkaCurvatureELat == 0.0f)
-                        curvELat = curvELong;
-                    const f32 argL = bxL - (bxL - atanBx.x) * curvELong;
-                    const f32 argS = bxS - (bxS - atanBx.y) * curvELat;
-                    const VectorSingle atanArgs = ATan2(VectorSingle(argL, argS, 0.0f, 0.0f), VectorSingle(1.0f));
-                    const VectorSingle sinVals = Sin(VectorSingle(atanArgs.x * shapeCLong, atanArgs.y * shapeCLat, 0.0f, 0.0f));
-                    fLong = sinVals.x * peakFric;
-                    fLat = sinVals.y * peakFric;
-                    if(Abs(VectorSingle(wDef.camberAngleRad)).x >= 1.0e-5f){
-                        f32 cambSign = 1.0f;
-                        if(wDef.attachmentPoint.x < -1.0e-4f)
-                            cambSign = -1.0f;
-                        fLat += 0.25f * normalLoad * Sin(VectorSingle(cambSign * wDef.camberAngleRad)).x;
-                    }
-                    f32 rollDir = 0.0f;
-                    if(vLong > 0.0f)
-                        rollDir = 1.0f;
-                    else if(vLong < 0.0f)
-                        rollDir = -1.0f;
-                    fLong -= rollDir * wDef.rollingResistanceCoeff * normalLoad;
-                    if(vAbs.x < 1.5f){
-                        const f32 blend = Clamp(1.0f - vAbs.x / 1.5f, 0.0f, 1.0f);
-                        const f32 wheelShareMass = chassisMass / groundedShareF;
-                        f32 latDampForce = -vLat * (wheelShareMass / Max(dt, 1.0e-3f)) * 0.35f * blend;
-                        if(this.engine.useSolverImpulses){
-                            const f32 maxZeroSlipLatF = Abs(VectorSingle(vLat)).x / Max(invEffLat * groundedShareF * safeDt, 1.0e-6f);
-                            latDampForce = Clamp(latDampForce, -maxZeroSlipLatF, maxZeroSlipLatF);
-                        }
-                        fLat = fLat * (1.0f - blend) + latDampForce;
-                    }
-                    const f32 combSq = fLong * fLong + fLat * fLat;
-                    if(combSq > peakFric * peakFric && combSq > 1.0e-8f){
-                        const f32 scale = peakFric * Rsqrt(VectorSingle(combSq)).x;
-                        fLong *= scale;
-                        fLat *= scale;
-                    }
-                    wState.aligningTorque = -fLat * Max(0.0f, wDef.selfAligningTrail) * 0.35f;
-                }
-
-                this.m_stepFrcLong[i] = fLong;
-                this.m_stepFrcLat[i] = fLat;
-                this.m_stepNormLoad[i] = normalLoad;
-                this.m_stepPeakFric[i] = peakFric;
-                if(this.m_stepStaticHold[i] != 0u)
-                    this.m_stepPeakFric[i] = staticPeakFric;
-                this.m_stepInvEffLong[i] = invEffLong;
-                this.m_stepInvEffLat[i] = invEffLat;
-                this.m_stepVLong[i] = vLong;
-                this.m_stepVLat[i] = vLat;
-                this.m_stepFwdTan[i] = f32x4(fwdTan, 0.0f);
-                this.m_stepSideTan[i] = f32x4(sideTan, 0.0f);
-                this.m_stepContactPt[i] = f32x4(contactPt, 0.0f);
             }
             else{
-                if(wDef.isDriven && axleFracSum[ax] > 1.0e-5f){
+                if(!wDef.attachedToTrailer && wDef.isDriven && axleFracSum[ax] > 1.0e-5f){
                     const f32 safeI = Max(0.1f, wDef.wheelInertia);
                     wState.angularVelocity = Clamp(wState.angularVelocity + (wheelDriveTorque / safeI) * dt, -400.0f, 400.0f);
                 }
@@ -1418,12 +1731,205 @@ class VehicleController{
             }
         }
 
-        if(anyStaticHold && this.engine.useSolverImpulses && groundedCount > 1u){
+        this.coupleTrackedBeltSpeeds(wheelCount, localSideAxis);
+
+        for(usize i = 0u; i < wheelCount; ++i){
+            in VehicleWheelDef wDef = this.wheelDefs[i];
+            mut VehicleWheelState wState = this.wheelStates[i];
+            if(!wState.isGrounded || (wDef.attachedToTrailer && !hasTrailer))
+                continue;
+
+            const VectorSingle hitN = VectorSingle(wState.contactNormal);
+            const VectorSingle suspDirW = VectorSingle(this.m_suspDirW[i]);
+            const VectorSingle baseSuspForceVec = (-suspDirW) * this.m_normalLoads[i];
+            const f32 normalLoad = Max(0.0f, Vector3Dot(baseSuspForceVec, hitN).x) + (this.m_bumpImpulses[i] / safeDt);
+            const f32 vLong = this.m_stepVLong[i];
+            const f32 vLat = this.m_stepVLat[i];
+            const f32 invEffLong = this.m_stepInvEffLong[i];
+            const f32 invEffLat = this.m_stepInvEffLat[i];
+            const VectorSingle fwdTan = VectorSingle(this.m_stepFwdTan[i]);
+            const VectorSingle sideTan = VectorSingle(this.m_stepSideTan[i]);
+            const VectorSingle gShapeRot = SafeNormalizeQuat(VectorSingle(this.m_stepGroundShapeRot[i]));
+
+            const f32 vWheel = wState.angularVelocity * wDef.wheelRadius;
+            const VectorSingle vAbs = Abs(VectorSingle(vLong, vWheel, vLat, effThrottle));
+            const f32 denomV = Max(1.5f, Max(vAbs.x, vAbs.y));
+            const f32 rawLongSlip = Clamp((vWheel - vLong) / denomV, -1.0f, 1.0f);
+            const f32 rawLatSlip = ATan2(VectorSingle(-vLat), VectorSingle(Max(0.5f, vAbs.x))).x;
+            const f32 travelDist = vAbs.x * dt;
+            f32 longSlip = rawLongSlip;
+            f32 latSlip = rawLatSlip;
+            if(wDef.relaxationLengthLong > 1.0e-4f){
+                const f32 aL = Clamp(travelDist / Max(travelDist, wDef.relaxationLengthLong), 0.1f, 1.0f);
+                longSlip = wState.prevSlipLong + (rawLongSlip - wState.prevSlipLong) * aL;
+            }
+            if(wDef.relaxationLengthLat > 1.0e-4f){
+                const f32 aS = Clamp(travelDist / Max(travelDist, wDef.relaxationLengthLat), 0.1f, 1.0f);
+                latSlip = wState.prevSlipLat + (rawLatSlip - wState.prevSlipLat) * aS;
+            }
+            wState.prevSlipLong = longSlip;
+            wState.prevSlipLat = latSlip;
+            wState.longitudinalSlip = longSlip;
+            wState.lateralSlip = latSlip;
+
+            const f32 curSlipMag = Max(Abs(VectorSingle(longSlip)).x, Abs(VectorSingle(latSlip)).x);
+            const b8 wasSlipping = (this.m_prevWheelSlipMags[i] >= slipThr);
+            const b8 isSlipping = (curSlipMag >= slipThr);
+            if(!wasSlipping && isSlipping){
+                VehicleTelemetryEvent slipStartEv;
+                slipStartEv.type = VehicleTelemetryEventType::WheelSlipStarted;
+                slipStartEv.wheelIndex = cast<u32>(i);
+                slipStartEv.slipRatio = curSlipMag;
+                slipStartEv.contactPoint = wState.contactPoint;
+                slipStartEv.contactNormal = wState.contactNormal;
+                this.stepEvents.push_back(slipStartEv);
+            }
+            else if(wasSlipping && !isSlipping){
+                VehicleTelemetryEvent slipEndEv;
+                slipEndEv.type = VehicleTelemetryEventType::WheelSlipStopped;
+                slipEndEv.wheelIndex = cast<u32>(i);
+                slipEndEv.slipRatio = curSlipMag;
+                slipEndEv.contactPoint = wState.contactPoint;
+                slipEndEv.contactNormal = wState.contactNormal;
+                this.stepEvents.push_back(slipEndEv);
+            }
+
+            f32 loadScale = 1.0f;
+            if(wDef.loadSensitivity > 0.0f)
+                loadScale = Clamp(1.0f - wDef.loadSensitivity * ((normalLoad / Max(1.0f, wDef.nominalWheelLoad)) - 1.0f), 0.35f, 1.35f);
+            const f32 groundFric = Max(0.0f, wState.groundMaterial.friction);
+            f32 groundStaticFric = groundFric;
+            if(wState.groundMaterial.staticFriction >= 0.0f)
+                groundStaticFric = wState.groundMaterial.staticFriction;
+            const f32 basePeakFric = normalLoad * groundFric * wDef.frictionMultiplier * loadScale;
+            const f32 baseStaticPeak = normalLoad * Max(groundFric, groundStaticFric) * wDef.frictionMultiplier * loadScale;
+            const f32 anisoLong = ComputeVehicleSurfaceAnisotropicScale(wState.groundMaterial, gShapeRot, hitN, fwdTan);
+            const f32 anisoLat = ComputeVehicleSurfaceAnisotropicScale(wState.groundMaterial, gShapeRot, hitN, sideTan);
+            const f32 peakFricLong = basePeakFric * anisoLong;
+            const f32 peakFricLat = basePeakFric * anisoLat;
+            const f32 staticPeakLong = baseStaticPeak * anisoLong;
+            const f32 staticPeakLat = baseStaticPeak * anisoLat;
+
+            const f32 brakeTorque = stepBrakeTorques[i];
+            const b8 useStaticHold = (vAbs.x < 0.5f && vAbs.y < 0.5f && brakeTorque > 0.0f);
+            f32 fLong = 0.0f;
+            f32 fLat = 0.0f;
+            f32 activeLimLong = peakFricLong;
+            f32 activeLimLat = peakFricLat;
+
+            f32 ownerMass = chassisMass;
+            if(wDef.attachedToTrailer && hasTrailer)
+                ownerMass = trailerMass;
+
+            if(useStaticHold){
+                this.m_stepStaticHold[i] = 1u;
+                if(!wDef.attachedToTrailer)
+                    anyChassisStaticHold = true;
+                const f32 holdInvScale = groundedShareF * safeDt;
+                if(this.engine.useSolverImpulses){
+                    fLong = -vLong / Max(invEffLong * holdInvScale, 1.0e-6f);
+                    fLat = -vLat / Max(invEffLat * holdInvScale, 1.0e-6f);
+                }
+                else{
+                    const f32 wheelShareMass = ownerMass / groundedShareF;
+                    const f32 holdGain = (wheelShareMass / Max(dt, 1.0e-3f)) * 0.65f;
+                    fLong = -vLong * holdGain;
+                    fLat = -vLat * holdGain;
+                }
+                wState.angularVelocity *= Max(0.0f, 1.0f - Min(1.0f, dt * 20.0f));
+                activeLimLong = staticPeakLong;
+                activeLimLat = staticPeakLat;
+                wState.aligningTorque = 0.0f;
+            }
+            else{
+                const f32 bxL = wDef.longitudinalStiffness * longSlip;
+                const f32 bxS = wDef.lateralStiffness * latSlip;
+                const VectorSingle bx(bxL, bxS, 0.0f, 0.0f);
+                const VectorSingle atanBx = ATan2(bx, VectorSingle(1.0f));
+                const f32 shapeCLong = Max(0.1f, wDef.pacejkaShapeC);
+                f32 shapeCLat = shapeCLong;
+                if(wDef.pacejkaShapeCLat > 0.0f)
+                    shapeCLat = Max(0.1f, wDef.pacejkaShapeCLat);
+                const f32 curvELong = Clamp(wDef.pacejkaCurvatureE, -2.0f, 1.0f);
+                f32 curvELat = Clamp(wDef.pacejkaCurvatureELat, -2.0f, 1.0f);
+                if(wDef.pacejkaShapeCLat <= 0.0f && wDef.pacejkaCurvatureELat == 0.0f)
+                    curvELat = curvELong;
+                const f32 argL = bxL - (bxL - atanBx.x) * curvELong;
+                const f32 argS = bxS - (bxS - atanBx.y) * curvELat;
+                const VectorSingle atanArgs = ATan2(VectorSingle(argL, argS, 0.0f, 0.0f), VectorSingle(1.0f));
+                const VectorSingle sinVals = Sin(VectorSingle(atanArgs.x * shapeCLong, atanArgs.y * shapeCLat, 0.0f, 0.0f));
+                fLong = sinVals.x * peakFricLong;
+                fLat = sinVals.y * peakFricLat;
+                if(Abs(VectorSingle(wDef.camberAngleRad)).x >= 1.0e-5f){
+                    const f32 latCoord = Vector3Dot(VectorSingle(wDef.attachmentPoint), localSideAxis).x;
+                    f32 cambSign = 1.0f;
+                    if(latCoord < -1.0e-4f)
+                        cambSign = -1.0f;
+                    fLat += 0.25f * normalLoad * Sin(VectorSingle(cambSign * wDef.camberAngleRad)).x;
+                }
+                f32 rollDir = 0.0f;
+                if(vLong > 0.0f)
+                    rollDir = 1.0f;
+                else if(vLong < 0.0f)
+                    rollDir = -1.0f;
+                const f32 effRoll = Max(0.0f, wDef.rollingResistanceCoeff) + Max(0.0f, wState.groundMaterial.rollingResistance);
+                f32 rollForceMag = effRoll * normalLoad;
+                if(this.engine.useSolverImpulses && rollForceMag > 0.0f){
+                    const f32 maxRollStop = Abs(VectorSingle(vLong)).x / Max(invEffLong * groundedShareF * safeDt, 1.0e-6f);
+                    rollForceMag = Min(rollForceMag, maxRollStop);
+                }
+                fLong -= rollDir * rollForceMag;
+                if(vAbs.x < 1.5f){
+                    const f32 blend = Clamp(1.0f - vAbs.x / 1.5f, 0.0f, 1.0f);
+                    const f32 wheelShareMass = ownerMass / groundedShareF;
+                    f32 latDampForce = -vLat * (wheelShareMass / Max(dt, 1.0e-3f)) * 0.35f * blend;
+                    if(this.engine.useSolverImpulses){
+                        const f32 maxZeroSlipLatF = Abs(VectorSingle(vLat)).x / Max(invEffLat * groundedShareF * safeDt, 1.0e-6f);
+                        latDampForce = Clamp(latDampForce, -maxZeroSlipLatF, maxZeroSlipLatF);
+                    }
+                    fLat = fLat * (1.0f - blend) + latDampForce;
+                }
+            }
+
+            if(activeLimLong <= 1.0e-5f){
+                fLong = 0.0f;
+            }
+            if(activeLimLat <= 1.0e-5f){
+                fLat = 0.0f;
+            }
+            if(activeLimLong > 1.0e-5f && activeLimLat > 1.0e-5f){
+                const f32 nLong = fLong / activeLimLong;
+                const f32 nLat = fLat / activeLimLat;
+                const f32 ellSq = nLong * nLong + nLat * nLat;
+                if(ellSq > 1.0f){
+                    const f32 s = Rsqrt(VectorSingle(ellSq)).x;
+                    fLong *= s;
+                    fLat *= s;
+                }
+            }
+            else if(activeLimLong > 1.0e-5f){
+                fLong = Clamp(fLong, -activeLimLong, activeLimLong);
+            }
+            else if(activeLimLat > 1.0e-5f){
+                fLat = Clamp(fLat, -activeLimLat, activeLimLat);
+            }
+
+            if(!useStaticHold)
+                wState.aligningTorque = -fLat * Max(0.0f, wDef.selfAligningTrail) * 0.35f;
+
+            this.m_stepFrcLong[i] = fLong;
+            this.m_stepFrcLat[i] = fLat;
+            this.m_stepNormLoad[i] = normalLoad;
+            this.m_stepPeakFricLong[i] = activeLimLong;
+            this.m_stepPeakFricLat[i] = activeLimLat;
+        }
+
+        if(anyChassisStaticHold && this.engine.useSolverImpulses && groundedCount > 1u){
             for(u32 gsIter = 0u; gsIter < 2u; ++gsIter){
                 VectorSingle dvLin(0.0f);
                 VectorSingle dvAng(0.0f);
                 for(usize wi = 0u; wi < wheelCount; ++wi){
-                    if(!this.wheelStates[wi].isGrounded)
+                    if(!this.wheelStates[wi].isGrounded || this.wheelDefs[wi].attachedToTrailer)
                         continue;
                     const VectorSingle armW = VectorSingle(this.m_stepContactPt[wi]) - chassisCenter;
                     const VectorSingle impW = (VectorSingle(this.m_stepFwdTan[wi]) * this.m_stepFrcLong[wi] + VectorSingle(this.m_stepSideTan[wi]) * this.m_stepFrcLat[wi]) * dt;
@@ -1431,7 +1937,7 @@ class VehicleController{
                     dvAng = dvAng + Matrix3MulVec(chassisInvI, Cross(armW, impW));
                 }
                 for(usize wi = 0u; wi < wheelCount; ++wi){
-                    if(!this.wheelStates[wi].isGrounded || this.m_stepStaticHold[wi] == 0u)
+                    if(!this.wheelStates[wi].isGrounded || this.wheelDefs[wi].attachedToTrailer || this.m_stepStaticHold[wi] == 0u)
                         continue;
                     const VectorSingle armW = VectorSingle(this.m_stepContactPt[wi]) - chassisCenter;
                     const VectorSingle dVelW = dvLin + Cross(dvAng, armW);
@@ -1441,12 +1947,27 @@ class VehicleController{
                     const f32 resS = (this.m_stepVLat[wi] + dVS) / Max(this.m_stepInvEffLat[wi] * safeDt, 1.0e-6f);
                     f32 nfL = this.m_stepFrcLong[wi] - 0.5f * resL;
                     f32 nfS = this.m_stepFrcLat[wi] - 0.5f * resS;
-                    const f32 lim = this.m_stepPeakFric[wi];
-                    const f32 sq = nfL * nfL + nfS * nfS;
-                    if(sq > lim * lim && sq > 1.0e-8f){
-                        const f32 sc = lim * Rsqrt(VectorSingle(sq)).x;
-                        nfL *= sc;
-                        nfS *= sc;
+                    const f32 limL = this.m_stepPeakFricLong[wi];
+                    const f32 limS = this.m_stepPeakFricLat[wi];
+                    if(limL <= 1.0e-5f)
+                        nfL = 0.0f;
+                    if(limS <= 1.0e-5f)
+                        nfS = 0.0f;
+                    if(limL > 1.0e-5f && limS > 1.0e-5f){
+                        const f32 nL = nfL / limL;
+                        const f32 nS = nfS / limS;
+                        const f32 sq = nL * nL + nS * nS;
+                        if(sq > 1.0f){
+                            const f32 sc = Rsqrt(VectorSingle(sq)).x;
+                            nfL *= sc;
+                            nfS *= sc;
+                        }
+                    }
+                    else if(limL > 1.0e-5f){
+                        nfL = Clamp(nfL, -limL, limL);
+                    }
+                    else if(limS > 1.0e-5f){
+                        nfS = Clamp(nfS, -limS, limS);
                     }
                     this.m_stepFrcLong[wi] = nfL;
                     this.m_stepFrcLat[wi] = nfS;
@@ -1457,44 +1978,88 @@ class VehicleController{
         for(usize i = 0u; i < wheelCount; ++i){
             in VehicleWheelDef wDef = this.wheelDefs[i];
             mut VehicleWheelState wState = this.wheelStates[i];
+            if(!wState.isGrounded || (wDef.attachedToTrailer && !hasTrailer))
+                continue;
+            const f32 fLong = this.m_stepFrcLong[i];
+            const f32 fLat = this.m_stepFrcLat[i];
+            wState.longitudinalForce = fLong;
+            wState.lateralForce = fLat;
+            const f32 safeI = Max(0.1f, wDef.wheelInertia);
+            const f32 tireTorqueOnWheel = -fLong * wDef.wheelRadius;
+            const f32 effWheelVisc = (wDef.wheelRadius * wDef.wheelRadius) / safeI;
+            wState.angularVelocity = (wState.angularVelocity + (tireTorqueOnWheel / safeI) * dt) / (1.0f + 0.02f * effWheelVisc * dt);
+        }
+
+        this.coupleTrackedBeltSpeeds(wheelCount, localSideAxis);
+
+        const b8 isMoto = (this.engine.archetype == VehicleArchetype::Motorcycle);
+        for(usize i = 0u; i < wheelCount; ++i){
+            in VehicleWheelDef wDef = this.wheelDefs[i];
+            mut VehicleWheelState wState = this.wheelStates[i];
             const VectorSingle attachW = VectorSingle(this.m_attachW[i]);
             const VectorSingle suspDirW = VectorSingle(this.m_suspDirW[i]);
             const VectorSingle wheelRot = VectorSingle(this.m_wheelRots[i]);
-            if(wState.isGrounded){
-                const f32 fLong = this.m_stepFrcLong[i];
-                const f32 fLat = this.m_stepFrcLat[i];
-                wState.longitudinalForce = fLong;
-                wState.lateralForce = fLat;
-                const f32 safeI = Max(0.1f, wDef.wheelInertia);
-                const f32 tireTorqueOnWheel = -fLong * wDef.wheelRadius;
-                const f32 effWheelVisc = (wDef.wheelRadius * wDef.wheelRadius) / safeI;
-                wState.angularVelocity = (wState.angularVelocity + (tireTorqueOnWheel / safeI) * dt) / (1.0f + 0.02f * effWheelVisc * dt);
+            const b8 useTrailer = wDef.attachedToTrailer && hasTrailer;
 
+            if(wState.isGrounded && !(wDef.attachedToTrailer && !hasTrailer)){
+                BodyId ownerBodyId = this.chassisBodyId;
+                VectorSingle ownerCenter = chassisCenter;
+                if(useTrailer){
+                    ownerBodyId = this.trailerBodyId;
+                    ownerCenter = trailerCenter;
+                }
+                const b8 accumChassis = !useTrailer;
                 const VectorSingle hitN = VectorSingle(wState.contactNormal);
                 const VectorSingle baseSuspForceVec = (-suspDirW) * this.m_normalLoads[i];
                 const VectorSingle hubPos = attachW + suspDirW * wState.suspensionLength;
                 const VectorSingle contactPt = VectorSingle(this.m_stepContactPt[i]);
-                const VectorSingle tireForceVec = VectorSingle(this.m_stepFwdTan[i]) * fLong + VectorSingle(this.m_stepSideTan[i]) * fLat;
-                const VectorSingle suspImpVec = baseSuspForceVec * dt + hitN * this.m_bumpImpulses[i];
-                const VectorSingle tireImpVec = tireForceVec * dt;
+                const VectorSingle tireForceVec = VectorSingle(this.m_stepFwdTan[i]) * this.m_stepFrcLong[i] + VectorSingle(this.m_stepSideTan[i]) * this.m_stepFrcLat[i];
                 const b8 hasDynGround = (this.m_stepHasDynGround[i] != 0u);
-                if(this.engine.useSolverImpulses){
-                    world.applyLinearImpulseAtPoint(this.chassisBodyId, suspImpVec, hubPos, true);
-                    world.applyLinearImpulseAtPoint(this.chassisBodyId, tireImpVec, contactPt, true);
+
+                this.applyBodyLinearVecAtPoint(ownerBodyId, accumChassis, ownerCenter, hubPos, baseSuspForceVec, dt, invSteps, outSubImpLin, outSubImpAng, world);
+                this.applyBodyLinearVecAtPoint(ownerBodyId, accumChassis, ownerCenter, contactPt, tireForceVec, dt, invSteps, outSubImpLin, outSubImpAng, world);
+                if(this.m_bumpImpulses[i] > 0.0f){
+                    const VectorSingle bumpImp = hitN * this.m_bumpImpulses[i];
+                    world.applyLinearImpulseAtPoint(ownerBodyId, bumpImp, hubPos, true);
+                    if(accumChassis){
+                        outSubImpLin = outSubImpLin + bumpImp;
+                        outSubImpAng = outSubImpAng + Cross(hubPos - ownerCenter, bumpImp);
+                    }
                     if(hasDynGround)
-                        world.applyLinearImpulseAtPoint(wState.groundBodyId, -(suspImpVec + tireImpVec), contactPt, true);
+                        world.applyLinearImpulseAtPoint(wState.groundBodyId, -bumpImp, contactPt, true);
                 }
-                else{
-                    world.applyForceAtPoint(this.chassisBodyId, baseSuspForceVec, hubPos, true);
-                    world.applyForceAtPoint(this.chassisBodyId, tireForceVec, contactPt, true);
-                    if(this.m_bumpImpulses[i] > 0.0f)
-                        world.applyLinearImpulseAtPoint(this.chassisBodyId, hitN * this.m_bumpImpulses[i], hubPos, true);
-                    if(hasDynGround){
-                        world.applyForceAtPoint(wState.groundBodyId, -(baseSuspForceVec + tireForceVec), contactPt, true);
-                        if(this.m_bumpImpulses[i] > 0.0f)
-                            world.applyLinearImpulseAtPoint(wState.groundBodyId, -hitN * this.m_bumpImpulses[i], contactPt, true);
+                if(hasDynGround){
+                    if(this.engine.useSolverImpulses){
+                        world.applyLinearImpulseAtPoint(wState.groundBodyId, -(baseSuspForceVec + tireForceVec) * dt, contactPt, true);
+                    }
+                    else{
+                        world.applyForceAtPoint(wState.groundBodyId, (-(baseSuspForceVec + tireForceVec)) * invSteps, contactPt, true);
                     }
                 }
+                if(Abs(VectorSingle(wState.aligningTorque)).x > 1.0e-5f){
+                    const VectorSingle alignTorqueVec = hitN * wState.aligningTorque;
+                    this.applyBodyAngularVec(ownerBodyId, accumChassis, alignTorqueVec, dt, invSteps, outSubImpAng, world);
+                    if(hasDynGround){
+                        if(this.engine.useSolverImpulses)
+                            world.applyAngularImpulse(wState.groundBodyId, -alignTorqueVec * dt, true);
+                        else
+                            world.applyTorque(wState.groundBodyId, (-alignTorqueVec) * invSteps, true);
+                    }
+                }
+            }
+
+            if(isMoto && !useTrailer && this.engine.motorcycleGyroGain != 0.0f && Abs(VectorSingle(wState.angularVelocity)).x > 1.0e-3f){
+                const VectorSingle axleW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(this.m_axleAxisNorm[i]), wheelRot), chassisSide);
+                const VectorSingle spinAngMom = axleW * (Max(0.05f, wDef.wheelInertia) * wState.angularVelocity);
+                const f32 steerRate = (wState.steerAngle - this.m_substepPrevSteer[i]) / safeDt;
+                const VectorSingle omegaFrame = chassisAngVel + (-suspDirW) * steerRate;
+                VectorSingle tauGyro = Cross(spinAngMom, omegaFrame) * this.engine.motorcycleGyroGain;
+                const f32 maxGyro = chassisMass * 40.0f;
+                const f32 tauSq = Vector3LengthSq(tauGyro).x;
+                if(tauSq > maxGyro * maxGyro)
+                    tauGyro = tauGyro * (maxGyro * Rsqrt(VectorSingle(tauSq)).x);
+                if(Vector3LengthSq(tauGyro).x > 1.0e-6f)
+                    this.applyBodyAngularVec(this.chassisBodyId, true, tauGyro, dt, invSteps, outSubImpAng, world);
             }
 
             wState.rotationAngle += wState.angularVelocity * dt;
@@ -1503,6 +2068,8 @@ class VehicleController{
                 const f32 turns = Floor(VectorSingle(wState.rotationAngle / twoPi)).x * twoPi;
                 wState.rotationAngle -= turns;
                 wState.prevRotationAngle -= turns;
+                if(i < this.m_frameRotWrapAccum.size())
+                    this.m_frameRotWrapAccum[i] += turns;
             }
             wState.worldTransform = BuildVehicleWheelWorldTransformVectors(
                 attachW,
@@ -1514,31 +2081,237 @@ class VehicleController{
             );
         }
 
-        if(this.engine.archetype == VehicleArchetype::Motorcycle && groundedCount > 0u){
-            const VectorSingle worldUp = SafeNormalizeVec3(-world.gravity(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            const VectorSingle chassisSide = SafeNormalizeVec3(Cross(chassisUp, chassisFwd), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-            const f32 curLean = ASin(Clamp(VectorSingle(Vector3Dot(chassisSide, worldUp).x), VectorSingle(-1.0f), VectorSingle(1.0f))).x;
-            const f32 targetLean = Clamp(-deltaAvg * this.currentSpeedMps * this.engine.motorcycleLeanGain * 0.2f, -this.engine.motorcycleLeanMaxRad, this.engine.motorcycleLeanMaxRad);
+        if(isMoto && groundedCount > 0u){
+            const f32 curLean = ATan2(VectorSingle(Vector3Dot(chassisSide, worldUp).x), VectorSingle(Vector3Dot(chassisUp, worldUp).x)).x;
+            const f32 gravScale = 9.81f / Max(0.5f, gravMag);
+            const f32 targetLean = Clamp(-deltaAvg * this.currentSpeedMps * this.engine.motorcycleLeanGain * 0.2f * gravScale, -this.engine.motorcycleLeanMaxRad, this.engine.motorcycleLeanMaxRad);
             const f32 curRollVel = Vector3Dot(chassisAngVel, chassisFwd).x;
             const f32 rollTorqueMag = chassisMass * (45.0f * (targetLean - curLean) - 8.0f * curRollVel);
-            world.applyTorque(this.chassisBodyId, chassisFwd * rollTorqueMag, true);
+            this.applyBodyAngularVec(this.chassisBodyId, true, chassisFwd * rollTorqueMag, dt, invSteps, outSubImpAng, world);
         }
 
-        const VectorSingle relAirVel = chassisLinVel - VectorSingle(this.engine.ambientWindVelocity, 0.0f);
+        const VectorSingle effWind = VectorSingle(this.engine.ambientWindVelocity, 0.0f) + VectorSingle(this.m_envWindVelocity, 0.0f);
+        const VectorSingle relAirVel = chassisLinVel - effWind;
         const f32 speedSq = Vector3LengthSq(VectorSingle(relAirVel, 0.0f)).x;
         if(speedSq > 1.0e-4f){
             const f32 dynPressure = 0.5f * Max(0.0f, this.engine.airDensity) * Max(0.0f, this.engine.frontalArea);
             const VectorSingle aeroDrag = (-relAirVel) * (dynPressure * this.engine.dragCoeff * Sqrt(VectorSingle(speedSq)).x);
             const VectorSingle downForce = chassisUp * (-dynPressure * this.engine.downforceCoeff * speedSq);
-            world.applyForce(this.chassisBodyId, aeroDrag + downForce, false);
+            const VectorSingle aeroTotal = aeroDrag + downForce;
+            if(this.engine.useSolverImpulses){
+                const VectorSingle aeroImp = aeroTotal * dt;
+                world.applyLinearImpulse(this.chassisBodyId, aeroImp, true);
+                outSubImpLin = outSubImpLin + aeroImp;
+            }
+            else{
+                world.applyForce(this.chassisBodyId, aeroTotal * invSteps, false);
+            }
+        }
+
+        if(hasTrailer && (driverBrakeInput > 0.0f || input.handbrake > 0.0f) && this.engine.trailerBrakeForce > 0.0f && trailerInvMass > 0.0f){
+            const f32 brakeLevel = Max(driverBrakeInput, Clamp(input.handbrake, 0.0f, 1.0f));
+            const VectorSingle trHorizVel = trailerLinVel - worldUp * Vector3Dot(trailerLinVel, worldUp).x;
+            const f32 hSpSq = Vector3LengthSq(trHorizVel).x;
+            if(hSpSq > 1.0e-6f){
+                const f32 hSp = Sqrt(VectorSingle(hSpSq)).x;
+                const VectorSingle hDir = trHorizVel * (1.0f / hSp);
+                const f32 maxBrakeImp = trailerMass * hSp;
+                const f32 impMag = Min(this.engine.trailerBrakeForce * brakeLevel * dt, maxBrakeImp);
+                if(impMag > 1.0e-5f){
+                    if(this.engine.useSolverImpulses)
+                        world.applyLinearImpulse(this.trailerBodyId, -hDir * impMag, true);
+                    else
+                        world.applyForce(this.trailerBodyId, (-hDir) * ((impMag / safeDt) * invSteps), true);
+                }
+            }
         }
     }
 
-    public void applyWheelAndWindEnvironment(in PhysicsWorld world, in PhysicsEnvironment env, in f32 dt){
+    private void sanitizeTrailerLink(mut PhysicsWorld world){
+        if(this.trailerJointId.valid() && !world.isValidJoint(this.trailerJointId)){
+            this.trailerJointId = JointId();
+            this.trailerBodyId = BodyId();
+            return;
+        }
+        if(this.trailerBodyId.valid() && !world.isValidBody(this.trailerBodyId)){
+            if(this.trailerJointId.valid() && world.isValidJoint(this.trailerJointId))
+                world.destroyJoint(this.trailerJointId);
+            this.trailerJointId = JointId();
+            this.trailerBodyId = BodyId();
+        }
+    }
+
+    private b8 extractBodyPredState(
+        in PhysicsWorld world,
+        in BodyId bodyId,
+        in VectorSingle worldGrav,
+        mut b8 outIsDynamic,
+        mut VectorSingle outPos,
+        mut VectorSingle outRot,
+        mut VectorSingle outCenter,
+        mut VectorSingle outLocalCom,
+        mut VectorSingle outLinVel,
+        mut VectorSingle outAngVel,
+        mut f32 outMass,
+        mut f32 outInvMass,
+        mut MatrixSingle outInvInertiaLocal,
+        mut MatrixSingle outInvI,
+        mut VectorSingle outGravAccel,
+        mut VectorSingle outBaseExtForce,
+        mut VectorSingle outBaseExtTorque,
+        mut VectorSingle outPrevWorldForce,
+        mut VectorSingle outPrevWorldTorque,
+        mut VectorSingle outPrevWorldLinVel,
+        mut VectorSingle outPrevWorldAngVel,
+        mut u32 outFlags,
+        mut f32 outLinDamp,
+        mut f32 outAngDamp
+    )const{
+        outIsDynamic = false;
+        outMass = 0.0f;
+        outInvMass = 0.0f;
+        outInvInertiaLocal = Matrix3FromSymMat3(SymMat3());
+        outInvI = Matrix3FromSymMat3(SymMat3());
+        outGravAccel = VectorSingle(0.0f);
+        outBaseExtForce = VectorSingle(0.0f);
+        outBaseExtTorque = VectorSingle(0.0f);
+        outPrevWorldForce = VectorSingle(0.0f);
+        outPrevWorldTorque = VectorSingle(0.0f);
+        outPrevWorldLinVel = VectorSingle(0.0f);
+        outPrevWorldAngVel = VectorSingle(0.0f);
+        outFlags = 0u;
+        outLinDamp = 0.0f;
+        outAngDamp = 0.01f;
+        if(!bodyId.valid() || !world.isValidBody(bodyId))
+            return false;
+        in Body b = world.m_bodies[bodyId.index];
+        if(!b.alive || b.setIndex >= world.m_solverSets.size() || b.localIndex >= world.m_solverSets[b.setIndex].sims.size())
+            return false;
+        in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
+        in BodyState st = world.m_solverSets[b.setIndex].states[b.localIndex];
+        outPos = VectorSingle(sim.transform.position);
+        outRot = SafeNormalizeQuat(VectorSingle(sim.transform.rotation));
+        outCenter = sim.center();
+        outLocalCom = sim.localCenter();
+        outLinVel = VectorSingle(st.linearVelocity);
+        outAngVel = VectorSingle(st.angularVelocity);
+        outFlags = b.flags;
+        outLinDamp = sim.linearDamping();
+        outAngDamp = sim.angularDamping();
+        if(b.type == BodyType::Dynamic){
+            outIsDynamic = true;
+            outInvMass = sim.invMass();
+            if(outInvMass > 0.0f)
+                outMass = 1.0f / outInvMass;
+            outInvInertiaLocal = Matrix3FromSymMat3(sim.invInertiaLocal);
+            outInvI = Matrix3MaskAngularLocks(Matrix3FromSymMat3(sim.invInertiaWorld), b.flags);
+            outGravAccel = worldGrav * sim.gravityScale;
+            outBaseExtForce = sim.force();
+            outBaseExtTorque = sim.torque();
+            outPrevWorldForce = outBaseExtForce;
+            outPrevWorldTorque = outBaseExtTorque;
+            outPrevWorldLinVel = outLinVel;
+            outPrevWorldAngVel = outAngVel;
+        }
+        return true;
+    }
+
+    private void advanceBodyPredState(
+        in PhysicsWorld world,
+        in BodyId bodyId,
+        in b8 isDynamic,
+        in f32 subDt,
+        in f32 stepsF,
+        in b8 useImpulses,
+        in b8 useDirectImpulses,
+        in VectorSingle directImpLin,
+        in VectorSingle directImpAng,
+        in f32 invMass,
+        in MatrixSingle invInertiaLocal,
+        in VectorSingle localCom,
+        in u32 flags,
+        in f32 linDamp,
+        in f32 angDamp,
+        in VectorSingle gravAccel,
+        in VectorSingle baseExtForce,
+        in VectorSingle baseExtTorque,
+        mut VectorSingle ioPrevWorldForce,
+        mut VectorSingle ioPrevWorldTorque,
+        mut VectorSingle ioPrevWorldLinVel,
+        mut VectorSingle ioPrevWorldAngVel,
+        mut VectorSingle ioLinVel,
+        mut VectorSingle ioAngVel,
+        mut VectorSingle ioCenter,
+        mut VectorSingle ioRot,
+        mut VectorSingle ioPos,
+        mut MatrixSingle ioInvI
+    )const{
+        if(isDynamic && bodyId.valid() && world.isValidBody(bodyId)){
+            in Body b = world.m_bodies[bodyId.index];
+            if(b.alive && b.setIndex < world.m_solverSets.size() && b.localIndex < world.m_solverSets[b.setIndex].sims.size()){
+                in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
+                in BodyState st = world.m_solverSets[b.setIndex].states[b.localIndex];
+                const VectorSingle curForce = sim.force();
+                const VectorSingle curTorque = sim.torque();
+                VectorSingle totForce = baseExtForce;
+                VectorSingle totTorque = baseExtTorque;
+                if(!useImpulses){
+                    totForce = totForce + (curForce - ioPrevWorldForce) * stepsF;
+                    totTorque = totTorque + (curTorque - ioPrevWorldTorque) * stepsF;
+                }
+                const VectorSingle curWorldLin = VectorSingle(st.linearVelocity);
+                const VectorSingle curWorldAng = VectorSingle(st.angularVelocity);
+                VectorSingle dvLin(0.0f);
+                VectorSingle dvAng(0.0f);
+                if(useDirectImpulses){
+                    dvLin = directImpLin * invMass;
+                    dvAng = Matrix3MulVec(ioInvI, directImpAng);
+                }
+                else{
+                    dvLin = curWorldLin - ioPrevWorldLinVel;
+                    dvAng = curWorldAng - ioPrevWorldAngVel;
+                }
+                const f32 linDampScale = 1.0f / (1.0f + Max(0.0f, linDamp) * subDt);
+                const f32 angDampScale = 1.0f / (1.0f + Max(0.0f, angDamp) * subDt);
+                ioLinVel = ApplyLinearLocks((ioLinVel + (gravAccel + totForce * invMass) * subDt + dvLin) * linDampScale, flags);
+                ioAngVel = ApplyAngularLocks((ioAngVel + Matrix3MulVec(ioInvI, totTorque) * subDt + dvAng) * angDampScale, flags);
+                ioPrevWorldForce = curForce;
+                ioPrevWorldTorque = curTorque;
+                ioPrevWorldLinVel = curWorldLin;
+                ioPrevWorldAngVel = curWorldAng;
+            }
+        }
+        ioCenter = ioCenter + ioLinVel * subDt;
+        ioRot = IntegrateDeltaQuaternion(ioRot, ioAngVel, subDt);
+        ioPos = ioCenter - Vector3Rotate(localCom, ioRot);
+        if(isDynamic)
+            ioInvI = Matrix3MaskAngularLocks(RotateSymMatrix3(ioRot, invInertiaLocal), flags);
+    }
+
+    private void snapshotFrameStartPrevWheelState(in usize wheelCount){
+        for(usize i = 0u; i < wheelCount; ++i){
+            in VehicleWheelState ws = this.wheelStates[i];
+            this.m_frameStartPrevSuspLen[i] = ws.suspensionLength;
+            this.m_frameStartPrevSteer[i] = ws.steerAngle;
+            this.m_frameStartPrevRot[i] = ws.rotationAngle;
+            this.m_frameRotWrapAccum[i] = 0.0f;
+        }
+    }
+
+    private void restoreFrameStartPrevWheelState(in PhysicsWorld world, in usize wheelCount, in Transform3D initChassisXf){
+        for(usize i = 0u; i < wheelCount; ++i){
+            mut VehicleWheelState ws = this.wheelStates[i];
+            ws.prevSuspensionLength = this.m_frameStartPrevSuspLen[i];
+            ws.prevSteerAngle = this.m_frameStartPrevSteer[i];
+            ws.prevRotationAngle = this.m_frameStartPrevRot[i] - this.m_frameRotWrapAccum[i];
+        }
+        this.updateWheelWorldTransformsWithTrailer(world, initChassisXf);
+    }
+
+    public void applyWheelAndWindEnvironment(mut PhysicsWorld world, in PhysicsEnvironment env, in f32 dt){
         if(dt <= 0.0f || this.wheelDefs.empty())
             return;
         VectorSingle accumWind(0.0f);
-        u32 windCount = 0u;
         VectorSingle chassisPos(0.0f);
         if(world.isValidBody(this.chassisBodyId)){
             const Expected<Transform3D> cXf = world.tryGetBodyTransform(this.chassisBodyId);
@@ -1549,29 +2322,84 @@ class VehicleController{
             in ForceField ff = env.forceFields[ffi];
             if(!ff.enabled || !ShouldCollideFilters(this.queryFilter, ff.filter))
                 continue;
-            if(ff.type == ForceFieldType::BoxWind || ff.type == ForceFieldType::Directional){
-                if(!ff.useBounds || ff.containsPoint(chassisPos)){
-                    accumWind = accumWind + SafeNormalizeVec3(VectorSingle(ff.originOrDirection), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)) * ff.strength;
-                    ++windCount;
+            if(ff.type == ForceFieldType::BoxWind || ff.type == ForceFieldType::Directional || ff.type == ForceFieldType::VectorField){
+                if(ff.useBounds && !ff.containsPoint(chassisPos))
+                    continue;
+                b8 outsideZone = false;
+                const f32 falloff = ComputeZoneFieldFalloff(ff, chassisPos, outsideZone);
+                if(outsideZone || falloff <= 0.0f)
+                    continue;
+                if(ff.type == ForceFieldType::VectorField){
+                    if(ff.hasVectorFieldGrid())
+                        accumWind = accumWind + ff.sampleVectorFieldVelocity(chassisPos) * (ff.strength * falloff);
+                }
+                else{
+                    accumWind = accumWind + SafeNormalizeVec3(VectorSingle(ff.originOrDirection), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)) * (ff.strength * falloff);
                 }
             }
         }
-        if(windCount > 0u)
-            this.engine.ambientWindVelocity = f32x4(accumWind, 0.0f);
+        this.m_envWindVelocity = f32x4(accumWind, 0.0f);
 
+        const VectorSingle grav = world.gravity();
+        const f32 wheelCountF = Max(1.0f, cast<f32>(this.wheelDefs.size()));
+        const f32 invDtSafe = 1.0f / Max(dt, 1.0e-4f);
         for(usize wi = 0u; wi < this.wheelStates.size() && wi < this.wheelDefs.size(); ++wi){
+            in VehicleWheelDef wDef = this.wheelDefs[wi];
+            BodyId ownerBodyId = this.chassisBodyId;
+            if(wDef.attachedToTrailer && this.trailerBodyId.valid() && world.isValidBody(this.trailerBodyId))
+                ownerBodyId = this.trailerBodyId;
+            b8 hasDynOwner = false;
+            VectorSingle ownerCenter(0.0f);
+            VectorSingle ownerLinVel(0.0f);
+            VectorSingle ownerAngVel(0.0f);
+            f32 ownerInvMass = 0.0f;
+            if(ownerBodyId.valid() && world.isValidBody(ownerBodyId)){
+                in Body ob = world.m_bodies[ownerBodyId.index];
+                if(ob.alive && ob.type == BodyType::Dynamic && ob.setIndex < world.m_solverSets.size() && ob.localIndex < world.m_solverSets[ob.setIndex].sims.size()){
+                    in BodySim oSim = world.m_solverSets[ob.setIndex].sims[ob.localIndex];
+                    in BodyState oSt = world.m_solverSets[ob.setIndex].states[ob.localIndex];
+                    ownerInvMass = oSim.invMass();
+                    if(ownerInvMass > 0.0f){
+                        hasDynOwner = true;
+                        ownerCenter = oSim.center();
+                        ownerLinVel = VectorSingle(oSt.linearVelocity);
+                        ownerAngVel = VectorSingle(oSt.angularVelocity);
+                    }
+                }
+            }
             const VectorSingle wPos(this.wheelStates[wi].worldTransform.position);
-            const f32 wr = Max(0.05f, this.wheelDefs[wi].wheelRadius);
+            const f32 wr = Max(0.05f, wDef.wheelRadius);
+            const f32 ww = Max(0.04f, wDef.wheelWidth);
+            const f32 wheelVol = s_Pi * wr * wr * ww;
+            const f32 wheelArea = 2.0f * wr * ww;
             for(usize fi = 0u; fi < env.fluids.size(); ++fi){
                 in FluidVolume fv = env.fluids[fi];
                 if(!fv.enabled || !ShouldCollideFilters(this.queryFilter, fv.filter))
                     continue;
                 const VectorSingle n = fv.normalizedSurfaceNormal();
-                const f32 depth = fv.signedDepthWithNormalAtTime(wPos, n, env.elapsedTimeSec);
+                f32 depth = 0.0f;
+                VectorSingle flowVel(0.0f);
+                fv.evaluateSurfaceAtDepthAndFlow(wPos, n, env.elapsedTimeSec, depth, flowVel);
                 const f32 subFrac = Clamp((depth + wr) / (2.0f * wr), 0.0f, 1.0f);
                 if(subFrac > 1.0e-4f){
                     const f32 dragMul = Max(0.0f, 1.0f - Min(0.95f, fv.linearDrag * subFrac * dt * 2.5f));
                     this.wheelStates[wi].angularVelocity *= dragMul;
+                    if(hasDynOwner){
+                        const f32 wheelShareMass = Max(1.0f, (1.0f / ownerInvMass) / wheelCountF);
+                        const VectorSingle buoyF = (-grav) * (Max(0.0f, fv.density) * wheelVol * subFrac);
+                        const VectorSingle wVel = ownerLinVel + Cross(ownerAngVel, wPos - ownerCenter);
+                        const VectorSingle vRel = wVel - flowVel;
+                        const f32 vRelMag = Vector3Length(vRel).x;
+                        const f32 linDragCoeff = Max(0.0f, fv.linearDrag) * subFrac * wheelShareMass;
+                        const f32 quadDragCoeff = 0.5f * Max(0.0f, fv.quadraticDrag) * Max(0.0f, fv.density) * wheelArea * subFrac;
+                        f32 dragScale = linDragCoeff + quadDragCoeff * vRelMag;
+                        const f32 maxStableDrag = (wheelShareMass * invDtSafe) * 0.9f;
+                        if(dragScale > maxStableDrag)
+                            dragScale = maxStableDrag;
+                        const VectorSingle netForce = buoyF - vRel * dragScale;
+                        if(Vector3LengthSq(netForce).x > 1.0e-8f)
+                            world.applyForceAtPoint(ownerBodyId, netForce, wPos, true);
+                    }
                 }
             }
         }
@@ -1580,11 +2408,19 @@ class VehicleController{
     public void applyEnvironment(mut PhysicsWorld world, in PhysicsEnvironment env, in f32 dt){
         if(dt <= 0.0f || !this.chassisBodyId.valid() || !world.isValidBody(this.chassisBodyId))
             return;
+        this.sanitizeTrailerLink(world);
         this.applyWheelAndWindEnvironment(world, env, dt);
-        for(usize fi = 0u; fi < env.fluids.size(); ++fi)
+        const b8 hasTrailer = this.trailerBodyId.valid() && world.isValidBody(this.trailerBodyId);
+        for(usize fi = 0u; fi < env.fluids.size(); ++fi){
             ApplyFluidVolumeToSingleBody(world, this.chassisBodyId, env.fluids[fi], env.elapsedTimeSec, dt);
-        for(usize ffi = 0u; ffi < env.forceFields.size(); ++ffi)
+            if(hasTrailer)
+                ApplyFluidVolumeToSingleBody(world, this.trailerBodyId, env.fluids[fi], env.elapsedTimeSec, dt);
+        }
+        for(usize ffi = 0u; ffi < env.forceFields.size(); ++ffi){
             ApplyForceFieldToSingleBody(world, this.chassisBodyId, env.forceFields[ffi], env.elapsedTimeSec, dt);
+            if(hasTrailer)
+                ApplyForceFieldToSingleBody(world, this.trailerBodyId, env.forceFields[ffi], env.elapsedTimeSec, dt);
+        }
     }
 
     private void castWheelsSerial(in PhysicsWorld world, in usize wheelCount){
@@ -1592,6 +2428,7 @@ class VehicleController{
             this.m_castResults[i] = CastSingleVehicleWheel(
                 world,
                 this.chassisBodyId,
+                this.trailerBodyId,
                 this.queryFilter,
                 VectorSingle(this.m_wheelRots[i]),
                 VectorSingle(this.m_axleAxisNorm[i]),
@@ -1602,60 +2439,69 @@ class VehicleController{
         }
     }
 
-    private b8 prepareVehicleSubstep(
-        in PhysicsWorld world,
+    private void prepareVehicleSubstep(
         in VehicleInput input,
         in f32 dt,
-        mut Transform3D outChassisXf,
-        mut VectorSingle outChassisLinVel,
-        mut VectorSingle outChassisAngVel,
+        in f32 gravMag,
+        in VectorSingle worldUp,
+        in VectorSingle chassisPos,
+        in VectorSingle chassisRot,
+        in VectorSingle chassisLinVel,
+        in b8 hasTrailer,
+        in VectorSingle trailerPos,
+        in VectorSingle trailerRot,
+        in usize wheelCount,
+        mut VectorSingle outChassisUp,
         mut VectorSingle outChassisFwd,
-        mut usize outWheelCount
+        mut VectorSingle outChassisSide
     ){
-        const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.chassisBodyId);
-        if(!xfRes.has_value())
-            return false;
-        outChassisXf = xfRes.value();
-        outChassisLinVel = VectorSingle(world.tryGetLinearVelocity(this.chassisBodyId).value());
-        outChassisAngVel = VectorSingle(world.tryGetAngularVelocity(this.chassisBodyId).value());
-        const VectorSingle chassisRot = VectorSingle(outChassisXf.rotation);
         const VectorSingle localFwd = SafeNormalizeVec3(VectorSingle(this.engine.chassisForwardAxis), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        const VectorSingle localUp = SafeNormalizeVec3(VectorSingle(this.engine.chassisUpAxis), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle localSide = SafeNormalizeVec3(Cross(localUp, localFwd), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
         outChassisFwd = SafeNormalizeVec3(Vector3Rotate(localFwd, chassisRot), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-        this.currentSpeedMps = Vector3Dot(outChassisLinVel, outChassisFwd).x;
+        outChassisUp = SafeNormalizeVec3(Vector3Rotate(localUp, chassisRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        outChassisSide = SafeNormalizeVec3(Vector3Rotate(localSide, chassisRot), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+        this.currentSpeedMps = Vector3Dot(chassisLinVel, outChassisFwd).x;
         if(this.shiftCooldown > 0.0f)
             this.shiftCooldown = Max(0.0f, this.shiftCooldown - dt);
-        outWheelCount = this.wheelDefs.size();
-        if(outWheelCount == 0u)
+        this.prepareWheelTransformsAndSteer(chassisPos, chassisRot, hasTrailer, trailerPos, trailerRot, outChassisUp, outChassisSide, worldUp, gravMag, wheelCount, input.steer, dt);
+    }
+
+    private b8 beginVehicleStepFrame(mut PhysicsWorld world, in f32 dt, mut usize outWheelCount, mut Transform3D outInitChassisXf){
+        this.stepEvents.clear();
+        if(dt <= 0.0f || !this.chassisBodyId.valid() || !world.isValidBody(this.chassisBodyId))
             return false;
-        this.prepareWheelTransformsAndSteer(VectorSingle(outChassisXf.position), chassisRot, outWheelCount, input.steer, dt);
+        world.ensureCpuBroadphaseSynced();
+        world.flushDirtyBodyMasses();
+        this.sanitizeTrailerLink(world);
+        outWheelCount = this.wheelDefs.size();
+        if(outWheelCount == 0u){
+            this.m_envWindVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            return false;
+        }
+        if(this.wheelStates.size() != outWheelCount)
+            this.wheelStates.resize(outWheelCount);
+        this.ensureWheelScratch(outWheelCount);
+        this.snapshotFrameStartPrevWheelState(outWheelCount);
+        const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.chassisBodyId);
+        if(!xfRes.has_value()){
+            this.m_envWindVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            return false;
+        }
+        outInitChassisXf = xfRes.value();
         return true;
     }
 
-    private void stepSubstepSerial(mut PhysicsWorld world, in VehicleInput input, in f32 dt){
-        world.ensureCpuBroadphaseSynced();
-        Transform3D chassisXf;
-        VectorSingle chassisLinVel(0.0f);
-        VectorSingle chassisAngVel(0.0f);
-        VectorSingle chassisFwd(0.0f, 0.0f, 1.0f, 0.0f);
-        usize wheelCount = 0u;
-        if(!this.prepareVehicleSubstep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount))
-            return;
-        this.castWheelsSerial(world, wheelCount);
-        this.finishVehicleStep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount);
-    }
-
-    private void stepSubstepInternal(mut PhysicsWorld world, in VehicleInput input, in f32 dt, mut CpuTaskScheduler cpuScheduler, in b8 allowParallel){
-        world.ensureCpuBroadphaseSynced();
-        Transform3D chassisXf;
-        VectorSingle chassisLinVel(0.0f);
-        VectorSingle chassisAngVel(0.0f);
-        VectorSingle chassisFwd(0.0f, 0.0f, 1.0f, 0.0f);
-        usize wheelCount = 0u;
-        if(!this.prepareVehicleSubstep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount))
-            return;
+    private void castWheelsDispatch(
+        in PhysicsWorld world,
+        in usize wheelCount,
+        in b8 allowParallel,
+        mut CpuTaskScheduler cpuScheduler
+    ){
         if(allowParallel && cpuScheduler.isParallelEnabled() && wheelCount >= 4u){
             in PhysicsWorld worldRef = world;
             const BodyId chassisId = this.chassisBodyId;
+            const BodyId trailerId = this.trailerBodyId;
             in Filter filterRef = this.queryFilter;
             in Vector<VehicleWheelDef> defsRef = this.wheelDefs;
             in Vector<f32x4> wheelRotsRef = this.m_wheelRots;
@@ -1667,10 +2513,11 @@ class VehicleController{
                 0u,
                 wheelCount,
                 1u,
-                lambda[in worldRef, in chassisId, in filterRef, in defsRef, in wheelRotsRef, in axleAxisRef, in attachRef, in suspDirRef, mut castOut](in usize wi) -> void{
+                lambda[in worldRef, in chassisId, in trailerId, in filterRef, in defsRef, in wheelRotsRef, in axleAxisRef, in attachRef, in suspDirRef, mut castOut](in usize wi) -> void{
                     castOut[wi] = CastSingleVehicleWheel(
                         worldRef,
                         chassisId,
+                        trailerId,
                         filterRef,
                         VectorSingle(wheelRotsRef[wi]),
                         VectorSingle(axleAxisRef[wi]),
@@ -1681,34 +2528,256 @@ class VehicleController{
                 },
                 CpuTaskOptions()
             );
-            if(!res.has_value())
+            if(res.has_value())
+                return;
+        }
+        this.castWheelsSerial(world, wheelCount);
+    }
+
+    private void stepCoreLoop(
+        in VehicleInput input,
+        in f32 dt,
+        in usize wheelCount,
+        in Transform3D initChassisXf,
+        in b8 allowParallel,
+        in Optional<mut CpuTaskScheduler> optScheduler,
+        mut PhysicsWorld world
+    ){
+        const u32 steps = Clamp(this.engine.subSteps, 1u, 16u);
+        const f32 stepsF = cast<f32>(steps);
+        const f32 subDt = dt / stepsF;
+        const f32 invSteps = 1.0f / stepsF;
+        const VectorSingle worldGrav = world.gravity();
+        const f32 gravMag = Max(1.0e-3f, Vector3Length(worldGrav).x);
+        const VectorSingle worldUp = SafeNormalizeVec3(-worldGrav, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle localSideAxis = this.computeLocalChassisSideAxis();
+
+        b8 chDyn = false;
+        VectorSingle chPos(0.0f);
+        VectorSingle chRot(0.0f, 0.0f, 0.0f, 1.0f);
+        VectorSingle chCenter(0.0f);
+        VectorSingle chLocalCom(0.0f);
+        VectorSingle chLinVel(0.0f);
+        VectorSingle chAngVel(0.0f);
+        f32 chMass = 0.0f;
+        f32 chInvMass = 0.0f;
+        MatrixSingle chInvInertiaLocal = Matrix3FromSymMat3(SymMat3());
+        MatrixSingle chInvI = Matrix3FromSymMat3(SymMat3());
+        VectorSingle chGravAccel(0.0f);
+        VectorSingle chBaseForce(0.0f);
+        VectorSingle chBaseTorque(0.0f);
+        VectorSingle chPrevForce(0.0f);
+        VectorSingle chPrevTorque(0.0f);
+        VectorSingle chPrevWorldLin(0.0f);
+        VectorSingle chPrevWorldAng(0.0f);
+        u32 chFlags = 0u;
+        f32 chLinDamp = 0.0f;
+        f32 chAngDamp = 0.01f;
+        if(!this.extractBodyPredState(
+            world,
+            this.chassisBodyId,
+            worldGrav,
+            chDyn,
+            chPos,
+            chRot,
+            chCenter,
+            chLocalCom,
+            chLinVel,
+            chAngVel,
+            chMass,
+            chInvMass,
+            chInvInertiaLocal,
+            chInvI,
+            chGravAccel,
+            chBaseForce,
+            chBaseTorque,
+            chPrevForce,
+            chPrevTorque,
+            chPrevWorldLin,
+            chPrevWorldAng,
+            chFlags,
+            chLinDamp,
+            chAngDamp
+        )){
+            this.m_envWindVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            return;
+        }
+
+        b8 trDyn = false;
+        VectorSingle trPos = chPos;
+        VectorSingle trRot = chRot;
+        VectorSingle trCenter = chCenter;
+        VectorSingle trLocalCom(0.0f);
+        VectorSingle trLinVel(0.0f);
+        VectorSingle trAngVel(0.0f);
+        f32 trMass = 0.0f;
+        f32 trInvMass = 0.0f;
+        MatrixSingle trInvInertiaLocal = Matrix3FromSymMat3(SymMat3());
+        MatrixSingle trInvI = Matrix3FromSymMat3(SymMat3());
+        VectorSingle trGravAccel(0.0f);
+        VectorSingle trBaseForce(0.0f);
+        VectorSingle trBaseTorque(0.0f);
+        VectorSingle trPrevForce(0.0f);
+        VectorSingle trPrevTorque(0.0f);
+        VectorSingle trPrevWorldLin(0.0f);
+        VectorSingle trPrevWorldAng(0.0f);
+        u32 trFlags = 0u;
+        f32 trLinDamp = 0.0f;
+        f32 trAngDamp = 0.01f;
+        const b8 hasTrailer = this.extractBodyPredState(
+            world,
+            this.trailerBodyId,
+            worldGrav,
+            trDyn,
+            trPos,
+            trRot,
+            trCenter,
+            trLocalCom,
+            trLinVel,
+            trAngVel,
+            trMass,
+            trInvMass,
+            trInvInertiaLocal,
+            trInvI,
+            trGravAccel,
+            trBaseForce,
+            trBaseTorque,
+            trPrevForce,
+            trPrevTorque,
+            trPrevWorldLin,
+            trPrevWorldAng,
+            trFlags,
+            trLinDamp,
+            trAngDamp
+        );
+
+        for(u32 s = 0u; s < steps; ++s){
+            VectorSingle chUp(0.0f, 1.0f, 0.0f, 0.0f);
+            VectorSingle chFwd(0.0f, 0.0f, 1.0f, 0.0f);
+            VectorSingle chSide(1.0f, 0.0f, 0.0f, 0.0f);
+            this.prepareVehicleSubstep(input, subDt, gravMag, worldUp, chPos, chRot, chLinVel, hasTrailer, trPos, trRot, wheelCount, chUp, chFwd, chSide);
+            if(allowParallel && optScheduler.has_value())
+                this.castWheelsDispatch(world, wheelCount, true, optScheduler.value());
+            else
                 this.castWheelsSerial(world, wheelCount);
+
+            VectorSingle subImpLin(0.0f);
+            VectorSingle subImpAng(0.0f);
+            this.finishVehicleStep(
+                input,
+                subDt,
+                invSteps,
+                chCenter,
+                chLinVel,
+                chAngVel,
+                chInvI,
+                chMass,
+                chInvMass,
+                chUp,
+                chFwd,
+                chSide,
+                hasTrailer,
+                trCenter,
+                trLinVel,
+                trAngVel,
+                trInvI,
+                trMass,
+                trInvMass,
+                localSideAxis,
+                worldUp,
+                gravMag,
+                wheelCount,
+                subImpLin,
+                subImpAng,
+                world
+            );
+            if(s + 1u < steps){
+                this.advanceBodyPredState(
+                    world,
+                    this.chassisBodyId,
+                    chDyn,
+                    subDt,
+                    stepsF,
+                    this.engine.useSolverImpulses,
+                    true,
+                    subImpLin,
+                    subImpAng,
+                    chInvMass,
+                    chInvInertiaLocal,
+                    chLocalCom,
+                    chFlags,
+                    chLinDamp,
+                    chAngDamp,
+                    chGravAccel,
+                    chBaseForce,
+                    chBaseTorque,
+                    chPrevForce,
+                    chPrevTorque,
+                    chPrevWorldLin,
+                    chPrevWorldAng,
+                    chLinVel,
+                    chAngVel,
+                    chCenter,
+                    chRot,
+                    chPos,
+                    chInvI
+                );
+                if(hasTrailer){
+                    this.advanceBodyPredState(
+                        world,
+                        this.trailerBodyId,
+                        trDyn,
+                        subDt,
+                        stepsF,
+                        this.engine.useSolverImpulses,
+                        false,
+                        VectorSingle(0.0f),
+                        VectorSingle(0.0f),
+                        trInvMass,
+                        trInvInertiaLocal,
+                        trLocalCom,
+                        trFlags,
+                        trLinDamp,
+                        trAngDamp,
+                        trGravAccel,
+                        trBaseForce,
+                        trBaseTorque,
+                        trPrevForce,
+                        trPrevTorque,
+                        trPrevWorldLin,
+                        trPrevWorldAng,
+                        trLinVel,
+                        trAngVel,
+                        trCenter,
+                        trRot,
+                        trPos,
+                        trInvI
+                    );
+                }
+            }
         }
-        else{
-            this.castWheelsSerial(world, wheelCount);
-        }
-        this.finishVehicleStep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount);
+        if(steps > 1u)
+            this.restoreFrameStartPrevWheelState(world, wheelCount, initChassisXf);
+        this.m_envWindVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
     public void step(mut PhysicsWorld world, in VehicleInput input, in f32 dt){
-        this.stepEvents.clear();
-        if(dt <= 0.0f || !this.chassisBodyId.valid() || !world.isValidBody(this.chassisBodyId))
+        usize wheelCount = 0u;
+        Transform3D initChassisXf;
+        if(!this.beginVehicleStepFrame(world, dt, wheelCount, initChassisXf))
             return;
-        const u32 steps = Clamp(this.engine.subSteps, 1u, 16u);
-        const f32 subDt = dt / cast<f32>(steps);
-        for(u32 s = 0u; s < steps; ++s)
-            this.stepSubstepSerial(world, input, subDt);
+        const Optional<mut CpuTaskScheduler> noScheduler = Optional<mut CpuTaskScheduler>();
+        this.stepCoreLoop(input, dt, wheelCount, initChassisXf, false, noScheduler, world);
     }
 
     public void stepWithScheduler(mut PhysicsWorld world, in VehicleInput input, in f32 dt, mut CpuTaskScheduler cpuScheduler){
-        this.stepEvents.clear();
-        if(dt <= 0.0f || !this.chassisBodyId.valid() || !world.isValidBody(this.chassisBodyId))
+        usize wheelCount = 0u;
+        Transform3D initChassisXf;
+        if(!this.beginVehicleStepFrame(world, dt, wheelCount, initChassisXf))
             return;
-        const u32 steps = Clamp(this.engine.subSteps, 1u, 16u);
-        const f32 subDt = dt / cast<f32>(steps);
-        const b8 canParallel = cpuScheduler.isParallelEnabled() && this.wheelDefs.size() >= 4u;
-        for(u32 s = 0u; s < steps; ++s)
-            this.stepSubstepInternal(world, input, subDt, cpuScheduler, canParallel);
+        const b8 canParallel = cpuScheduler.isParallelEnabled() && wheelCount >= 4u;
+        const Optional<mut CpuTaskScheduler> optScheduler(cpuScheduler);
+        this.stepCoreLoop(input, dt, wheelCount, initChassisXf, canParallel, optScheduler, world);
     }
 }
 

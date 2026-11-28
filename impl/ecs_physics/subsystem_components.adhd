@@ -306,7 +306,6 @@ class GpuRenderTransformExportComponent{
     public b8 enabled = true;
     public GpuRenderTransformExportTarget target = GpuRenderTransformExportTarget::Auto;
     public u32 subTargetIndex = 0u;
-    public u32 instanceIndex = 0u;
     public u32 flags = 0u;
     public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);
 }

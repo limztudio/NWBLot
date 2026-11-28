@@ -158,22 +158,15 @@ b8 ParseAssetMetadata(
 
     b8 useAssetCache = !assetCacheDirectory.empty();
     Sha256Digest producerDigest = {};
-    Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
-    Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena> externalSourceCollectors(scratchArena);
     CookMetadataDetail::CookMetadataRegistrySnapshot registrySnapshot(scratchArena);
     Optional<CookMetadataDetail::CookExternalSourceDigestCache> externalDigestCache;
     if(!nwbFiles.empty())
         CookMetadataDetail::CaptureMetadataRegistrySnapshot(registrySnapshot);
     if(useAssetCache && !nwbFiles.empty()){
         AssetProducerFingerprint::Resolve(scratchArena, useAssetCache, producerDigest);
-        if(useAssetCache){
-            CookMetadataDetail::CopyPairedSidecarRules(pairedSidecarRules);
-            CookMetadataDetail::CopyCookExternalSourceCollectors(externalSourceCollectors);
+        if(useAssetCache)
             externalDigestCache.emplace();
-        }
     }
-    const Span<const AssetPairedSidecarRule> pairedSidecarRuleSpan(pairedSidecarRules.data(), pairedSidecarRules.size());
-    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectorSpan(externalSourceCollectors.data(), externalSourceCollectors.size());
     CookMetadataDetail::CookExternalSourceDigestCache* const externalDigestCachePtr = externalDigestCache ? &*externalDigestCache : nullptr;
 
     outMetadata.fileCacheRecords.clear();
@@ -235,8 +228,7 @@ b8 ParseAssetMetadata(
                     discoveredNwbFile,
                     AStringView(entry.metaText),
                     producerDigest,
-                    pairedSidecarRuleSpan,
-                    externalSourceCollectorSpan,
+                    registrySnapshot,
                     workerScratch,
                     sourcePathText,
                     cacheFileName,
@@ -329,8 +321,7 @@ b8 ParseAssetMetadata(
                     discoveredNwbFile,
                     metaTextView,
                     producerDigest,
-                    pairedSidecarRuleSpan,
-                    externalSourceCollectorSpan,
+                    registrySnapshot,
                     fileScratchArena,
                     sourcePathText,
                     cacheFileName,
@@ -348,7 +339,7 @@ b8 ParseAssetMetadata(
                     fileScratchArena,
                     seenPropertyAssetPathHashes,
                     outMetadata,
-                    &registrySnapshot
+                    registrySnapshot
                 );
                 if(cacheResult == CookMetadataDetail::NwbCacheLoadResult::Error)
                     return false;

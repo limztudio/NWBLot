@@ -1637,10 +1637,6 @@ class PhysicsWorld{
         return this.resolveMaterialForNode(shape.type, shape.geometryIndex, featureTriIdx, subShapeIdx, shape.material, 0u);
     }
 
-    public SurfaceMaterial resolveShapeContactMaterial(in Shape shape, in u32 featureTriIdx)const{
-        return this.resolveShapeContactMaterial(shape, featureTriIdx, s_NullIndex);
-    }
-
     private VectorSingle computeEffectiveShapeWorldRotation(in Shape shape, in VectorSingle bodyRot)const{
         if(shape.hasLocalTransform())
             return SafeNormalizeQuat(QuaternionMultiply(bodyRot, VectorSingle(shape.localTransform.rotation)));
@@ -4628,12 +4624,6 @@ class PhysicsWorld{
         return this.m_bodies[bodyId.index].maxAngularVelocity;
     }
 
-    public f32 bodyMass(in BodyId bodyId)const{
-        if(!this.isValidBody(bodyId))
-            return 0.0f;
-        return this.m_bodies[bodyId.index].mass;
-    }
-
     public Expected<BodyType> tryGetBodyType(in BodyId bodyId)const{
         if(!this.isValidBody(bodyId))
             return MakeUnexpected(Failure());
@@ -7340,18 +7330,6 @@ class PhysicsWorld{
         return true;
     }
 
-    public b8 setJointSwingLimit(in JointId jointId, in f32 swingLimit){
-        if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(swingLimit)) || swingLimit < 0.0f)
-            return false;
-        this.m_joints[jointId.index].swingLimit = swingLimit;
-        if(swingLimit <= 0.0f)
-            this.m_joints[jointId.index].setConeOrSuspensionImpulse(0.0f);
-        ++this.m_jointTopologyVersion;
-        this.wakeBody(this.makeBodyId(this.m_joints[jointId.index].edges[0u].bodyId));
-        this.wakeBody(this.makeBodyId(this.m_joints[jointId.index].edges[1u].bodyId));
-        return true;
-    }
-
     public b8 setJointSpring(in JointId jointId, in b8 enableSpring, in f32 hertz, in f32 dampingRatio){
         if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(hertz, dampingRatio, 0.0f, 0.0f)) || hertz < 0.0f || dampingRatio < 0.0f)
             return false;
@@ -7605,18 +7583,6 @@ class PhysicsWorld{
         }
         ++this.m_jointTopologyVersion;
         return true;
-    }
-
-    public b8 isJointEnabled(in JointId jointId)const{
-        if(!this.isValidJoint(jointId))
-            return false;
-        return this.m_joints[jointId.index].enabled();
-    }
-
-    public b8 isJointMotorEnabled(in JointId jointId)const{
-        if(!this.isValidJoint(jointId))
-            return false;
-        return this.m_joints[jointId.index].enableMotor();
     }
 
     public b8 setJointSpringTarget(in JointId jointId, in f32 springTarget){
@@ -8169,12 +8135,6 @@ class PhysicsWorld{
         if(!this.isValidJoint(jointId))
             return MakeUnexpected(Failure());
         return this.m_joints[jointId.index].breakTorque;
-    }
-
-    public b8 isJointCollideConnected(in JointId jointId)const{
-        if(!this.isValidJoint(jointId))
-            return false;
-        return this.m_joints[jointId.index].collideConnected();
     }
 
     public Expected<JointType> tryGetJointType(in JointId jointId)const{

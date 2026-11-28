@@ -73,7 +73,6 @@ class VehicleWheelDef{
     public b8 isSteerable = false;
     public b8 isDriven = true;
     public b8 handbrakeAffected = false;
-    public b8 useSweptCast = false;
     public b8 attachedToTrailer = false;
 }
 
@@ -145,7 +144,6 @@ class VehicleEngineDef{
     public b8 useAckermanSteering = true;
     public b8 automaticTransmission = true;
     public b8 useTorqueConverter = true;
-    public b8 useSolverImpulses = true;
     public b8 enableAbs = false;
     public b8 enableTcs = false;
     public b8 enableEsp = false;
@@ -228,13 +226,7 @@ VehicleWheelCastResult CastSingleVehicleWheel(
     const b8 hasOtherIgnore = otherIgnoreId.valid() && worldRef.isValidBody(otherIgnoreId);
     const u32 otherBodyIdx = otherIgnoreId.index;
     const f32 maxLen = wDef.suspensionRestLength + wDef.suspensionMaxTravel;
-    VehicleWheelCastMode effMode = wDef.wheelCastMode;
-    if(effMode == VehicleWheelCastMode::Raycast && wDef.useSweptCast){
-        if(wDef.wheelWidth > 1.0e-4f && wDef.wheelRadius > 0.0f)
-            effMode = VehicleWheelCastMode::CylinderCast;
-        else
-            effMode = VehicleWheelCastMode::SphereCast;
-    }
+    const VehicleWheelCastMode effMode = wDef.wheelCastMode;
     const Span<Shape> shapes = worldRef.m_shapes;
     if(effMode != VehicleWheelCastMode::Raycast){
         Array<f32x3u, 1u> ptPts;
@@ -1054,16 +1046,11 @@ class VehicleController{
         mut VectorSingle ioChassisImpAng,
         mut PhysicsWorld world
     ){
-        if(this.engine.useSolverImpulses){
-            const VectorSingle imp = forceVec * dt;
-            world.applyLinearImpulseAtPoint(targetBody, imp, worldPt, true);
-            if(accumulateForChassis){
-                ioChassisImpLin = ioChassisImpLin + imp;
-                ioChassisImpAng = ioChassisImpAng + Cross(worldPt - bodyCenter, imp);
-            }
-        }
-        else{
-            world.applyForceAtPoint(targetBody, forceVec * invSteps, worldPt, true);
+        const VectorSingle imp = forceVec * dt;
+        world.applyLinearImpulseAtPoint(targetBody, imp, worldPt, true);
+        if(accumulateForChassis){
+            ioChassisImpLin = ioChassisImpLin + imp;
+            ioChassisImpAng = ioChassisImpAng + Cross(worldPt - bodyCenter, imp);
         }
     }
 
@@ -1076,15 +1063,10 @@ class VehicleController{
         mut VectorSingle ioChassisImpAng,
         mut PhysicsWorld world
     ){
-        if(this.engine.useSolverImpulses){
-            const VectorSingle imp = torqueVec * dt;
-            world.applyAngularImpulse(targetBody, imp, true);
-            if(accumulateForChassis)
-                ioChassisImpAng = ioChassisImpAng + imp;
-        }
-        else{
-            world.applyTorque(targetBody, torqueVec * invSteps, true);
-        }
+        const VectorSingle imp = torqueVec * dt;
+        world.applyAngularImpulse(targetBody, imp, true);
+        if(accumulateForChassis)
+            ioChassisImpAng = ioChassisImpAng + imp;
     }
 
     private void finishVehicleStep(
@@ -1862,16 +1844,8 @@ class VehicleController{
                 if(!wDef.attachedToTrailer)
                     anyChassisStaticHold = true;
                 const f32 holdInvScale = groundedShareF * safeDt;
-                if(this.engine.useSolverImpulses){
-                    fLong = -vLong / Max(invEffLong * holdInvScale, 1.0e-6f);
-                    fLat = -vLat / Max(invEffLat * holdInvScale, 1.0e-6f);
-                }
-                else{
-                    const f32 wheelShareMass = ownerMass / groundedShareF;
-                    const f32 holdGain = (wheelShareMass / Max(dt, 1.0e-3f)) * 0.65f;
-                    fLong = -vLong * holdGain;
-                    fLat = -vLat * holdGain;
-                }
+                fLong = -vLong / Max(invEffLong * holdInvScale, 1.0e-6f);
+                fLat = -vLat / Max(invEffLat * holdInvScale, 1.0e-6f);
                 wState.angularVelocity *= Max(0.0f, 1.0f - Min(1.0f, dt * 20.0f));
                 activeLimLong = staticPeakLong;
                 activeLimLat = staticPeakLat;
@@ -1910,7 +1884,7 @@ class VehicleController{
                     rollDir = -1.0f;
                 const f32 effRoll = Max(0.0f, wDef.rollingResistanceCoeff) + Max(0.0f, wState.groundMaterial.rollingResistance);
                 f32 rollForceMag = effRoll * normalLoad;
-                if(this.engine.useSolverImpulses && rollForceMag > 0.0f){
+                if(rollForceMag > 0.0f){
                     const f32 maxRollStop = Abs(VectorSingle(vLong)).x / Max(invEffLong * groundedShareF * safeDt, 1.0e-6f);
                     rollForceMag = Min(rollForceMag, maxRollStop);
                 }
@@ -1919,10 +1893,8 @@ class VehicleController{
                     const f32 blend = Clamp(1.0f - vAbs.x / 1.5f, 0.0f, 1.0f);
                     const f32 wheelShareMass = ownerMass / groundedShareF;
                     f32 latDampForce = -vLat * (wheelShareMass / Max(dt, 1.0e-3f)) * 0.35f * blend;
-                    if(this.engine.useSolverImpulses){
-                        const f32 maxZeroSlipLatF = Abs(VectorSingle(vLat)).x / Max(invEffLat * groundedShareF * safeDt, 1.0e-6f);
-                        latDampForce = Clamp(latDampForce, -maxZeroSlipLatF, maxZeroSlipLatF);
-                    }
+                    const f32 maxZeroSlipLatF = Abs(VectorSingle(vLat)).x / Max(invEffLat * groundedShareF * safeDt, 1.0e-6f);
+                    latDampForce = Clamp(latDampForce, -maxZeroSlipLatF, maxZeroSlipLatF);
                     fLat = fLat * (1.0f - blend) + latDampForce;
                 }
             }
@@ -1960,7 +1932,7 @@ class VehicleController{
             this.m_stepPeakFricLat[i] = activeLimLat;
         }
 
-        if(anyChassisStaticHold && this.engine.useSolverImpulses && groundedCount > 1u){
+        if(anyChassisStaticHold && groundedCount > 1u){
             for(u32 gsIter = 0u; gsIter < 2u; ++gsIter){
                 VectorSingle dvLin(0.0f);
                 VectorSingle dvAng(0.0f);
@@ -2064,23 +2036,13 @@ class VehicleController{
                     if(hasDynGround)
                         world.applyLinearImpulseAtPoint(wState.groundBodyId, -bumpImp, contactPt, true);
                 }
-                if(hasDynGround){
-                    if(this.engine.useSolverImpulses){
-                        world.applyLinearImpulseAtPoint(wState.groundBodyId, -(baseSuspForceVec + tireForceVec) * dt, contactPt, true);
-                    }
-                    else{
-                        world.applyForceAtPoint(wState.groundBodyId, (-(baseSuspForceVec + tireForceVec)) * invSteps, contactPt, true);
-                    }
-                }
+                if(hasDynGround)
+                    world.applyLinearImpulseAtPoint(wState.groundBodyId, -(baseSuspForceVec + tireForceVec) * dt, contactPt, true);
                 if(Abs(VectorSingle(wState.aligningTorque)).x > 1.0e-5f){
                     const VectorSingle alignTorqueVec = hitN * wState.aligningTorque;
                     this.applyBodyAngularVec(ownerBodyId, accumChassis, alignTorqueVec, dt, invSteps, outSubImpAng, world);
-                    if(hasDynGround){
-                        if(this.engine.useSolverImpulses)
-                            world.applyAngularImpulse(wState.groundBodyId, -alignTorqueVec * dt, true);
-                        else
-                            world.applyTorque(wState.groundBodyId, (-alignTorqueVec) * invSteps, true);
-                    }
+                    if(hasDynGround)
+                        world.applyAngularImpulse(wState.groundBodyId, -alignTorqueVec * dt, true);
                 }
             }
 
@@ -2134,14 +2096,9 @@ class VehicleController{
             const VectorSingle aeroDrag = (-relAirVel) * (dynPressure * this.engine.dragCoeff * Sqrt(VectorSingle(speedSq)).x);
             const VectorSingle downForce = chassisUp * (-dynPressure * this.engine.downforceCoeff * speedSq);
             const VectorSingle aeroTotal = aeroDrag + downForce;
-            if(this.engine.useSolverImpulses){
-                const VectorSingle aeroImp = aeroTotal * dt;
-                world.applyLinearImpulse(this.chassisBodyId, aeroImp, true);
-                outSubImpLin = outSubImpLin + aeroImp;
-            }
-            else{
-                world.applyForce(this.chassisBodyId, aeroTotal * invSteps, false);
-            }
+            const VectorSingle aeroImp = aeroTotal * dt;
+            world.applyLinearImpulse(this.chassisBodyId, aeroImp, true);
+            outSubImpLin = outSubImpLin + aeroImp;
         }
 
         if(hasTrailer && (driverBrakeInput > 0.0f || input.handbrake > 0.0f) && this.engine.trailerBrakeForce > 0.0f && trailerInvMass > 0.0f){
@@ -2153,12 +2110,8 @@ class VehicleController{
                 const VectorSingle hDir = trHorizVel * (1.0f / hSp);
                 const f32 maxBrakeImp = trailerMass * hSp;
                 const f32 impMag = Min(this.engine.trailerBrakeForce * brakeLevel * dt, maxBrakeImp);
-                if(impMag > 1.0e-5f){
-                    if(this.engine.useSolverImpulses)
-                        world.applyLinearImpulse(this.trailerBodyId, -hDir * impMag, true);
-                    else
-                        world.applyForce(this.trailerBodyId, (-hDir) * ((impMag / safeDt) * invSteps), true);
-                }
+                if(impMag > 1.0e-5f)
+                    world.applyLinearImpulse(this.trailerBodyId, -hDir * impMag, true);
             }
         }
     }
@@ -2258,7 +2211,6 @@ class VehicleController{
         in b8 isDynamic,
         in f32 subDt,
         in f32 stepsF,
-        in b8 useImpulses,
         in b8 useDirectImpulses,
         in VectorSingle directImpLin,
         in VectorSingle directImpAng,
@@ -2291,10 +2243,6 @@ class VehicleController{
                 const VectorSingle curTorque = sim.torque();
                 VectorSingle totForce = baseExtForce;
                 VectorSingle totTorque = baseExtTorque;
-                if(!useImpulses){
-                    totForce = totForce + (curForce - ioPrevWorldForce) * stepsF;
-                    totTorque = totTorque + (curTorque - ioPrevWorldTorque) * stepsF;
-                }
                 const VectorSingle curWorldLin = VectorSingle(st.linearVelocity);
                 const VectorSingle curWorldAng = VectorSingle(st.angularVelocity);
                 VectorSingle dvLin(0.0f);
@@ -2781,7 +2729,6 @@ class VehicleController{
                     chDyn,
                     subDt,
                     stepsF,
-                    this.engine.useSolverImpulses,
                     true,
                     subImpLin,
                     subImpAng,
@@ -2812,7 +2759,6 @@ class VehicleController{
                         trDyn,
                         subDt,
                         stepsF,
-                        this.engine.useSolverImpulses,
                         false,
                         VectorSingle(0.0f),
                         VectorSingle(0.0f),

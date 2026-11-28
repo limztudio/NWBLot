@@ -338,7 +338,7 @@ class SoftBodyRuntimeMeshCpuState{
     public u64 gpuTopologyKey = 0u;
     public b8 gpuUseCage = false;
 
-    public b8 needsTopologyRebuild(in SoftBody sb, in Name sourceMeshName)const{
+    public b8 needsTopologyRebuild(in SoftBody sb, in TransformComponent xf, in Name sourceMeshName)const{
         if(!this.topologyValid)
             return true;
         if(this.cachedTopologyVersion != sb.topologyVersion)
@@ -349,11 +349,7 @@ class SoftBodyRuntimeMeshCpuState{
             return true;
         if(this.m_cachedCageBindingCount != sb.cageBinding.bindings.size())
             return true;
-        return this.cachedSourceMeshName != sourceMeshName;
-    }
-
-    public b8 needsTopologyRebuild(in SoftBody sb, in TransformComponent xf, in Name sourceMeshName)const{
-        if(this.needsTopologyRebuild(sb, sourceMeshName))
+        if(this.cachedSourceMeshName != sourceMeshName)
             return true;
         const b8 mirrored = sb.isWorldSpaceBaked() && ((xf.scale.x * xf.scale.y * xf.scale.z) < 0.0f);
         return this.m_cachedMirroredWinding != mirrored;
@@ -415,24 +411,6 @@ class SoftBodyRuntimeMeshCpuState{
     public b8 rebuildTopology(in SoftBody sb, in TransformComponent xf, in Name recordedSourceMeshName){
         SoftBodyCachedSourceMesh emptySrc;
         return this.rebuildTopologyInternal(sb, xf, emptySrc, recordedSourceMeshName);
-    }
-
-    public b8 rebuildTopology(in SoftBody sb, in TransformComponent xf){
-        return this.rebuildTopology(sb, xf, s_NameNone);
-    }
-
-    public b8 rebuildTopologyFromMesh(
-        in SoftBody sb,
-        in TransformComponent xf,
-        in Mesh sourceMesh,
-        in Name sourceMeshName
-    ){
-        if(!sourceMesh.positionStream().empty() && !sourceMesh.meshlets().empty()){
-            SoftBodyCachedSourceMesh cachedSrc;
-            ExtractSoftBodyCachedSourceMesh(sourceMesh, cachedSrc);
-            return this.rebuildTopologyInternal(sb, xf, cachedSrc, sourceMeshName);
-        }
-        return this.rebuildTopology(sb, xf, sourceMeshName);
     }
 
     public b8 rebuildTopologyFromCachedSource(

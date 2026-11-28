@@ -296,7 +296,7 @@ Expected<VehicleComponentCookEntry> ParseVehicleComponentCookMetadata(in Name vi
                 if(key == "handbrake") return ReadPhysicsF32Value(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.input.handbrake);
                 if(key == "clutch") return ReadPhysicsF32Value(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.input.clutch);
                 if(key == "requested_gear") return ReadPhysicsI32Value(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.input.requestedGear);
-                if(key == "wheel_entities" || key == "wheel_entity_names") return ParsePhysicsEntityNameListValue(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.wheelEntityNames);
+                if(key == "wheel_entities") return ParsePhysicsEntityNameListValue(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.wheelEntityNames);
                 if(key == "skeleton_entity") return ReadPhysicsNameValue(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.skeletonEntityName);
                 if(key == "wheel_joint_indices") return ReadPhysicsU32ArrayValue(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.wheelJointIndices);
                 if(key == "trailer_entity") return ReadPhysicsNameValue(fileRef, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.trailerEntityName);
@@ -387,12 +387,6 @@ b8 ParseFluidGerstnerWavesList(in Path file, in MetascriptValue listVal, mut Vec
         }
         mut FluidGerstnerWave w = outWaves[wi];
         if(!items[wi].forEachMapEntry(lambda[in file, mut w](in StringView wKey, in MetascriptValue wVal) -> b8{
-            if(wKey == "direction_and_steepness"){
-                const Expected<f32x4> v4 = DecodePhysicsFloat4Value(file, wVal, s_FluidVolumeComponentDiagnosticPrefix, wKey);
-                if(!v4.has_value()) return false;
-                w.directionAndSteepness = v4.value();
-                return true;
-            }
             if(wKey == "direction"){
                 VectorSingle v(0.0f);
                 if(!DecodePhysicsFloat3Value(file, wVal, s_FluidVolumeComponentDiagnosticPrefix, wKey, v)) return false;
@@ -785,18 +779,18 @@ Expected<FractureComponentCookEntry> ParseFractureComponentCookMetadata(in Name 
             if(key == "pattern") return ParseFracturePatternTypeValue(file, fieldVal, s_FractureComponentDiagnosticPrefix, fc.pattern);
             if(key == "chunk_count") return ReadPhysicsU32Value(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, fc.chunkCount);
             if(key == "seed") return ReadPhysicsU32Value(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, fc.seed);
-            if(key == "box_half_extents" || key == "half_extents"){
+            if(key == "box_half_extents"){
                 VectorSingle v(0.0f);
                 if(!DecodePhysicsFloat3Value(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, v)) return false;
                 fc.boxHalfExtents = f32x4(v, 0.0f);
                 return true;
             }
-            if(key == "convex_radius" || key == "hull_radius") return ReadPhysicsF32Value(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, fc.convexRadius);
+            if(key == "convex_radius") return ReadPhysicsF32Value(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, fc.convexRadius);
             if(key == "use_custom_hull"){
                 hasUseCustomHullExplicit = true;
                 return ReadPhysicsBoolValue(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, fc.useCustomHull);
             }
-            if(key == "hull_points" || key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, customVertices);
+            if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, customVertices);
             if(key == "source_mesh"){
                 const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_FractureComponentDiagnosticPrefix, key);
                 if(!srcRes.has_value())
@@ -821,7 +815,7 @@ Expected<FractureComponentCookEntry> ParseFractureComponentCookMetadata(in Name 
                 sourceSubmesh = subRes.value();
                 return true;
             }
-            if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+            if(key == "source_normalize_units"){
                 hasSourceTransformOrFilter = true;
                 return ReadPhysicsBoolValue(file, fieldVal, s_FractureComponentDiagnosticPrefix, key, sourceNormalizeUnits);
             }
@@ -865,7 +859,7 @@ Expected<FractureComponentCookEntry> ParseFractureComponentCookMetadata(in Name 
         return MakeUnexpected(Failure());
     }
     if(hasSourceMesh && !customVertices.empty()){
-        error("{} '{}': 'source_mesh' and 'vertices'/'hull_points' are mutually exclusive", s_FractureComponentDiagnosticPrefix, PathToString(file));
+        error("{} '{}': 'source_mesh' and 'vertices' are mutually exclusive", s_FractureComponentDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
     if(hasSourceMesh){
@@ -915,7 +909,6 @@ Expected<GpuRenderTransformExportComponentCookEntry> ParseGpuRenderTransformExpo
                 return true;
             }
             if(key == "sub_target_index") return ReadPhysicsU32Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key, entry.component.subTargetIndex);
-            if(key == "instance_index") return ReadPhysicsU32Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key, entry.component.instanceIndex);
             if(key == "flags") return ReadPhysicsU32Value(file, fieldVal, s_GpuRenderTransformExportComponentDiagnosticPrefix, key, entry.component.flags);
             if(key == "local_scale"){
                 VectorSingle v(0.0f);

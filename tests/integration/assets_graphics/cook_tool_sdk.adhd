@@ -114,7 +114,7 @@ extern class AssetRootResolutionError{
 };
 [cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::ResolveAssetRoots")]
 extern Expected<HeapStorageVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveGraphicsRoots(in auto root, in auto sources, in b8 infer, in AssetRootDuplicatePolicy policy, mut auto scratch);
-[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord")]
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::PrepareCacheRecord")]
 extern void PrepareGraphicsCacheRecord(...);
 [cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText")]
 extern Expected<PathScratchString> DeriveGraphicsScratchPath(in auto root, in StringView virtualRoot, in auto source, mut auto output, mut auto scratch);

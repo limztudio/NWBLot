@@ -146,16 +146,14 @@ void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRul
     QueryAssetAutoRegistrationQueue<AssetPairedSidecarRule, AssetsArenaScope::s_PairedSidecarRuleQueueArena>().copyTo(outRules);
 }
 
-void CopyCookExternalSourceCollectors(Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena>& outCollectors){
-    QueryAssetAutoRegistrationQueue<NotNull<CookExternalSourceCollectorFunction>, AssetsArenaScope::s_ExternalSourceCollectorQueueArena>().copyTo(outCollectors);
-}
-
 void CaptureMetadataRegistrySnapshot(CookMetadataRegistrySnapshot& outSnapshot){
     QueryAssetAutoRegistrationQueue<AutoMetadataParser, AssetsArenaScope::s_MetadataParserQueueArena>().copyTo(outSnapshot.metadataParsers);
     QueryAssetAutoRegistrationQueue<NotNull<AssetBunchExpandFunction>, AssetsArenaScope::s_BunchExpanderQueueArena>().copyTo(outSnapshot.bunchExpanders);
     QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_NonStandaloneTypeQueueArena>().copyTo(outSnapshot.nonStandaloneTypes);
     QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenQueueArena>().copyTo(outSnapshot.nonStandaloneTokens);
     QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenSuffixQueueArena>().copyTo(outSnapshot.nonStandaloneTokenSuffixes);
+    QueryAssetAutoRegistrationQueue<AssetPairedSidecarRule, AssetsArenaScope::s_PairedSidecarRuleQueueArena>().copyTo(outSnapshot.pairedSidecarRules);
+    QueryAssetAutoRegistrationQueue<NotNull<CookExternalSourceCollectorFunction>, AssetsArenaScope::s_ExternalSourceCollectorQueueArena>().copyTo(outSnapshot.externalSourceCollectors);
 }
 
 AssetMetadataParseResult::Enum TryDocumentMetadataParsers(const CookMetadataRegistrySnapshot& snapshot, AssetDocumentMetadataParseContext& context){
@@ -305,16 +303,6 @@ void RegisterNonStandaloneFirstTokenSuffix(const AStringView tokenSuffix){
     );
 }
 
-b8 IsNonStandaloneAssetType(const Name& assetType){
-    if(!assetType)
-        return false;
-
-    return QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_NonStandaloneTypeQueueArena>().contains(
-        assetType,
-        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
-    );
-}
-
 b8 IsLikelyNonStandaloneFirstToken(const AStringView firstToken){
     if(firstToken.empty())
         return false;
@@ -357,10 +345,6 @@ void RegisterCookExternalSourceCollector(const CookExternalSourceCollectorFuncti
 
 AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){
     return __hidden_cook_metadata_registry::TryAutoCollectedMetadataParsers(&__hidden_cook_metadata_registry::AutoMetadataParser::documentFunction, context);
-}
-
-AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context){
-    return __hidden_cook_metadata_registry::TryAutoCollectedMetadataParsers(&__hidden_cook_metadata_registry::AutoMetadataParser::valueFunction, context);
 }
 
 Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context){

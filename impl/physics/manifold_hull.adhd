@@ -1694,22 +1694,6 @@ void CollideHullAndMeshMulti(
         ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
-Manifold CollideHullAndMesh(
-    in HullShape hullA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in MeshShape meshB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
-    Optional<TriangleFilterCallback> noFilter;
-    CollideHullAndMeshMulti(hullA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
-    return primary;
-}
-
 
 void CollideMeshesMulti(
     in MeshShape meshA,
@@ -2216,22 +2200,6 @@ void CollideMeshesMulti(
 
     if(!candidates.empty())
         ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
-}
-
-Manifold CollideMeshes(
-    in MeshShape meshA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in MeshShape meshB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
-    Optional<TriangleFilterCallback> noFilter;
-    CollideMeshesMulti(meshA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
-    return primary;
 }
 
 

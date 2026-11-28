@@ -277,22 +277,6 @@ b8 LoadCookSkeletonFromNwb(
             return true;
         });
         if(!foundVar){
-            const Optional<in MetascriptValue> assetOpt = doc.borrowVariable("asset");
-            if(assetOpt.has_value() && assetOpt.value().isMap()){
-                foundVar = true;
-                const Expected<Vector<SkeletonCookJoint>> parsed = ParseSkeletonCookJoints(resolvedPath, assetOpt.value());
-                if(parsed.has_value()){
-                    outResult.cookJoints = parsed.value();
-                    parseOk = BuildSkeletonCookJoints(
-                        Name("skeleton"),
-                        Span<SkeletonCookJoint>(outResult.cookJoints.data(), outResult.cookJoints.size()),
-                        outResult.joints,
-                        outResult.jointIndices
-                    );
-                }
-            }
-        }
-        if(!foundVar){
             error("{} '{}': source .nwb contains no skeleton declaration", prefix, PathToString(resolvedPath));
             return false;
         }
@@ -353,9 +337,9 @@ b8 ParseRigFractureCollectionFromMap(
         mut halfExtents, mut hasHalfExtents, mut hasImpactLocalPoint
     ](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "pattern") return ParseFracturePatternTypeValue(file, fieldVal, prefix, params.pattern);
-        if(key == "chunk_count" || key == "site_count") return ReadPhysicsU32Value(file, fieldVal, prefix, key, params.siteCount);
+        if(key == "chunk_count") return ReadPhysicsU32Value(file, fieldVal, prefix, key, params.siteCount);
         if(key == "seed") return ReadPhysicsU32Value(file, fieldVal, prefix, key, params.seed);
-        if(key == "hull_radius" || key == "convex_radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.hullRadius);
+        if(key == "hull_radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.hullRadius);
         if(key == "min_chunk_volume_ratio") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.minChunkVolumeRatio);
         if(key == "impact_point_bias") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.impactPointBias);
         if(key == "impact_local_point"){
@@ -367,16 +351,16 @@ b8 ParseRigFractureCollectionFromMap(
             return true;
         }
         if(key == "has_impact_point") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, params.hasImpactPoint);
-        if(key == "total_mass" || key == "total_mass_override") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.totalMassOverride);
+        if(key == "total_mass") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.totalMassOverride);
         if(key == "fallback_density") return ReadPhysicsF32Value(file, fieldVal, prefix, key, params.fallbackDensity);
-        if(key == "use_hierarchy" || key == "use_hierarchy_collection") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, useHierarchy);
-        if(key == "level2_site_count" || key == "hierarchy_level2_site_count") return ReadPhysicsU32Value(file, fieldVal, prefix, key, level2SiteCount);
+        if(key == "use_hierarchy") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, useHierarchy);
+        if(key == "level2_site_count") return ReadPhysicsU32Value(file, fieldVal, prefix, key, level2SiteCount);
         if(key == "seed_offset") return ReadPhysicsU32Value(file, fieldVal, prefix, key, seedOffset);
-        if(key == "half_extents" || key == "box_half_extents"){
+        if(key == "half_extents"){
             hasHalfExtents = true;
             return DecodePhysicsFloat3Value(file, fieldVal, prefix, key, halfExtents);
         }
-        if(key == "vertices" || key == "hull_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, vertices);
+        if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, vertices);
         if(key == "source_mesh"){
             const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, prefix, key);
             if(!srcRes.has_value())
@@ -401,7 +385,7 @@ b8 ParseRigFractureCollectionFromMap(
             sourceSubmesh = subRes.value();
             return true;
         }
-        if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+        if(key == "source_normalize_units"){
             hasSourceTransformOrFilter = true;
             return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
         }
@@ -797,10 +781,6 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
     SurfaceMaterial materialVal;
     materialVal.friction = 0.4f;
     materialVal.restitution = 0.0f;
-    b8 hasScalarFriction = false;
-    f32 scalarFriction = 0.4f;
-    b8 hasScalarRestitution = false;
-    f32 scalarRestitution = 0.0f;
     b8 hasTearStrain = false;
     f32 tearStrainVal = 0.0f;
     b8 hasEnableSelfCol = false;
@@ -866,7 +846,7 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
         mut hasWind, mut windVel, mut hasRefPos, mut refPos, mut hasRefRot, mut refRot, mut refRotCount,
         mut hasParticleRadius, mut particleRadiusVal, mut hasDamping, mut dampingVal,
         mut hasAeroDrag, mut aeroDragVal, mut hasLiftCoeff, mut liftCoeffVal,
-        mut hasMaterialMap, mut materialVal, mut hasScalarFriction, mut scalarFriction, mut hasScalarRestitution, mut scalarRestitution,
+        mut hasMaterialMap, mut materialVal,
         mut hasTearStrain, mut tearStrainVal, mut hasEnableSelfCol, mut enableSelfColVal,
         mut hasSelfColRadius, mut selfColRadiusVal, mut hasSelfColStiff, mut selfColStiffVal, mut hasSelfColFric, mut selfColFricVal,
         mut hasTriEdgeSelf, mut triEdgeSelfVal, mut hasContSelf, mut contSelfVal, mut hasVertexSplit, mut vertexSplitVal,
@@ -891,8 +871,6 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
         if(key == "aerodynamic_drag"){ hasAeroDrag = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, aeroDragVal); }
         if(key == "lift_coeff"){ hasLiftCoeff = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, liftCoeffVal); }
         if(key == "material"){ hasMaterialMap = true; return ParseSurfaceMaterialWithSourceMap(file, fieldVal, prefix, "material", materialVal); }
-        if(key == "friction"){ hasScalarFriction = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, scalarFriction); }
-        if(key == "restitution"){ hasScalarRestitution = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, scalarRestitution); }
         if(key == "tear_strain_threshold"){ hasTearStrain = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, tearStrainVal); }
         if(key == "enable_self_collision"){ hasEnableSelfCol = true; return ReadPhysicsBoolValue(file, fieldVal, prefix, key, enableSelfColVal); }
         if(key == "self_collision_radius"){ hasSelfColRadius = true; return ReadPhysicsF32Value(file, fieldVal, prefix, key, selfColRadiusVal); }
@@ -971,7 +949,7 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
             sourceSubmesh = subRes.value();
             return true;
         }
-        if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+        if(key == "source_normalize_units"){
             hasSourceTransformOrFilter = true;
             return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
         }
@@ -1059,8 +1037,8 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
                 mut spacing, mut particleMass, mut structComp, mut bendComp, mut addDihedral, mut gridFixed
             ](in StringView gKey, in MetascriptValue gVal) -> b8{
                 if(gKey == "origin") return DecodePhysicsFloat3Value(file, gVal, prefix, gKey, origin);
-                if(gKey == "right_dir" || gKey == "right") return DecodePhysicsFloat3Value(file, gVal, prefix, gKey, rightDir);
-                if(gKey == "forward_dir" || gKey == "forward") return DecodePhysicsFloat3Value(file, gVal, prefix, gKey, forwardDir);
+                if(gKey == "right_dir") return DecodePhysicsFloat3Value(file, gVal, prefix, gKey, rightDir);
+                if(gKey == "forward_dir") return DecodePhysicsFloat3Value(file, gVal, prefix, gKey, forwardDir);
                 if(gKey == "cols") return ReadPhysicsU32Value(file, gVal, prefix, gKey, cols);
                 if(gKey == "rows") return ReadPhysicsU32Value(file, gVal, prefix, gKey, rows);
                 if(gKey == "spacing") return ReadPhysicsF32Value(file, gVal, prefix, gKey, spacing);
@@ -1086,7 +1064,7 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
                 hasFixedParticleList = true;
             return true;
         }
-        if(key == "tetrahedral_box" || key == "tet_box"){
+        if(key == "tetrahedral_box"){
             if(!fieldVal.isMap()){
                 error("{} '{}': field '{}' must be a map", prefix, PathToString(file), key);
                 return false;
@@ -1566,8 +1544,6 @@ b8 ParseRigSoftBodyDataFromMapWithExtra(
     if(hasAeroDrag) outSb.aerodynamicDrag = aeroDragVal;
     if(hasLiftCoeff) outSb.liftCoeff = liftCoeffVal;
     if(hasMaterialMap) outSb.surfaceMaterial = materialVal;
-    if(hasScalarFriction) outSb.surfaceMaterial.friction = scalarFriction;
-    if(hasScalarRestitution) outSb.surfaceMaterial.restitution = scalarRestitution;
     if(hasTearStrain) outSb.tearStrainThreshold = tearStrainVal;
     if(hasEnableSelfCol) outSb.enableSelfCollision = enableSelfColVal;
     if(hasSelfColRadius) outSb.selfCollisionRadius = selfColRadiusVal;
@@ -1902,7 +1878,6 @@ b8 ParseRigRagdollBoneMap(in Path file, in MetascriptValue mapVal, in StringView
         if(key == "preset") return ParseRigRagdollJointPresetValue(file, fieldVal, prefix, outBone.preset);
         if(key == "apply_preset_on_create") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outBone.applyPresetOnCreate);
         if(key == "use_six_dof") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outBone.useSixDof);
-        if(key == "use_solver_motors") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outBone.useSolverMotors);
         if(key == "six_dof_axes") return ParseRigRagdollSixDofAxesList(file, fieldVal, prefix, outBone.sixDofAxes);
         error("{} '{}': unsupported bone field '{}'", prefix, PathToString(file), key);
         return false;
@@ -2257,8 +2232,6 @@ b8 ParseRigArticulationLinkMap(in Path file, in MetascriptValue mapVal, in Strin
             return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outLink.useFullInertiaTensor);
         }
         if(key == "enable_limit") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outLink.enableLimit);
-        if(key == "lower_limit") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.lowerLimit);
-        if(key == "upper_limit") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.upperLimit);
         if(key == "lower_limits"){
             VectorSingle v(0.0f);
             if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v)) return false;
@@ -2274,8 +2247,6 @@ b8 ParseRigArticulationLinkMap(in Path file, in MetascriptValue mapVal, in Strin
         if(key == "limit_stiffness") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.limitStiffness);
         if(key == "limit_damping") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.limitDamping);
         if(key == "enable_drive") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outLink.enableDrive);
-        if(key == "drive_target_pos") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.driveTargetPos);
-        if(key == "drive_target_vel") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.driveTargetVel);
         if(key == "drive_target_pos3"){
             VectorSingle v(0.0f);
             if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v)) return false;
@@ -2288,9 +2259,6 @@ b8 ParseRigArticulationLinkMap(in Path file, in MetascriptValue mapVal, in Strin
             outLink.driveTargetVel3 = f32x4(v, 0.0f);
             return true;
         }
-        if(key == "drive_stiffness") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.driveStiffness);
-        if(key == "drive_damping") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.driveDamping);
-        if(key == "drive_max_force") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.driveMaxForce);
         if(key == "limit_restitution") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.limitRestitution);
         if(key == "joint_damping") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.jointDamping);
         if(key == "joint_friction") return ReadPhysicsF32Value(file, fieldVal, prefix, key, outLink.jointFriction);
@@ -2317,8 +2285,6 @@ b8 ParseRigArticulationLinkMap(in Path file, in MetascriptValue mapVal, in Strin
             outLink.driveDofMask = cast<u8>(mask);
             return true;
         }
-        if(key == "use_per_dof_limits") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outLink.usePerDofLimits);
-        if(key == "use_per_dof_drives") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outLink.usePerDofDrives);
         if(key == "drive_stiffness3"){
             VectorSingle v(0.0f);
             if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v)) return false;
@@ -2726,13 +2692,14 @@ b8 ParseRigArticulationDataFromMapWithExtra(
             }
             xmlView = StringView(fileText);
         }
-        b8 importedFixedBase = true;
-        if(!ParseUrdfArticulation(xmlView, outData.links, importedFixedBase)){
+        ArticulationImportResult urdfRes;
+        if(!ParseUrdfArticulation(xmlView, urdfRes)){
             error("{} '{}': failed to parse URDF articulation", prefix, PathToString(file));
             return false;
         }
+        outData.links = urdfRes.links;
         if(!hasExplicitIsFixedBase)
-            outData.isFixedBase = importedFixedBase;
+            outData.isFixedBase = urdfRes.fixedBase;
     }
     else if(hasMjcfFile || hasMjcfXml){
         String fileText;
@@ -2974,7 +2941,6 @@ b8 ParseRigVehicleWheelMap(in Path file, in MetascriptValue mapVal, in StringVie
         if(key == "is_steerable") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outWheel.isSteerable);
         if(key == "is_driven") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outWheel.isDriven);
         if(key == "handbrake_affected") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outWheel.handbrakeAffected);
-        if(key == "use_swept_cast") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outWheel.useSweptCast);
         if(key == "attached_to_trailer") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, outWheel.attachedToTrailer);
         error("{} '{}': unsupported wheel field '{}'", prefix, PathToString(file), key);
         return false;
@@ -3107,7 +3073,6 @@ b8 ParseRigVehicleDataFromMapWithExtra(
         if(key == "use_ackerman_steering") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.useAckermanSteering);
         if(key == "automatic_transmission") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.automaticTransmission);
         if(key == "use_torque_converter") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.useTorqueConverter);
-        if(key == "use_solver_impulses") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.useSolverImpulses);
         if(key == "enable_abs") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.enableAbs);
         if(key == "enable_tcs") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.enableTcs);
         if(key == "enable_esp") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, e.enableEsp);

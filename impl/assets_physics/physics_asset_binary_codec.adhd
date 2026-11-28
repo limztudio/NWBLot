@@ -932,49 +932,45 @@ class PhysicsAssetBinaryCodec{
     }
 
     private b8 validHeightfieldAccelerationData(in HeightfieldShape hf)const{
-        if(!hf.hierarchy.empty()){
-            if(hf.hierarchy.size() > 32u)
+        if(hf.hierarchy.empty() || hf.hierarchy.size() > 32u)
+            return false;
+        u32 expCols = ((hf.cols - 1u) + 1u) >> 1u;
+        u32 expRows = ((hf.rows - 1u) + 1u) >> 1u;
+        usize levelIdx = 0u;
+        b8 expectingMore = true;
+        while(expectingMore){
+            if(levelIdx >= hf.hierarchy.size())
                 return false;
-            u32 expCols = ((hf.cols - 1u) + 1u) >> 1u;
-            u32 expRows = ((hf.rows - 1u) + 1u) >> 1u;
-            usize levelIdx = 0u;
-            b8 expectingMore = true;
-            while(expectingMore){
-                if(levelIdx >= hf.hierarchy.size())
+            in HeightfieldMipLevel lvl = hf.hierarchy[levelIdx];
+            if(lvl.cols != expCols || lvl.rows != expRows)
+                return false;
+            if(lvl.minMaxY.size() != cast<usize>(expCols) * cast<usize>(expRows))
+                return false;
+            for(usize bi = 0u; bi < lvl.minMaxY.size(); ++bi){
+                const f32x2u mm = lvl.minMaxY[bi];
+                if(!IsFinite(VectorSingle(mm.x, mm.y, 0.0f, 0.0f)))
                     return false;
-                in HeightfieldMipLevel lvl = hf.hierarchy[levelIdx];
-                if(lvl.cols != expCols || lvl.rows != expRows)
+                const b8 emptySentinel = (mm.x == s_MaxF32 && mm.y == -s_MaxF32);
+                if(!emptySentinel && mm.x > mm.y)
                     return false;
-                if(lvl.minMaxY.size() != cast<usize>(expCols) * cast<usize>(expRows))
-                    return false;
-                for(usize bi = 0u; bi < lvl.minMaxY.size(); ++bi){
-                    const f32x2u mm = lvl.minMaxY[bi];
-                    if(!IsFinite(VectorSingle(mm.x, mm.y, 0.0f, 0.0f)))
-                        return false;
-                    const b8 emptySentinel = (mm.x == s_MaxF32 && mm.y == -s_MaxF32);
-                    if(!emptySentinel && mm.x > mm.y)
-                        return false;
-                }
-                ++levelIdx;
-                if(expCols > 2u || expRows > 2u){
-                    expCols = (expCols + 1u) >> 1u;
-                    expRows = (expRows + 1u) >> 1u;
-                }
-                else{
-                    expectingMore = false;
-                }
             }
-            if(levelIdx != hf.hierarchy.size())
-                return false;
+            ++levelIdx;
+            if(expCols > 2u || expRows > 2u){
+                expCols = (expCols + 1u) >> 1u;
+                expRows = (expRows + 1u) >> 1u;
+            }
+            else{
+                expectingMore = false;
+            }
         }
-        if(!hf.triangleEdgeFlags.empty()){
-            const usize expFlags = cast<usize>(hf.cols - 1u) * cast<usize>(hf.rows - 1u) * 2u;
-            if(hf.triangleEdgeFlags.size() != expFlags)
+        if(levelIdx != hf.hierarchy.size())
+            return false;
+        const usize expFlags = cast<usize>(hf.cols - 1u) * cast<usize>(hf.rows - 1u) * 2u;
+        if(hf.triangleEdgeFlags.size() != expFlags)
+            return false;
+        for(usize fi = 0u; fi < hf.triangleEdgeFlags.size(); ++fi){
+            if((hf.triangleEdgeFlags[fi] & 0xc0u) != 0u)
                 return false;
-            for(usize fi = 0u; fi < hf.triangleEdgeFlags.size(); ++fi){
-                if((hf.triangleEdgeFlags[fi] & 0xc0u) != 0u)
-                    return false;
-            }
         }
         return true;
     }
@@ -1108,6 +1104,7 @@ class PhysicsAssetBinaryCodec{
             || hdr.reserved0 != 0u
             || hdr.reserved1 != 0u
             || hdr.reserved4 != 0u
+            || hdr.mipLevelCount == 0u
             || hdr.mipLevelCount > 32u
             || (hdr.flags & 0xfeu) != 0u
         ){
@@ -1125,7 +1122,7 @@ class PhysicsAssetBinaryCodec{
             return MakeUnexpected(Failure());
         }
         const u64 expectedTriFlags = cast<u64>(hdr.cols - 1u) * cast<u64>(hdr.rows - 1u) * 2u;
-        if(hdr.triangleEdgeFlagCount != 0u && cast<u64>(hdr.triangleEdgeFlagCount) != expectedTriFlags){
+        if(cast<u64>(hdr.triangleEdgeFlagCount) != expectedTriFlags){
             error("HeightfieldAsset::loadBinary failed: triangle edge flag count mismatch");
             return MakeUnexpected(Failure());
         }
@@ -1169,40 +1166,38 @@ class PhysicsAssetBinaryCodec{
         if(!ReadBinaryVectorPayload(binary, hdr.cellHoleByteCount, cursor, hf.cellHoles).has_value())
             return MakeUnexpected(Failure());
 
-        if(hdr.mipLevelCount > 0u){
-            hf.hierarchy.reserve(hdr.mipLevelCount);
-            u32 expCols = ((hdr.cols - 1u) + 1u) >> 1u;
-            u32 expRows = ((hdr.rows - 1u) + 1u) >> 1u;
-            for(u32 li = 0u; li < hdr.mipLevelCount; ++li){
-                const Expected<HeightfieldMipLevelBinary> lvlHdrRes = ReadPOD<HeightfieldMipLevelBinary>(binary, cursor);
-                if(!lvlHdrRes.has_value())
-                    return MakeUnexpected(Failure());
-                in HeightfieldMipLevelBinary lvlHdr = lvlHdrRes.value();
-                if(lvlHdr.cols == 0u || lvlHdr.rows == 0u || lvlHdr.cols != expCols || lvlHdr.rows != expRows){
-                    error("HeightfieldAsset::loadBinary failed: invalid heightfield mip dimensions");
-                    return MakeUnexpected(Failure());
-                }
-                const u64 minMaxCount = cast<u64>(lvlHdr.cols) * cast<u64>(lvlHdr.rows);
-                if(minMaxCount > cast<u64>(u32.max) || minMaxCount * cast<u64>(size_of<f32x2u>()) > cast<u64>(binary.size() - cursor))
-                    return MakeUnexpected(Failure());
-                HeightfieldMipLevel lvl;
-                lvl.cols = lvlHdr.cols;
-                lvl.rows = lvlHdr.rows;
-                if(!ReadBinaryVectorPayload(binary, cast<u32>(minMaxCount), cursor, lvl.minMaxY).has_value())
-                    return MakeUnexpected(Failure());
-                hf.hierarchy.push_back(lvl);
-                if(li + 1u < hdr.mipLevelCount){
-                    if(expCols <= 2u && expRows <= 2u){
-                        error("HeightfieldAsset::loadBinary failed: unexpected extra heightfield mip levels");
-                        return MakeUnexpected(Failure());
-                    }
-                    expCols = (expCols + 1u) >> 1u;
-                    expRows = (expRows + 1u) >> 1u;
-                }
-                else if(expCols > 2u || expRows > 2u){
-                    error("HeightfieldAsset::loadBinary failed: incomplete heightfield mip pyramid");
+        hf.hierarchy.reserve(hdr.mipLevelCount);
+        u32 expCols = ((hdr.cols - 1u) + 1u) >> 1u;
+        u32 expRows = ((hdr.rows - 1u) + 1u) >> 1u;
+        for(u32 li = 0u; li < hdr.mipLevelCount; ++li){
+            const Expected<HeightfieldMipLevelBinary> lvlHdrRes = ReadPOD<HeightfieldMipLevelBinary>(binary, cursor);
+            if(!lvlHdrRes.has_value())
+                return MakeUnexpected(Failure());
+            in HeightfieldMipLevelBinary lvlHdr = lvlHdrRes.value();
+            if(lvlHdr.cols == 0u || lvlHdr.rows == 0u || lvlHdr.cols != expCols || lvlHdr.rows != expRows){
+                error("HeightfieldAsset::loadBinary failed: invalid heightfield mip dimensions");
+                return MakeUnexpected(Failure());
+            }
+            const u64 minMaxCount = cast<u64>(lvlHdr.cols) * cast<u64>(lvlHdr.rows);
+            if(minMaxCount > cast<u64>(u32.max) || minMaxCount * cast<u64>(size_of<f32x2u>()) > cast<u64>(binary.size() - cursor))
+                return MakeUnexpected(Failure());
+            HeightfieldMipLevel lvl;
+            lvl.cols = lvlHdr.cols;
+            lvl.rows = lvlHdr.rows;
+            if(!ReadBinaryVectorPayload(binary, cast<u32>(minMaxCount), cursor, lvl.minMaxY).has_value())
+                return MakeUnexpected(Failure());
+            hf.hierarchy.push_back(lvl);
+            if(li + 1u < hdr.mipLevelCount){
+                if(expCols <= 2u && expRows <= 2u){
+                    error("HeightfieldAsset::loadBinary failed: unexpected extra heightfield mip levels");
                     return MakeUnexpected(Failure());
                 }
+                expCols = (expCols + 1u) >> 1u;
+                expRows = (expRows + 1u) >> 1u;
+            }
+            else if(expCols > 2u || expRows > 2u){
+                error("HeightfieldAsset::loadBinary failed: incomplete heightfield mip pyramid");
+                return MakeUnexpected(Failure());
             }
         }
 
@@ -1225,10 +1220,6 @@ class PhysicsAssetBinaryCodec{
         }
         hf.scaleMinMaxY.w = loY;
         hf.originMaxY.w = hiY;
-        if(hdr.mipLevelCount == 0u)
-            hf.buildHierarchy();
-        else if(hdr.triangleEdgeFlagCount == 0u)
-            hf.rebuildTriangleEdgeFlags();
         return hf;
     }
 
@@ -1423,31 +1414,29 @@ class PhysicsAssetBinaryCodec{
                     return false;
             }
         }
-        if(!chain.nodes.empty()){
-            if(chain.bvhSegmentOrder.size() != segCount)
+        if(chain.nodes.empty() || chain.bvhSegmentOrder.size() != segCount)
+            return false;
+        const u32 nodeCount = cast<u32>(chain.nodes.size());
+        const u32 segCountU32 = cast<u32>(segCount);
+        for(u32 ni = 0u; ni < nodeCount; ++ni){
+            in MeshBvhNode node = chain.nodes[ni];
+            const Aabb3D box = node.aabb();
+            if(!IsFinite(VectorSingle(box.lowerBound)) || !IsFinite(VectorSingle(box.upperBound)))
                 return false;
-            const u32 nodeCount = cast<u32>(chain.nodes.size());
-            const u32 segCountU32 = cast<u32>(segCount);
-            for(u32 ni = 0u; ni < nodeCount; ++ni){
-                in MeshBvhNode node = chain.nodes[ni];
-                const Aabb3D box = node.aabb();
-                if(!IsFinite(VectorSingle(box.lowerBound)) || !IsFinite(VectorSingle(box.upperBound)))
-                    return false;
-                if(node.isLeaf()){
-                    const u32 first = node.leftOrFirst();
-                    const u32 cnt = node.rightOrCount();
-                    if(cnt == 0u || cast<u64>(first) + cast<u64>(cnt) > cast<u64>(segCountU32))
-                        return false;
-                }
-                else{
-                    if(node.leftOrFirst() >= nodeCount || node.rightOrCount() >= nodeCount)
-                        return false;
-                }
-            }
-            for(usize oi = 0u; oi < chain.bvhSegmentOrder.size(); ++oi){
-                if(chain.bvhSegmentOrder[oi] >= segCountU32)
+            if(node.isLeaf()){
+                const u32 first = node.leftOrFirst();
+                const u32 cnt = node.rightOrCount();
+                if(cnt == 0u || cast<u64>(first) + cast<u64>(cnt) > cast<u64>(segCountU32))
                     return false;
             }
+            else{
+                if(node.leftOrFirst() >= nodeCount || node.rightOrCount() >= nodeCount)
+                    return false;
+            }
+        }
+        for(usize oi = 0u; oi < chain.bvhSegmentOrder.size(); ++oi){
+            if(chain.bvhSegmentOrder[oi] >= segCountU32)
+                return false;
         }
         return true;
     }
@@ -1544,6 +1533,8 @@ class PhysicsAssetBinaryCodec{
             hdr.magic != s_ChainShapeMagic
             || hdr.version != s_ChainShapeVersion
             || (hdr.flags & ~s_ChainFlagIsLoop) != 0u
+            || hdr.nodeCount == 0u
+            || hdr.bvhOrderCount == 0u
             || hdr.reserved0 != 0u
             || hdr.reserved1 != 0u
             || hdr.reserved2 != 0u
@@ -1599,23 +1590,6 @@ class PhysicsAssetBinaryCodec{
         if(!this.validChainShapeNonMaterialData(chain)){
             error("ChainShapeAsset::loadBinary failed: invalid chain shape data");
             return MakeUnexpected(Failure());
-        }
-        if(chain.nodes.empty()){
-            const Expected<ChainShape> rebuilt = MakeChainShape(
-                Span<f32x4>(chain.vertices.data(), chain.vertices.size()),
-                chain.radius,
-                chain.isLoop,
-                chain.material,
-                Span<SurfaceMaterial>(chain.materials.data(), chain.materials.size()),
-                Span<u16>(chain.segmentMaterialIndices.data(), chain.segmentMaterialIndices.size()),
-                VectorSingle(chain.ghostStart),
-                VectorSingle(chain.ghostEnd)
-            );
-            if(!rebuilt.has_value()){
-                error("ChainShapeAsset::loadBinary failed: failed to rebuild chain BVH");
-                return MakeUnexpected(Failure());
-            }
-            return rebuilt.value();
         }
         return chain;
     }

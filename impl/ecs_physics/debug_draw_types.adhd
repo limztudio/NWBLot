@@ -99,12 +99,6 @@ b8 AppendPhysicsDebugCentisText(mut CompactString str, in f32 val){
     return ok;
 }
 
-class PhysicsDebugLine{
-    public f32x4 start(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 end(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
-}
-
 class PhysicsDebugFrustumPlanesSoa{
     public f32x4 x03(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 y03(0.0f, 0.0f, 0.0f, 0.0f);

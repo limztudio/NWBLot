@@ -63,7 +63,6 @@ class RagdollBoneDef{
     public FixedVector<f32x4, 32u> hullVertices;
     public f32 hullRadius = 0.0f;
     public FixedVector<RagdollExtraShapeDef, 4u> extraShapes;
-    public b8 useSolverMotors = true;
     public ShapeDef shapeDef;
     public f32x4 jointAnchorWorld(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 jointAxisWorld(0.0f, 1.0f, 0.0f, 0.0f);
@@ -308,7 +307,6 @@ class RagdollInstance{
     private Vector<f32> m_boneMaxInertias;
     private Vector<Mat3> m_boneLocalInertias;
     private Vector<f32x4> m_jointRestRefQ;
-    private Vector<u8> m_boneUseSolverMotor;
     private Vector<f32x4> m_driveCurQ;
     private Vector<f32x4> m_driveTgtQ;
     private Vector<f32x4> m_driveAngVel;
@@ -319,7 +317,6 @@ class RagdollInstance{
     private b8 m_articulationKinematic = false;
     private Vector<u8> m_articulationBoneKinMask;
     private Vector<usize> m_heldLinkIndicesScratch;
-    private Vector<f32> m_heldQScratch;
     private Vector<f32x4> m_heldQ3Scratch;
     private Vector<f32x4> m_heldJointRotScratch;
     private Vector<f32x4> m_balanceBonePosScratch;
@@ -344,7 +341,6 @@ class RagdollInstance{
         this.m_boneMaxInertias.clear();
         this.m_boneLocalInertias.clear();
         this.m_jointRestRefQ.clear();
-        this.m_boneUseSolverMotor.clear();
         this.m_driveCurQ.clear();
         this.m_driveTgtQ.clear();
         this.m_driveAngVel.clear();
@@ -355,7 +351,6 @@ class RagdollInstance{
         this.m_articulationKinematic = false;
         this.m_articulationBoneKinMask.clear();
         this.m_heldLinkIndicesScratch.clear();
-        this.m_heldQScratch.clear();
         this.m_heldQ3Scratch.clear();
         this.m_heldJointRotScratch.clear();
         this.m_balanceBonePosScratch.clear();
@@ -380,10 +375,6 @@ class RagdollInstance{
         return Span<f32x4>(this.m_jointRestRefQ);
     }
 
-    public Span<u8> snapshotBoneUseSolverMotor()const{
-        return Span<u8>(this.m_boneUseSolverMotor);
-    }
-
     public b8 snapshotArticulationKinematic()const{
         return this.m_articulationKinematic;
     }
@@ -396,7 +387,6 @@ class RagdollInstance{
         in Span<f32> boneMaxInertias,
         in Span<Mat3> boneLocalInertias,
         in Span<f32x4> jointRestRefQuats,
-        in Span<u8> boneUseSolverMotor,
         in b8 artKin,
         in Span<u8> artBoneKinMask
     ){
@@ -409,9 +399,6 @@ class RagdollInstance{
         this.m_jointRestRefQ.resize(jointRestRefQuats.size(), f32x4(0.0f, 0.0f, 0.0f, 1.0f));
         for(usize i = 0u; i < jointRestRefQuats.size(); ++i)
             this.m_jointRestRefQ[i] = jointRestRefQuats[i];
-        this.m_boneUseSolverMotor.resize(boneUseSolverMotor.size(), 0u);
-        for(usize i = 0u; i < boneUseSolverMotor.size(); ++i)
-            this.m_boneUseSolverMotor[i] = boneUseSolverMotor[i];
         this.m_driveCurQ.clear();
         this.m_driveTgtQ.clear();
         this.m_driveAngVel.clear();
@@ -424,7 +411,6 @@ class RagdollInstance{
         for(usize i = 0u; i < artBoneKinMask.size(); ++i)
             this.m_articulationBoneKinMask[i] = artBoneKinMask[i];
         this.m_heldLinkIndicesScratch.clear();
-        this.m_heldQScratch.clear();
         this.m_heldQ3Scratch.clear();
         this.m_heldJointRotScratch.clear();
         this.m_balanceBonePosScratch.clear();
@@ -597,7 +583,6 @@ class RagdollInstance{
         this.m_boneMaxInertias.reserve(bones.size());
         this.m_boneLocalInertias.reserve(bones.size());
         this.m_jointRestRefQ.resize(bones.size(), f32x4(0.0f, 0.0f, 0.0f, 1.0f));
-        this.m_boneUseSolverMotor.resize(bones.size(), 0u);
 
         Vector<RagdollBoneDef> resolvedBones;
         resolvedBones.resize(bones.size());
@@ -664,10 +649,6 @@ class RagdollInstance{
             this.maxMotorTorques.push_back(motorVec.x);
             this.motorHertzes.push_back(motorVec.y);
             this.motorDampings.push_back(motorVec.z);
-            u8 solverMotorFlag = 0u;
-            if(bDef.useSolverMotors)
-                solverMotorFlag = 1u;
-            this.m_boneUseSolverMotor[i] = solverMotorFlag;
         }
 
         world.flushDirtyBodyMasses();
@@ -737,18 +718,16 @@ class RagdollInstance{
                         if(activeCount == 0u){
                             al.jointType = ArticulationJointType::Fixed;
                             al.enableLimit = false;
-                            al.usePerDofLimits = false;
                         }
                         else if(activeCount == 1u){
                             const u32 a0 = activeAxes[0u];
                             in SixDofAxisConfig cfg0 = bDef.sixDofAxes[3u + a0];
                             al.jointType = ArticulationJointType::Revolute;
                             al.jointAxisLocal = jAxes[a0];
-                            al.usePerDofLimits = false;
                             if(cfg0.motion == JointMotion::Limited){
                                 al.enableLimit = true;
-                                al.lowerLimit = cfg0.lowerLimit;
-                                al.upperLimit = cfg0.upperLimit;
+                                al.lowerLimits = f32x4(cfg0.lowerLimit, -s_Pi, -s_Pi, 0.0f);
+                                al.upperLimits = f32x4(cfg0.upperLimit, s_Pi, s_Pi, 0.0f);
                             }
                             else{
                                 al.enableLimit = false;
@@ -762,7 +741,6 @@ class RagdollInstance{
                             al.jointType = ArticulationJointType::Universal;
                             al.jointAxisLocal = jAxes[a0];
                             al.jointAxisSecondaryLocal = jAxes[a1];
-                            al.usePerDofLimits = true;
                             u8 lMask = 0u;
                             f32 l0 = -s_Pi; f32 h0 = s_Pi;
                             f32 l1 = -s_Pi; f32 h1 = s_Pi;
@@ -785,7 +763,6 @@ class RagdollInstance{
                             al.jointType = ArticulationJointType::Spherical;
                             al.jointAxisLocal = f32x4(jAx0, 0.0f);
                             al.jointAxisSecondaryLocal = f32x4(jAx1, 0.0f);
-                            al.usePerDofLimits = true;
                             u8 lMask = 0u;
                             f32 l0 = -s_Pi; f32 h0 = s_Pi;
                             f32 l1 = -s_Pi; f32 h1 = s_Pi;
@@ -816,7 +793,6 @@ class RagdollInstance{
                         al.jointType = ArticulationJointType::Spherical;
                         const b8 hasTwistRange = (bDef.twistMax >= bDef.twistMin) && (bDef.twistMin > -s_Pi + 1.0e-4f || bDef.twistMax < s_Pi - 1.0e-4f);
                         al.enableLimit = (bDef.swingLimitY > 0.0f || bDef.swingLimitZ > 0.0f || hasTwistRange);
-                        al.usePerDofLimits = true;
                         al.useEllipticConeLimit = true;
                         f32 swY = Max(0.0f, bDef.swingLimitY);
                         f32 swZ = Max(0.0f, bDef.swingLimitZ);
@@ -835,11 +811,14 @@ class RagdollInstance{
                     if(bDef.motorMaxTorque > 0.0f && bDef.motorHertz > 0.0f && al.jointType != ArticulationJointType::Fixed){
                         const f32 wn = 2.0f * s_Pi * bDef.motorHertz;
                         const f32 driveI = Max(1.0e-3f, this.m_boneMaxInertias[i]);
-                        al.driveStiffness = driveI * wn * wn;
-                        al.driveDamping = driveI * 2.0f * Max(0.0f, bDef.motorDamping) * wn;
-                        al.driveMaxForce = bDef.motorMaxTorque;
-                        al.enableDrive = bDef.useSolverMotors;
-                        al.useQuatDrive = (bDef.useSolverMotors && al.jointType == ArticulationJointType::Spherical);
+                        const f32 stiff = driveI * wn * wn;
+                        const f32 damp = driveI * 2.0f * Max(0.0f, bDef.motorDamping) * wn;
+                        const f32 maxF = bDef.motorMaxTorque;
+                        al.driveStiffness3 = f32x4(stiff, stiff, stiff, 0.0f);
+                        al.driveDamping3 = f32x4(damp, damp, damp, 0.0f);
+                        al.driveMaxForce3 = f32x4(maxF, maxF, maxF, 0.0f);
+                        al.enableDrive = true;
+                        al.useQuatDrive = (al.jointType == ArticulationJointType::Spherical);
                     }
                     else{
                         al.enableDrive = false;
@@ -910,7 +889,7 @@ class RagdollInstance{
                     jd.settings.lowerLimit = bDef.twistMin;
                     jd.settings.upperLimit = bDef.twistMax;
                 }
-                if(bDef.useSolverMotors && bDef.motorHertz > 0.0f){
+                if(bDef.motorHertz > 0.0f){
                     jd.settings.enableSlerpDrive = false;
                     jd.settings.slerpHertz = Max(0.0f, bDef.motorHertz);
                     jd.settings.slerpDampingRatio = Max(0.0f, bDef.motorDamping);
@@ -1019,7 +998,6 @@ class RagdollInstance{
         this.m_boneMaxInertias.clear();
         this.m_boneLocalInertias.clear();
         this.m_jointRestRefQ.clear();
-        this.m_boneUseSolverMotor.clear();
         this.m_driveCurQ.clear();
         this.m_driveTgtQ.clear();
         this.m_driveAngVel.clear();
@@ -1030,7 +1008,6 @@ class RagdollInstance{
         this.m_articulationKinematic = false;
         this.m_articulationBoneKinMask.clear();
         this.m_heldLinkIndicesScratch.clear();
-        this.m_heldQScratch.clear();
         this.m_heldQ3Scratch.clear();
         this.m_heldJointRotScratch.clear();
         this.m_balanceBonePosScratch.clear();
@@ -1140,14 +1117,12 @@ class RagdollInstance{
                 jointQ = -jointQ;
             s.jointRotation = f32x4(jointQ);
             if(d.jointType == ArticulationJointType::Fixed){
-                s.q = 0.0f;
                 s.q3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             }
             else if(d.jointType == ArticulationJointType::Revolute){
                 const VectorSingle ax0 = SafeNormalizeVec3(VectorSingle(d.jointAxisLocal), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
                 const VectorSingle rv = ArticulationRotVecFromQuat(jointQ);
                 const f32 ang = Vector3Dot(rv, ax0).x;
-                s.q = ang;
                 s.q3 = f32x4(ang, 0.0f, 0.0f, 0.0f);
             }
             else if(d.jointType == ArticulationJointType::Universal){
@@ -1159,7 +1134,6 @@ class RagdollInstance{
                 const f32 q0 = ATan2(VectorSingle(Vector3Dot(rA1, a2).x), VectorSingle(Vector3Dot(rA1, a1).x)).x;
                 const VectorSingle rInvA0 = Vector3InverseRotate(a0, jointQ);
                 const f32 q1 = ATan2(VectorSingle(Vector3Dot(rInvA0, a2).x), VectorSingle(Vector3Dot(rInvA0, a0).x)).x;
-                s.q = q0;
                 s.q3 = f32x4(q0, q1, 0.0f, 0.0f);
             }
             else{
@@ -1171,14 +1145,11 @@ class RagdollInstance{
                 const f32 c0 = Vector3Dot(rv, a0).x;
                 const f32 c1 = Vector3Dot(rv, a1).x;
                 const f32 c2 = Vector3Dot(rv, a2).x;
-                s.q = c0;
                 s.q3 = f32x4(c0, c1, c2, 0.0f);
             }
         }
         if(resetVelocities){
-            s.qd = 0.0f;
             s.qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            s.qdd = 0.0f;
             s.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             s.spatialVelocity = SpatialVec();
         }
@@ -1459,14 +1430,12 @@ class RagdollInstance{
                 const usize linkCnt = this.articulation.linkStates.size();
                 const usize maskCnt = Min(this.m_articulationBoneKinMask.size(), linkCnt);
                 this.m_heldLinkIndicesScratch.clear();
-                this.m_heldQScratch.clear();
                 this.m_heldQ3Scratch.clear();
                 this.m_heldJointRotScratch.clear();
                 for(usize i = 1u; i < maskCnt; ++i){
                     if(this.m_articulationBoneKinMask[i] != 0u && !this.articulation.isLinkDetached(i)){
                         in ArticulationLinkState s = this.articulation.linkStates[i];
                         this.m_heldLinkIndicesScratch.push_back(i);
-                        this.m_heldQScratch.push_back(s.q);
                         this.m_heldQ3Scratch.push_back(s.q3);
                         this.m_heldJointRotScratch.push_back(s.jointRotation);
                     }
@@ -1477,12 +1446,9 @@ class RagdollInstance{
                     for(usize hi = 0u; hi < this.m_heldLinkIndicesScratch.size(); ++hi){
                         const usize li = this.m_heldLinkIndicesScratch[hi];
                         mut ArticulationLinkState s = this.articulation.linkStates[li];
-                        s.q = this.m_heldQScratch[hi];
                         s.q3 = this.m_heldQ3Scratch[hi];
                         s.jointRotation = this.m_heldJointRotScratch[hi];
-                        s.qd = 0.0f;
                         s.qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                        s.qdd = 0.0f;
                         s.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                         s.spatialVelocity = SpatialVec();
                     }
@@ -1581,7 +1547,8 @@ class RagdollInstance{
 
                 mut ArticulationLinkDef ad = this.articulation.linkDefs[i];
                 ad.enableDrive = (gain > 0.0f && baseTorque > 0.0f && hertz > 0.0f);
-                ad.driveMaxForce = baseTorque * gain;
+                const f32 scaledMaxF = baseTorque * gain;
+                ad.driveMaxForce3 = f32x4(scaledMaxF, scaledMaxF, scaledMaxF, 0.0f);
                 ad.useQuatDrive = (ad.jointType == ArticulationJointType::Spherical);
 
                 VectorSingle a0(0.0f);
@@ -1599,8 +1566,6 @@ class RagdollInstance{
                 if(ad.jointType == ArticulationJointType::Revolute){
                     const f32 tgtAng = Vector3Dot(ArticulationRotVecFromQuat(slerpTargetQ), a0).x;
                     const f32 tgtVel = Vector3Dot(localW, a0).x;
-                    ad.driveTargetPos = tgtAng;
-                    ad.driveTargetVel = tgtVel;
                     ad.driveTargetPos3 = f32x4(tgtAng, 0.0f, 0.0f, 0.0f);
                     ad.driveTargetVel3 = f32x4(tgtVel, 0.0f, 0.0f, 0.0f);
                 }
@@ -1611,8 +1576,6 @@ class RagdollInstance{
                     const f32 tgtQ1 = ATan2(VectorSingle(Vector3Dot(rInvA0, a2).x), VectorSingle(Vector3Dot(rInvA0, a0).x)).x;
                     const f32 v0 = Vector3Dot(localW, a0).x;
                     const f32 v1 = Vector3Dot(localW, a1).x;
-                    ad.driveTargetPos = tgtQ0;
-                    ad.driveTargetVel = v0;
                     ad.driveTargetPos3 = f32x4(tgtQ0, tgtQ1, 0.0f, 0.0f);
                     ad.driveTargetVel3 = f32x4(v0, v1, 0.0f, 0.0f);
                 }
@@ -1621,7 +1584,6 @@ class RagdollInstance{
                     const f32 v0 = Vector3Dot(localW, a0).x;
                     const f32 v1 = Vector3Dot(localW, a1).x;
                     const f32 v2 = Vector3Dot(localW, a2).x;
-                    ad.driveTargetVel = v0;
                     ad.driveTargetVel3 = f32x4(v0, v1, v2, 0.0f);
                 }
             }
@@ -1679,8 +1641,6 @@ class RagdollInstance{
             const b8 hasValidParent = (pIdx != s_NullIndex && pIdx < cast<u32>(boneCount) && pIdx != cast<u32>(i) && (this.m_driveFlags[pIdx] & 1u) != 0u);
             const b8 useSolverMotor = (
                 hasValidParent
-                && i < this.m_boneUseSolverMotor.size()
-                && this.m_boneUseSolverMotor[i] != 0u
                 && i < this.boneJointIds.size()
                 && this.boneJointIds[i].valid()
                 && world.isValidJoint(this.boneJointIds[i])
@@ -2186,7 +2146,6 @@ Expected<Vector<RagdollBoneDef>> BuildRagdollBonesFromSkeleton(
         bDef.motorMaxTorque = jIn.motorMaxTorque;
         bDef.motorHertz = jIn.motorHertz;
         bDef.motorDamping = jIn.motorDamping;
-        bDef.useSolverMotors = true;
         bDef.jointToBodyOffset = Transform3D(InverseTransformPointValues(jPos, jRot, midPos), QuaternionIdentity());
 
         const VectorSingle pALoc = InverseTransformPointValues(midPos, jRot, jPos);

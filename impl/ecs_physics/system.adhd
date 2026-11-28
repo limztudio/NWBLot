@@ -1640,19 +1640,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return true;
     }
 
-    public Expected<f32> tryGetJointAngle(in JointId jointId)const{
-        return this.m_physicsWorld.tryGetJointAngle(jointId);
-    }
-
     public Expected<f32> tryGetJointAngle(in EntityID entity)const{
         const JointId jId = this.jointForEntity(entity);
         if(!jId.valid())
             return MakeUnexpected(Failure());
         return this.m_physicsWorld.tryGetJointAngle(jId);
-    }
-
-    public Expected<f32> tryGetJointTranslation(in JointId jointId)const{
-        return this.m_physicsWorld.tryGetJointTranslation(jointId);
     }
 
     public Expected<f32> tryGetJointTranslation(in EntityID entity)const{
@@ -1662,19 +1654,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return this.m_physicsWorld.tryGetJointTranslation(jId);
     }
 
-    public Expected<f32x4> tryGetJointConstraintForce(in JointId jointId)const{
-        return this.m_physicsWorld.tryGetJointConstraintForce(jointId);
-    }
-
     public Expected<f32x4> tryGetJointConstraintForce(in EntityID entity)const{
         const JointId jId = this.jointForEntity(entity);
         if(!jId.valid())
             return MakeUnexpected(Failure());
         return this.m_physicsWorld.tryGetJointConstraintForce(jId);
-    }
-
-    public Expected<f32x4> tryGetJointConstraintTorque(in JointId jointId)const{
-        return this.m_physicsWorld.tryGetJointConstraintTorque(jointId);
     }
 
     public Expected<f32x4> tryGetJointConstraintTorque(in EntityID entity)const{
@@ -1826,10 +1810,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return f32x4(this.m_physicsWorld.getPointVelocity(found.value().bodyId, worldPoint), 0.0f);
     }
 
-    public void explode(in ExplosionDef def){
-        this.applyExplosion(def);
-    }
-
     public b8 setKinematicTarget(in EntityID entity, in Transform3D targetTransform, in f32 dt){
         const auto found = this.m_entityRecords.find(entity);
         if(found == this.m_entityRecords.end() || found.value().attachedToParentBody || !found.value().bodyId.valid())
@@ -1875,28 +1855,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         if(found == this.m_entityRecords.end() || !found.value().bodyId.valid())
             return MakeUnexpected(Failure());
         return this.m_physicsWorld.tryGetAngularVelocity(found.value().bodyId);
-    }
-
-    public b8 wakeBody(in EntityID entity){
-        const auto found = this.m_entityRecords.find(entity);
-        if(found == this.m_entityRecords.end() || found.value().attachedToParentBody || !found.value().bodyId.valid())
-            return false;
-        const BodyId bodyId = found.value().bodyId;
-        if(!this.m_physicsWorld.wakeBody(bodyId))
-            return false;
-        this.syncEcsRigidBodyRuntimeState(entity, bodyId);
-        return true;
-    }
-
-    public b8 sleepBody(in EntityID entity){
-        const auto found = this.m_entityRecords.find(entity);
-        if(found == this.m_entityRecords.end() || found.value().attachedToParentBody || !found.value().bodyId.valid())
-            return false;
-        const BodyId bodyId = found.value().bodyId;
-        if(!this.m_physicsWorld.setBodyAwake(bodyId, false))
-            return false;
-        this.syncEcsRigidBodyRuntimeState(entity, bodyId);
-        return true;
     }
 
     public b8 setBodyAwake(in EntityID entity, in b8 awake){
@@ -1980,23 +1938,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return true;
     }
 
-    public b8 setBodyTransform(in EntityID entity, in Transform3D xf){
-        return this.setBodyTransform(entity, VectorSingle(xf.position), VectorSingle(xf.rotation));
-    }
-
     public Expected<Transform3D> tryGetBodyTransform(in EntityID entity)const{
         const auto found = this.m_entityRecords.find(entity);
         if(found == this.m_entityRecords.end() || !found.value().bodyId.valid())
             return MakeUnexpected(Failure());
         return this.m_physicsWorld.tryGetBodyTransform(found.value().bodyId);
-    }
-
-    public b8 addIgnoreCollisionPair(in BodyId bodyIdA, in BodyId bodyIdB){
-        return this.m_physicsWorld.addIgnoreCollisionPair(bodyIdA, bodyIdB);
-    }
-
-    public b8 removeIgnoreCollisionPair(in BodyId bodyIdA, in BodyId bodyIdB){
-        return this.m_physicsWorld.removeIgnoreCollisionPair(bodyIdA, bodyIdB);
     }
 
     public b8 addIgnoreCollisionPair(in EntityID entityA, in EntityID entityB){
@@ -2015,19 +1961,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return this.m_physicsWorld.worldOriginOffset();
     }
 
-    public b8 tryGetBodyPositionDouble(in BodyId bodyId, mut VectorDouble outWorldPos)const{
-        return this.m_physicsWorld.tryGetBodyPositionDouble(bodyId, outWorldPos);
-    }
-
     public b8 tryGetBodyPositionDouble(in EntityID entity, mut VectorDouble outWorldPos)const{
         const BodyId bodyId = this.bodyForEntity(entity);
         if(!bodyId.valid())
             return false;
         return this.m_physicsWorld.tryGetBodyPositionDouble(bodyId, outWorldPos);
-    }
-
-    public b8 setBodyPositionDouble(in BodyId bodyId, in VectorDouble worldPos){
-        return this.m_physicsWorld.setBodyPositionDouble(bodyId, worldPos);
     }
 
     public b8 setBodyPositionDouble(in EntityID entity, in VectorDouble worldPos){
@@ -2040,19 +1978,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return this.setBodyTransformDouble(entity, worldPos, VectorSingle(curXf.value().rotation));
     }
 
-    public Expected<Transform3DDouble> getBodyTransformDouble(in BodyId bodyId)const{
-        return this.m_physicsWorld.getBodyTransformDouble(bodyId);
-    }
-
     public Expected<Transform3DDouble> getBodyTransformDouble(in EntityID entity)const{
         const BodyId bodyId = this.bodyForEntity(entity);
         if(!bodyId.valid())
             return MakeUnexpected(Failure());
         return this.m_physicsWorld.getBodyTransformDouble(bodyId);
-    }
-
-    public b8 setBodyTransformDouble(in BodyId bodyId, in VectorDouble position, in VectorSingle rotation){
-        return this.m_physicsWorld.setBodyTransformDouble(bodyId, position, rotation);
     }
 
     public b8 setBodyTransformDouble(in EntityID entity, in VectorDouble position, in VectorSingle rotation){
@@ -2309,7 +2239,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_pendingSingleStep = true;
     }
 
-    public void shiftOrigin(mut World world, in VectorDouble delta){
+    public void shiftOrigin(in VectorDouble delta){
         if(!IsFinite(delta))
             return;
         if(delta.x == 0.0 && delta.y == 0.0 && delta.z == 0.0)
@@ -2319,6 +2249,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         const VectorSingle negDelta(cast<f32>(-delta.x), cast<f32>(-delta.y), cast<f32>(-delta.z), 0.0f);
         this.m_environmentScratch.shiftOrigin(negDelta);
 
+        mut World world = this.m_world;
         world.view<TransformComponent>().each(
             lambda[in negDelta, mut world](in EntityID entity, mut TransformComponent xf) -> void{
                 xf.position = f32x4(VectorSingle(xf.position) + negDelta, 0.0f);
@@ -2387,10 +2318,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         for(usize i = 0u; i < this.m_syncScratch.ecsFluidImmersionState.size(); ++i)
             this.m_syncScratch.ecsFluidImmersionState[i].lastPoint = f32x4(VectorSingle(this.m_syncScratch.ecsFluidImmersionState[i].lastPoint) + negDelta, 0.0f);
         this.m_syncScratch.writeBackPoseCache.clear();
-    }
-
-    public void shiftOrigin(in VectorDouble delta){
-        this.shiftOrigin(this.m_world, delta);
     }
 
     public b8 captureWorldSnapshot(mut Vector<u8> outBytes){
@@ -3189,54 +3116,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return this.m_gpuDispatcher.castShapeAnyBatchGpu(this.m_physicsWorld, queryProxies, inputs, outHits);
     }
 
-    public b8 overlapShapeBatchGpu(
-        in Span<ShapeProxy> queryProxies,
-        in Span<Transform3D> queryTransforms,
-        in Filter filter,
-        in b8 hitSensors,
-        in Span<BodyId> ignoreBodyIds,
-        in Span<ShapeId> ignoreShapeIds,
-        mut Vector<GpuPhysicsSpatialQueryResult> outResults,
-        mut Vector<GpuPhysicsSpatialQueryResult> outMultiHits,
-        in u32 maxHitsPerQuery
-    ){
-        return this.m_gpuDispatcher.overlapShapeBatchGpu(this.m_physicsWorld, queryProxies, queryTransforms, filter, hitSensors, ignoreBodyIds, ignoreShapeIds, outResults, outMultiHits, maxHitsPerQuery);
-    }
-
-    public b8 overlapShapeBatchGpu(
-        in Span<ShapeProxy> queryProxies,
-        in Span<Transform3D> queryTransforms,
-        in Filter filter,
-        in b8 hitSensors,
-        in Span<BodyId> ignoreBodyIds,
-        in Span<ShapeId> ignoreShapeIds,
-        mut Vector<GpuPhysicsSpatialQueryResult> outResults
-    ){
-        return this.m_gpuDispatcher.overlapShapeBatchGpu(this.m_physicsWorld, queryProxies, queryTransforms, filter, hitSensors, ignoreBodyIds, ignoreShapeIds, outResults);
-    }
-
-    public b8 overlapShapeBatchGpu(
-        in Span<ShapeProxy> queryProxies,
-        in Span<Transform3D> queryTransforms,
-        in Filter filter,
-        in b8 hitSensors,
-        mut Vector<GpuPhysicsSpatialQueryResult> outResults,
-        mut Vector<GpuPhysicsSpatialQueryResult> outMultiHits,
-        in u32 maxHitsPerQuery
-    ){
-        return this.m_gpuDispatcher.overlapShapeBatchGpu(this.m_physicsWorld, queryProxies, queryTransforms, filter, hitSensors, outResults, outMultiHits, maxHitsPerQuery);
-    }
-
-    public b8 overlapShapeBatchGpu(
-        in Span<ShapeProxy> queryProxies,
-        in Span<Transform3D> queryTransforms,
-        in Filter filter,
-        in b8 hitSensors,
-        mut Vector<GpuPhysicsSpatialQueryResult> outResults
-    ){
-        return this.m_gpuDispatcher.overlapShapeBatchGpu(this.m_physicsWorld, queryProxies, queryTransforms, filter, hitSensors, outResults);
-    }
-
     public b8 rayCastBatchGpuDouble(
         in Span<RayCastDoubleInput> inputs,
         mut Vector<RayCastDoubleHit> outHits
@@ -3310,32 +3189,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_lastStepStats = WorldStepStats();
         this.m_lastStepMs = 0.0;
         this.m_lastStepTopologyVersion = 0u;
-    }
-
-    public b8 exportRenderTransforms(mut Vector<GpuPhysicsRenderTransformOut> outTransforms){
-        const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
-        if(hasAnyPhysicsParents)
-            this.m_syncScratch.writeBackPoseCache.clear();
-        const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
-        this.m_exportCustomPosesScratch.clear();
-        CollectEcsGpuRenderTransformBindings(
-            this.m_world,
-            this.m_entityRecords,
-            this.m_bodyIndexToEntity,
-            hasAnyPhysicsParents,
-            bodyHandlesTrusted,
-            this.m_syncScratch.writeBackPoseCache,
-            this.m_physicsWorld,
-            this.m_gpuDispatcher,
-            this.m_exportBindingsScratch,
-            this.m_exportCustomPosesScratch
-        );
-        return this.m_gpuDispatcher.exportRenderTransforms(
-            this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
-            Span<GpuPhysicsBodyPose>(this.m_exportCustomPosesScratch.data(), this.m_exportCustomPosesScratch.size()),
-            outTransforms
-        );
     }
 
     public b8 syncGpuResidentToWorld(){

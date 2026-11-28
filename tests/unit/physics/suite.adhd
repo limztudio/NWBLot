@@ -91,6 +91,82 @@ Expected<MeshShape> BuildQuadMeshFloor(in f32 halfSize, in f32 radius, in b8 fli
     return MakeMeshShape(Span<f32x4>(verts.data(), verts.size()), Span<u32>(idx.data(), idx.size()), radius);
 }
 
+class TestPhysicsDebugLine{
+    public f32x4 start(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 end(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+void AppendTestDebugLineVertices(in Span<GpuDebugLineVertex> verts, mut Vector<TestPhysicsDebugLine> outLines){
+    for(usize vi = 0u; vi + 1u < verts.size(); vi += 2u){
+        TestPhysicsDebugLine line;
+        line.start = verts[vi].positionPad;
+        line.end = verts[vi + 1u].positionPad;
+        line.color = verts[vi].color;
+        outLines.push_back(line);
+    }
+}
+
+void FinalizeTestDebugCollectorLines(in GpuDebugLineCollector collector, mut Vector<TestPhysicsDebugLine> outLines){
+    outLines.clear();
+    AppendTestDebugLineVertices(collector.depthTestedVertices(), outLines);
+    AppendTestDebugLineVertices(collector.overlayVertices(), outLines);
+}
+
+PhysicsDebugDrawStats CollectPhysicsDebugLinesForTest(
+    in PhysicsWorld world,
+    in PhysicsDebugDrawOptions options,
+    in PhysicsDebugScreenProjector projector,
+    mut Vector<TestPhysicsDebugLine> outLines
+){
+    GpuDebugLineCollector collector;
+    PhysicsGpuDebugLineSink sink(collector, options.maxLines, options.depthTest);
+    PhysicsDebugDrawScratch scratch;
+    const PhysicsDebugDrawStats stats = BuildPhysicsDebugLinesToSink(world, options, projector, sink, scratch);
+    FinalizeTestDebugCollectorLines(collector, outLines);
+    return stats;
+}
+
+PhysicsDebugDrawStats CollectPhysicsDebugLinesForTest(
+    in PhysicsWorld world,
+    in PhysicsDebugDrawOptions options,
+    mut Vector<TestPhysicsDebugLine> outLines
+){
+    return CollectPhysicsDebugLinesForTest(world, options, PhysicsDebugScreenProjector(), outLines);
+}
+
+PhysicsDebugDrawStats CollectEcsPhysicsDebugLinesForTest(
+    mut World ecsWorld,
+    in PhysicsSystem physicsSystem,
+    in PhysicsDebugDrawOptions options,
+    in PhysicsDebugScreenProjector projector,
+    mut Vector<TestPhysicsDebugLine> outLines
+){
+    GpuDebugLineCollector collector;
+    PhysicsGpuDebugLineSink sink(collector, options.maxLines, options.depthTest);
+    PhysicsDebugDrawScratch scratch;
+    const PhysicsDebugDrawStats stats = BuildEcsPhysicsDebugLinesToSink(ecsWorld, physicsSystem, options, projector, sink, scratch);
+    FinalizeTestDebugCollectorLines(collector, outLines);
+    return stats;
+}
+
+void CollectPhysicsDebugBoxEdgesForTest(
+    in u32 maxLines,
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
+    in VectorSingle localCenter,
+    in VectorSingle halfExtents,
+    in VectorSingle boxRotation,
+    in VectorSingle color,
+    mut Vector<TestPhysicsDebugLine> outLines
+){
+    GpuDebugLineCollector collector;
+    PhysicsGpuDebugLineSink sink(collector, maxLines, true);
+    PhysicsDebugPhaseBudget budget(maxLines);
+    AppendPhysicsDebugBoxEdges(xfPos, xfRot, localCenter, halfExtents, boxRotation, color, sink, budget);
+    FinalizeTestDebugCollectorLines(collector, outLines);
+}
+
 void VerifyComponentPaddingRejection(in IComponent asset, mut IComponent badAsset, in usize expectedSize, in usize padOffset){
     Vector<u8> bytes0;
     Vector<u8> bytes1;
@@ -653,7 +729,7 @@ f32 ComputeRigidBodyMechanicalEnergy(
     in BodyId bodyId,
     in f32 inertiaScalar
 ){
-    const f32 mass = physWorld.bodyMass(bodyId);
+    const f32 mass = physWorld.tryGetBodyMass(bodyId).value_or(0.0f);
     const Transform3D xf = physWorld.tryGetBodyTransform(bodyId).value();
     const f32x4 linV = physWorld.tryGetLinearVelocity(bodyId).value();
     const f32x4 angV = physWorld.tryGetAngularVelocity(bodyId).value();
@@ -707,8 +783,8 @@ void VerifyCoupledTowerImpactCase(in f32 floorHalfExtent, in b8 checkFloorBounds
         ASSERT_TRUE(physWorld.createSphereShape(spheres[i], sphereSd, sphereShape).has_value());
     }
 
-    const f32 boxI = (1.0f / 6.0f) * physWorld.bodyMass(boxes[0u]) * (0.30f * 0.30f);
-    const f32 sphereI = 0.4f * physWorld.bodyMass(spheres[0u]) * (sphereR * sphereR);
+    const f32 boxI = (1.0f / 6.0f) * physWorld.tryGetBodyMass(boxes[0u]).value_or(0.0f) * (0.30f * 0.30f);
+    const f32 sphereI = 0.4f * physWorld.tryGetBodyMass(spheres[0u]).value_or(0.0f) * (sphereR * sphereR);
     f32 initialEnergy = 0.0f;
     for(u32 i = 0u; i < 4u; ++i)
         initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
@@ -872,9 +948,9 @@ void VerifyPhysicsEdgeCases_BodyMutatorsGyroAndRotationClamp(){
     sd.density = 1.0f;
     sd.updateBodyMass = false;
     ASSERT_TRUE(physWorld.createHullShape(bodyId, sd, MakeBoxHull(0.5f, 0.2f, 1.0f, 0.0f).value()).has_value());
-    EXPECT_FLOAT_EQ(physWorld.bodyMass(bodyId), 0.0f);
+    EXPECT_FLOAT_EQ(physWorld.tryGetBodyMass(bodyId).value_or(-1.0f), 0.0f);
     physWorld.flushDirtyBodyMasses();
-    EXPECT_GT(physWorld.bodyMass(bodyId), 0.7f);
+    EXPECT_GT(physWorld.tryGetBodyMass(bodyId).value_or(0.0f), 0.7f);
 
     EXPECT_TRUE(physWorld.applyLinearImpulseAtPoint(bodyId, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.8f, 0.0f), true));
     const f32x4 linV = physWorld.tryGetLinearVelocity(bodyId).value();
@@ -917,7 +993,7 @@ void VerifyPhysicsEdgeCases_BodyMutatorsGyroAndRotationClamp(){
     EXPECT_EQ(physWorld.awakeBodyCount(), 2u);
     EXPECT_TRUE(physWorld.setBodyType(clampBody, BodyType::Static));
     EXPECT_EQ(physWorld.tryGetBodyType(clampBody).value(), BodyType::Static);
-    EXPECT_FLOAT_EQ(physWorld.bodyMass(clampBody), 0.0f);
+    EXPECT_FLOAT_EQ(physWorld.tryGetBodyMass(clampBody).value_or(-1.0f), 0.0f);
 }
 
 void VerifyPhysicsEdgeCases_JointConstraints3D(){
@@ -1871,7 +1947,7 @@ void VerifyPhysicsEdgeCases_KinematicTargetSensorToggleAndJointMutators(){
     ASSERT_TRUE(physWorld.setBodyAwake(dynBody, false));
     ASSERT_TRUE(physWorld.setJointCollideConnected(jId, true));
     EXPECT_TRUE(physWorld.isBodyAwake(dynBody));
-    EXPECT_TRUE(physWorld.isJointCollideConnected(jId));
+    EXPECT_TRUE((physWorld.m_joints[jId.index].flags & cast<u8>(JointFlags::CollideConnected)) != 0u);
 
     ASSERT_TRUE(physWorld.setBodyAwake(dynBody, false));
     ASSERT_TRUE(physWorld.setJointBreakThresholds(jId, 12.0f, 24.0f));
@@ -2033,20 +2109,11 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     EXPECT_LT(tw.world.getComponent<TransformComponent>(dropEnt.id()).position.y, 0.35f);
     physSys.clearCustomFilterCallback();
 
-    Vector<PhysicsDebugLine> debugLines;
+    Vector<TestPhysicsDebugLine> debugLines;
     PhysicsDebugDrawOptions debugOpts;
     debugOpts.drawAabbs = true;
-    BuildPhysicsDebugLines(physSys.physicsWorld(), debugOpts, debugLines);
+    CollectPhysicsDebugLinesForTest(physSys.physicsWorld(), debugOpts, debugLines);
     EXPECT_FALSE(debugLines.empty());
-
-    TransformComponent camXf;
-    camXf.position = f32x4(0.0f, 1.0f, -5.0f, 0.0f);
-    camXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-    const Expected<CameraProjection> projRes = TryBuildCameraProjection(s_Pi / 3.0f, 0.1f, 100.0f, 16.0f / 9.0f, 16.0f / 9.0f);
-    ASSERT_TRUE(projRes.has_value());
-    VectorSingle projectedSegment(0.0f);
-    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f), projectedSegment));
-    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f), projectedSegment));
 
     const BodyId oldBody = tw.world.getComponent<RigidBodyComponent>(dropEnt.id()).runtimeBodyId;
     tw.world.destroyEntity(dropEnt.id());
@@ -2213,7 +2280,8 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
     Transform3D seamXf(VectorSingle(0.02f, 0.45f, 0.0f, 0.0f), QuaternionIdentity());
     const VectorSingle zeroPos(0.0f);
     const VectorSingle identRot = QuaternionIdentity();
-    const Manifold seamManifold = CollideSphereAndMesh(slideSphere, VectorSingle(seamXf.position), VectorSingle(seamXf.rotation), quadMesh, zeroPos, identRot, s_SpeculativeDistance);
+    Optional<TriangleFilterCallback> noTriFilter;
+    const Manifold seamManifold = CollideSphereAndMeshFiltered(slideSphere, VectorSingle(seamXf.position), VectorSingle(seamXf.rotation), quadMesh, zeroPos, identRot, s_SpeculativeDistance, ShapeId(), noTriFilter);
     ASSERT_GE(seamManifold.pointCount(), 1u);
     EXPECT_NEAR(seamManifold.normal().y, -1.0f, 1.0e-3f);
     EXPECT_NEAR(seamManifold.normal().x, 0.0f, 1.0e-3f);
@@ -2221,7 +2289,9 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
 
     const Expected<HullShape> boxHullRes = MakeBoxHull(0.4f, 0.4f, 0.4f, 0.0f);
     ASSERT_TRUE(boxHullRes.has_value());
-    const Manifold hullSeamManifold = CollideHullAndMesh(boxHullRes.value(), VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), identRot, quadMesh, zeroPos, identRot, s_SpeculativeDistance);
+    Manifold hullSeamManifold;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> extraHullM;
+    CollideHullAndMeshMulti(boxHullRes.value(), VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), identRot, quadMesh, zeroPos, identRot, s_SpeculativeDistance, ShapeId(), noTriFilter, hullSeamManifold, extraHullM);
     ASSERT_GE(hullSeamManifold.pointCount(), 1u);
     EXPECT_NEAR(hullSeamManifold.normal().y, -1.0f, 1.0e-3f);
 
@@ -2230,14 +2300,21 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
     in MeshShape closedMesh = cubeMeshRes.value();
     EXPECT_TRUE(closedMesh.isClosed());
 
-    const Manifold dualMeshM = CollideMeshes(
+    Manifold dualMeshM;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> extraDualM;
+    CollideMeshesMulti(
         closedMesh,
         VectorSingle(0.0f, 1.95f, 0.0f, 0.0f),
         identRot,
         closedMesh,
         zeroPos,
         identRot,
-        s_SpeculativeDistance
+        s_SpeculativeDistance,
+        ShapeId(),
+        ShapeId(),
+        noTriFilter,
+        dualMeshM,
+        extraDualM
     );
     EXPECT_GE(dualMeshM.pointCount(), 1u);
 
@@ -3046,8 +3123,8 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     const CapsuleShape dbgCap = MakeCapsuleShape(VectorSingle(0.0f, -0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), 0.25f).value();
     ASSERT_TRUE(dbgWorld.createCapsuleShape(disabledBody, ShapeDef(), dbgCap).has_value());
     PhysicsDebugDrawOptions dbgOpts;
-    Vector<PhysicsDebugLine> dbgLines;
-    BuildPhysicsDebugLines(dbgWorld, dbgOpts, dbgLines);
+    Vector<TestPhysicsDebugLine> dbgLines;
+    CollectPhysicsDebugLinesForTest(dbgWorld, dbgOpts, dbgLines);
     EXPECT_EQ(dbgLines.size(), cast<usize>(0u));
 
     dbgBd.isEnabled = true;
@@ -3069,7 +3146,7 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
         jTypes[ji].bodyIdB = enB;
         ASSERT_TRUE(dbgWorld.createJoint(jTypes[ji]).has_value());
     }
-    BuildPhysicsDebugLines(dbgWorld, dbgOpts, dbgLines);
+    CollectPhysicsDebugLinesForTest(dbgWorld, dbgOpts, dbgLines);
     EXPECT_GT(dbgLines.size(), cast<usize>(80u));
 }
 
@@ -3807,8 +3884,13 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
 
         const VectorSingle zeroPos(0.0f);
         const VectorSingle identRot = QuaternionIdentity();
-        const Manifold outerInnerM = CollideMeshes(outerMesh, zeroPos, identRot, innerMesh, zeroPos, identRot, s_SpeculativeDistance);
-        const Manifold innerOuterM = CollideMeshes(innerMesh, zeroPos, identRot, outerMesh, zeroPos, identRot, s_SpeculativeDistance);
+        Optional<TriangleFilterCallback> noTriFilter;
+        Manifold outerInnerM;
+        FixedVector<Manifold, s_MaxExtraManifoldsPerContact> extraOIM;
+        CollideMeshesMulti(outerMesh, zeroPos, identRot, innerMesh, zeroPos, identRot, s_SpeculativeDistance, ShapeId(), ShapeId(), noTriFilter, outerInnerM, extraOIM);
+        Manifold innerOuterM;
+        FixedVector<Manifold, s_MaxExtraManifoldsPerContact> extraIOM;
+        CollideMeshesMulti(innerMesh, zeroPos, identRot, outerMesh, zeroPos, identRot, s_SpeculativeDistance, ShapeId(), ShapeId(), noTriFilter, innerOuterM, extraIOM);
         EXPECT_GE(outerInnerM.pointCount(), 1u);
         EXPECT_GE(innerOuterM.pointCount(), 1u);
 
@@ -4057,25 +4139,25 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         opts.drawJoints = false;
         opts.drawContacts = true;
         opts.drawSpeculativeContacts = false;
-        Vector<PhysicsDebugLine> lines;
-        BuildPhysicsDebugLines(dbgWorld, opts, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        CollectPhysicsDebugLinesForTest(dbgWorld, opts, lines);
         const usize nonSpecContactLines = lines.size();
 
         opts.drawSpeculativeContacts = true;
         opts.drawContactImpulses = true;
-        BuildPhysicsDebugLines(dbgWorld, opts, lines);
+        CollectPhysicsDebugLinesForTest(dbgWorld, opts, lines);
         EXPECT_GT(lines.size(), nonSpecContactLines);
 
         opts.drawContacts = false;
         opts.drawShapes = true;
         opts.drawJoints = true;
         opts.drawDisabledBodies = false;
-        BuildPhysicsDebugLines(dbgWorld, opts, lines);
+        CollectPhysicsDebugLinesForTest(dbgWorld, opts, lines);
         const usize enabledOnlyLines = lines.size();
 
         opts.drawDisabledBodies = true;
         opts.drawBodyAxes = true;
-        BuildPhysicsDebugLines(dbgWorld, opts, lines);
+        CollectPhysicsDebugLinesForTest(dbgWorld, opts, lines);
         EXPECT_GT(lines.size(), enabledOnlyLines);
     }
 }
@@ -4309,8 +4391,8 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         opts.drawShapes = false;
         opts.drawContacts = false;
         opts.drawJoints = true;
-        Vector<PhysicsDebugLine> lines;
-        BuildPhysicsDebugLines(dbgJ, opts, projector, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        CollectPhysicsDebugLinesForTest(dbgJ, opts, projector, lines);
         EXPECT_GT(lines.size(), cast<usize>(0u));
 
         EXPECT_TRUE(dbgJ.destroyJoint(prisId));
@@ -4321,15 +4403,15 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         motJd.settings.linearOffset = f32x4(25.0f, 0.0f, 0.0f, 0.0f);
         motJd.settings.maxMotorForce = 10.0f;
         ASSERT_TRUE(dbgJ.createJoint(motJd).has_value());
-        BuildPhysicsDebugLines(dbgJ, opts, projector, lines);
+        CollectPhysicsDebugLinesForTest(dbgJ, opts, projector, lines);
         EXPECT_GT(lines.size(), cast<usize>(0u));
 
         const VectorSingle smallRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.002f, 0.0f, 0.0f));
         ASSERT_GT(Abs(smallRot).w, 0.99999f);
-        Vector<PhysicsDebugLine> idBoxLines;
-        Vector<PhysicsDebugLine> rotBoxLines;
-        AppendPhysicsDebugBoxEdges(256u, VectorSingle(0.0f), QuaternionIdentity(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), QuaternionIdentity(), VectorSingle(1.0f), idBoxLines);
-        AppendPhysicsDebugBoxEdges(256u, VectorSingle(0.0f), QuaternionIdentity(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), smallRot, VectorSingle(1.0f), rotBoxLines);
+        Vector<TestPhysicsDebugLine> idBoxLines;
+        Vector<TestPhysicsDebugLine> rotBoxLines;
+        CollectPhysicsDebugBoxEdgesForTest(256u, VectorSingle(0.0f), QuaternionIdentity(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), QuaternionIdentity(), VectorSingle(1.0f), idBoxLines);
+        CollectPhysicsDebugBoxEdgesForTest(256u, VectorSingle(0.0f), QuaternionIdentity(), VectorSingle(0.0f), VectorSingle(2.0f, 1.0f, 2.0f, 0.0f), smallRot, VectorSingle(1.0f), rotBoxLines);
         ASSERT_EQ(idBoxLines.size(), rotBoxLines.size());
         f32 maxDiff = 0.0f;
         for(usize li = 0u; li < idBoxLines.size(); ++li){
@@ -5102,8 +5184,8 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         phaseOpts.drawIslands = true;
         phaseOpts.drawVelocities = true;
         phaseOpts.drawBodyOriginVsCom = true;
-        Vector<PhysicsDebugLine> tightLines;
-        const PhysicsDebugDrawStats tightStats = BuildPhysicsDebugLines(dbg, phaseOpts, tightLines);
+        Vector<TestPhysicsDebugLine> tightLines;
+        const PhysicsDebugDrawStats tightStats = CollectPhysicsDebugLinesForTest(dbg, phaseOpts, tightLines);
         EXPECT_TRUE(tightStats.truncated);
         EXPECT_LE(tightLines.size(), cast<usize>(120u));
         b8 sawContactLine = false;
@@ -5129,11 +5211,11 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         dedupOpts.drawContacts = false;
         dedupOpts.drawJoints = false;
         dedupOpts.deduplicateMeshEdges = true;
-        Vector<PhysicsDebugLine> dedupLines;
-        BuildPhysicsDebugLines(meshWorld, dedupOpts, dedupLines);
+        Vector<TestPhysicsDebugLine> dedupLines;
+        CollectPhysicsDebugLinesForTest(meshWorld, dedupOpts, dedupLines);
         dedupOpts.deduplicateMeshEdges = false;
-        Vector<PhysicsDebugLine> rawMeshLines;
-        BuildPhysicsDebugLines(meshWorld, dedupOpts, rawMeshLines);
+        Vector<TestPhysicsDebugLine> rawMeshLines;
+        CollectPhysicsDebugLinesForTest(meshWorld, dedupOpts, rawMeshLines);
         EXPECT_EQ(rawMeshLines.size(), cast<usize>(6u));
         EXPECT_LT(dedupLines.size(), rawMeshLines.size());
     }
@@ -5323,13 +5405,11 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         EXPECT_EQ(sbOut.value().softBody.attachments.size(), cast<usize>(1u));
 
         GpuRenderTransformExportComponent gpuIn;
-        gpuIn.instanceIndex = 7u;
         gpuIn.flags = 3u;
         gpuIn.localScale = f32x4(2.0f, 3.0f, 4.0f, 0.0f);
         ASSERT_TRUE(subCodec.serializeGpuRenderTransformExport(gpuIn, payload));
         const Expected<GpuRenderTransformExportComponent> gpuOut = subCodec.deserializeGpuRenderTransformExport(payload);
         ASSERT_TRUE(gpuOut.has_value());
-        EXPECT_EQ(gpuOut.value().instanceIndex, 7u);
         EXPECT_FLOAT_EQ(gpuOut.value().localScale.y, 3.0f);
     }
 
@@ -5393,9 +5473,8 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         subOpts.drawJoints = false;
         subOpts.drawContacts = false;
         subOpts.drawSubsystems = true;
-        Vector<PhysicsDebugLine> artLines;
-        PhysicsDebugWorldLineSink artSink(subOpts.maxLines, artLines);
-        const PhysicsDebugDrawStats artStats = BuildEcsPhysicsDebugLinesToSink(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), artSink);
+        Vector<TestPhysicsDebugLine> artLines;
+        const PhysicsDebugDrawStats artStats = CollectEcsPhysicsDebugLinesForTest(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), artLines);
         EXPECT_FALSE(artStats.truncated);
         EXPECT_GT(artStats.emittedLines, 0u);
     }
@@ -5418,14 +5497,14 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         opts.drawContacts = false;
         opts.deduplicateMeshEdges = false;
         opts.maxLines = 3u;
-        Vector<PhysicsDebugLine> lines;
-        const PhysicsDebugDrawStats exactFit = BuildPhysicsDebugLines(triWorld, opts, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        const PhysicsDebugDrawStats exactFit = CollectPhysicsDebugLinesForTest(triWorld, opts, lines);
         EXPECT_FALSE(exactFit.truncated);
         EXPECT_EQ(exactFit.emittedLines, 3u);
         EXPECT_EQ(exactFit.droppedLines, 0u);
 
         opts.maxLines = 2u;
-        const PhysicsDebugDrawStats overflowStats = BuildPhysicsDebugLines(triWorld, opts, lines);
+        const PhysicsDebugDrawStats overflowStats = CollectPhysicsDebugLinesForTest(triWorld, opts, lines);
         EXPECT_TRUE(overflowStats.truncated);
         EXPECT_EQ(overflowStats.emittedLines, 2u);
         EXPECT_GE(overflowStats.droppedLines, 1u);
@@ -5435,7 +5514,7 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         bvhOnlyOpts.drawMeshBvh = true;
         bvhOnlyOpts.drawJoints = false;
         bvhOnlyOpts.drawContacts = false;
-        const PhysicsDebugDrawStats bvhStats = BuildPhysicsDebugLines(triWorld, bvhOnlyOpts, lines);
+        const PhysicsDebugDrawStats bvhStats = CollectPhysicsDebugLinesForTest(triWorld, bvhOnlyOpts, lines);
         EXPECT_GT(bvhStats.emittedLines, 0u);
 
         PhysicsWorld sixWorld;
@@ -5459,7 +5538,7 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         jointOpts.drawShapes = false;
         jointOpts.drawContacts = false;
         jointOpts.drawJoints = true;
-        const PhysicsDebugDrawStats sixStats = BuildPhysicsDebugLines(sixWorld, jointOpts, lines);
+        const PhysicsDebugDrawStats sixStats = CollectPhysicsDebugLinesForTest(sixWorld, jointOpts, lines);
         EXPECT_GT(sixStats.emittedLines, 0u);
     }
 }
@@ -6490,7 +6569,7 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
             childPp.attachColliderToParentBody = true;
         }
         childExpEnt.addComponent<ColliderComponent>();
-        childExpEnt.addComponent<GpuRenderTransformExportComponent>().instanceIndex = 42u;
+        childExpEnt.addComponent<GpuRenderTransformExportComponent>();
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         {
@@ -6536,10 +6615,6 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         EXPECT_FALSE(sbEnt.getComponent<SoftBodyComponent>().softBody.attachments[0u].bodyId.valid());
         EXPECT_FALSE(artEnt.getComponent<ArticulationComponent>().links[0u].proxyBodyId.valid());
         EXPECT_GT(physSys.physicsWorld().tryGetLinearVelocity(driftEnt.getComponent<RigidBodyComponent>().runtimeBodyId).value().x, 1.0e-4f);
-
-        Vector<GpuPhysicsRenderTransformOut> exportOut;
-        EXPECT_FALSE(physSys.exportRenderTransforms(exportOut));
-        EXPECT_TRUE(exportOut.empty());
     }
 }
 
@@ -6556,13 +6631,13 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         EXPECT_EQ(size_of<VehicleWheelFullBinary>(), cast<usize>(224u));
         EXPECT_EQ(size_of<RagdollComponentBinary>(), cast<usize>(336u));
         EXPECT_EQ(size_of<ArticulationComponentBinary>(), cast<usize>(336u));
-        EXPECT_EQ(size_of<ArticulationLinkFullBinary>(), cast<usize>(384u));
+        EXPECT_EQ(size_of<ArticulationLinkFullBinary>(), cast<usize>(352u));
         EXPECT_EQ(size_of<SoftBodyComponentBinary>(), cast<usize>(200u));
         EXPECT_EQ(size_of<SoftBodyBackstopBinary>(), cast<usize>(48u));
         EXPECT_EQ(size_of<FluidVolumeComponentBinary>(), cast<usize>(368u));
         EXPECT_EQ(size_of<ForceFieldComponentBinary>(), cast<usize>(288u));
         EXPECT_EQ(size_of<FractureComponentBinary>(), cast<usize>(400u));
-        EXPECT_EQ(size_of<GpuRenderTransformExportComponentBinary>(), cast<usize>(48u));
+        EXPECT_EQ(size_of<GpuRenderTransformExportComponentBinary>(), cast<usize>(32u));
         EXPECT_EQ(size_of<HeightfieldHeaderBinary>(), cast<usize>(80u));
 
         PhysicsAssetBinaryCodec assetCodec;
@@ -7189,8 +7264,8 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         links[1u].jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
         links[1u].mass = 2.0f;
         links[1u].enableLimit = true;
-        links[1u].lowerLimit = -0.2f;
-        links[1u].upperLimit = 0.2f;
+        links[1u].lowerLimits = f32x4(-0.2f, -s_Pi, -s_Pi, 0.0f);
+        links[1u].upperLimits = f32x4(0.2f, s_Pi, s_Pi, 0.0f);
         links[1u].limitRestitution = 0.8f;
 
         links[2u].parentIndex = 1u;
@@ -7203,37 +7278,37 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         Articulation art;
         ASSERT_TRUE(art.init(Transform3D(VectorSingle(0.0f, 5.0f, 0.0f, 0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(links.data(), 3u)));
         art.subSteps = 1u;
-        art.linkStates[1u].q = 0.1f;
-        art.linkStates[1u].qd = 0.7f;
-        art.linkStates[2u].q = -0.25f;
-        art.linkStates[2u].qd = -0.4f;
-        art.linkStates[1u].externalTau = 4.5f;
-        art.linkStates[2u].externalTau = -1.75f;
+        art.linkStates[1u].q3 = f32x4(0.1f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[1u].qd3 = f32x4(0.7f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[2u].q3 = f32x4(-0.25f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[2u].qd3 = f32x4(-0.4f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[1u].externalTau3 = f32x4(4.5f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[2u].externalTau3 = f32x4(-1.75f, 0.0f, 0.0f, 0.0f);
         art.computeForwardDynamicsABA(world.gravity());
-        Array<f32, 3u> abaQdd;
-        abaQdd[0u] = 0.0f;
-        abaQdd[1u] = art.linkStates[1u].qdd;
-        abaQdd[2u] = art.linkStates[2u].qdd;
+        Array<f32, 2u> abaQdd;
+        abaQdd[0u] = art.linkStates[1u].qdd3.x;
+        abaQdd[1u] = art.linkStates[2u].qdd3.x;
         Vector<f32> rneaTau;
-        art.computeInverseDynamicsRNEA(world.gravity(), Span<f32>(abaQdd.data(), 3u), rneaTau);
-        ASSERT_EQ(rneaTau.size(), cast<usize>(3u));
-        EXPECT_NEAR(rneaTau[1u], 4.5f, 1.0e-3f);
-        EXPECT_NEAR(rneaTau[2u], -1.75f, 1.0e-3f);
+        SpatialVec unusedRootWrench;
+        art.computeInverseDynamicsRNEA(world.gravity(), SpatialVec(), Span<f32>(abaQdd.data(), 2u), rneaTau, unusedRootWrench);
+        ASSERT_EQ(rneaTau.size(), cast<usize>(2u));
+        EXPECT_NEAR(rneaTau[0u], 4.5f, 1.0e-3f);
+        EXPECT_NEAR(rneaTau[1u], -1.75f, 1.0e-3f);
 
         const f32 invEffY = art.computeLinkEffectiveInvMassAlong(2u, VectorSingle(art.linkStates[2u].worldTransform.position), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         EXPECT_GT(invEffY, 0.05f);
-        const f32 qdBeforeImp = art.linkStates[1u].qd;
+        const f32 qdBeforeImp = art.linkStates[1u].qd3.x;
         art.applySpatialImpulseToLink(1u, VectorSingle(art.linkStates[1u].worldTransform.position), VectorSingle(0.0f, 5.0f, 0.0f, 0.0f));
-        EXPECT_GT(Abs(VectorSingle(art.linkStates[1u].qd - qdBeforeImp)).x, 0.1f);
+        EXPECT_GT(Abs(VectorSingle(art.linkStates[1u].qd3.x - qdBeforeImp)).x, 0.1f);
 
-        art.linkStates[1u].externalTau = 0.0f;
-        art.linkStates[2u].externalTau = 0.0f;
-        art.linkStates[1u].q = -0.195f;
-        art.linkStates[1u].qd = -6.0f;
-        art.linkStates[2u].q = 0.0f;
-        art.linkStates[2u].qd = 0.0f;
+        art.linkStates[1u].externalTau3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[2u].externalTau3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[1u].q3 = f32x4(-0.195f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[1u].qd3 = f32x4(-6.0f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[2u].q3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        art.linkStates[2u].qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         art.step(world, dt);
-        EXPECT_GT(art.linkStates[1u].qd, 2.0f);
+        EXPECT_GT(art.linkStates[1u].qd3.x, 2.0f);
 
         PhysicsWorld cplWorld;
         cplWorld.setGravity(VectorSingle(0.0f));
@@ -7262,10 +7337,10 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         ASSERT_TRUE(cplArt.init(Transform3D(VectorSingle(0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(cLinks.data(), 2u)));
         cplArt.enableContactCoupling = true;
         cplArt.contactRestitution = 0.5f;
-        cplArt.linkStates[1u].qd = 8.0f;
+        cplArt.linkStates[1u].qd3 = f32x4(8.0f, 0.0f, 0.0f, 0.0f);
         cplArt.step(cplWorld, dt);
         EXPECT_GT(cplWorld.tryGetLinearVelocity(hitDynId).value().y, 0.5f);
-        EXPECT_LT(cplArt.linkStates[1u].qd, 8.0f);
+        EXPECT_LT(cplArt.linkStates[1u].qd3.x, 8.0f);
     }
 
     {
@@ -7368,8 +7443,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         opts.drawJoints = false;
         opts.drawContacts = false;
         opts.drawInertiaTensors = true;
-        Vector<PhysicsDebugLine> lines;
-        const PhysicsDebugDrawStats stats = BuildPhysicsDebugLines(world, opts, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        const PhysicsDebugDrawStats stats = CollectPhysicsDebugLinesForTest(world, opts, lines);
         EXPECT_FALSE(stats.truncated);
         EXPECT_EQ(lines.size(), cast<usize>(36u));
         for(usize li = 0u; li < lines.size(); ++li){
@@ -7402,8 +7477,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         opts.drawShapes = false;
         opts.drawContacts = false;
         opts.drawJoints = true;
-        Vector<PhysicsDebugLine> lines;
-        BuildPhysicsDebugLines(world, opts, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        CollectPhysicsDebugLinesForTest(world, opts, lines);
         u32 pinionCircleLinesAtB = 0u;
         for(usize li = 0u; li < lines.size(); ++li){
             const VectorSingle aS = Abs(VectorSingle(lines[li].start));
@@ -7441,8 +7516,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         opts.drawShapes = false;
         opts.drawContacts = false;
         opts.drawJoints = true;
-        Vector<PhysicsDebugLine> lines;
-        BuildPhysicsDebugLines(world, opts, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        CollectPhysicsDebugLinesForTest(world, opts, lines);
         b8 foundPathSeg = false;
         for(usize li = 0u; li < lines.size(); ++li){
             const VectorSingle dS = Abs(VectorSingle(lines[li].start) - VectorSingle(2.5f, 1.0f, 0.0f, 0.0f));
@@ -7475,8 +7550,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         opts.drawShapes = false;
         opts.drawContacts = false;
         opts.drawJoints = true;
-        Vector<PhysicsDebugLine> lines;
-        BuildPhysicsDebugLines(world, opts, lines);
+        Vector<TestPhysicsDebugLine> lines;
+        CollectPhysicsDebugLinesForTest(world, opts, lines);
         f32 maxAbsY = 0.0f;
         for(usize li = 0u; li < lines.size(); ++li){
             const VectorSingle ay = Abs(VectorSingle(lines[li].start.y, lines[li].end.y, 0.0f, 0.0f));
@@ -7496,31 +7571,31 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         PhysicsDebugDrawOptions opts;
         opts.drawJoints = false;
         opts.drawContacts = false;
-        Vector<PhysicsDebugLine> cylNoSkin;
-        BuildPhysicsDebugLines(world, opts, cylNoSkin);
+        Vector<TestPhysicsDebugLine> cylNoSkin;
+        CollectPhysicsDebugLinesForTest(world, opts, cylNoSkin);
 
         PhysicsWorld world2;
         world2.setGravity(VectorSingle(0.0f));
         const BodyId bId2 = world2.createBody(bd).value();
         ASSERT_TRUE(world2.createCylinderShape(bId2, ShapeDef(), MakeCylinderShape(VectorSingle(0.0f), 0.5f, 0.3f, 0.05f).value()).has_value());
-        Vector<PhysicsDebugLine> cylWithSkin;
-        BuildPhysicsDebugLines(world2, opts, cylWithSkin);
+        Vector<TestPhysicsDebugLine> cylWithSkin;
+        CollectPhysicsDebugLinesForTest(world2, opts, cylWithSkin);
         EXPECT_GT(cylWithSkin.size(), cylNoSkin.size());
 
         PhysicsWorld segWorld;
         segWorld.setGravity(VectorSingle(0.0f));
         const BodyId sbId = segWorld.createBody(bd).value();
         ASSERT_TRUE(segWorld.createSegmentShape(sbId, ShapeDef(), MakeSegmentShape(VectorSingle(-0.5f, 0.0f, 0.0f, 0.0f), VectorSingle(0.5f, 0.0f, 0.0f, 0.0f), 0.2f).value()).has_value());
-        Vector<PhysicsDebugLine> segLines;
-        BuildPhysicsDebugLines(segWorld, opts, segLines);
+        Vector<TestPhysicsDebugLine> segLines;
+        CollectPhysicsDebugLinesForTest(segWorld, opts, segLines);
         EXPECT_GT(segLines.size(), cast<usize>(25u));
 
         PhysicsWorld tcWorld;
         tcWorld.setGravity(VectorSingle(0.0f));
         const BodyId tbId = tcWorld.createBody(bd).value();
         ASSERT_TRUE(tcWorld.createTaperedCapsuleShape(tbId, ShapeDef(), MakeTaperedCapsuleShape(VectorSingle(0.0f, -0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), 0.35f, 0.15f).value()).has_value());
-        Vector<PhysicsDebugLine> tcLines;
-        BuildPhysicsDebugLines(tcWorld, opts, tcLines);
+        Vector<TestPhysicsDebugLine> tcLines;
+        CollectPhysicsDebugLinesForTest(tcWorld, opts, tcLines);
         EXPECT_GT(tcLines.size(), cast<usize>(20u));
         for(usize li = 0u; li < tcLines.size(); ++li)
             EXPECT_TRUE(IsFinite(VectorSingle(tcLines[li].start)) && IsFinite(VectorSingle(tcLines[li].end)));
@@ -7536,8 +7611,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         ASSERT_TRUE(hfRes.has_value());
         hfRes.value().thickness = 0.4f;
         ASSERT_TRUE(hfWorld.createHeightfieldShape(hbId, ShapeDef(), hfRes.value()).has_value());
-        Vector<PhysicsDebugLine> hfLines;
-        BuildPhysicsDebugLines(hfWorld, opts, hfLines);
+        Vector<TestPhysicsDebugLine> hfLines;
+        CollectPhysicsDebugLinesForTest(hfWorld, opts, hfLines);
         b8 foundDiag = false;
         b8 foundBottom = false;
         for(usize li = 0u; li < hfLines.size(); ++li){
@@ -7582,8 +7657,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         cOpts.drawJoints = false;
         cOpts.drawContacts = true;
         cOpts.drawContactDetails = true;
-        Vector<PhysicsDebugLine> cLines;
-        BuildPhysicsDebugLines(world, cOpts, cLines);
+        Vector<TestPhysicsDebugLine> cLines;
+        CollectPhysicsDebugLinesForTest(world, cOpts, cLines);
         b8 foundZFriction = false;
         for(usize li = 0u; li < cLines.size(); ++li){
             if(cLines[li].color.z < 0.4f && cLines[li].color.y > 0.75f){
@@ -7650,9 +7725,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         subOpts.drawJoints = false;
         subOpts.drawContacts = false;
         subOpts.drawSubsystems = true;
-        Vector<PhysicsDebugLine> subLines;
-        PhysicsDebugWorldLineSink subSink(subOpts.maxLines, subLines);
-        BuildEcsPhysicsDebugLinesToSink(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), subSink);
+        Vector<TestPhysicsDebugLine> subLines;
+        CollectEcsPhysicsDebugLinesForTest(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), subLines);
         b8 foundFluidAt10 = false;
         for(usize li = 0u; li < subLines.size(); ++li){
             if(subLines[li].start.x > 8.5f && subLines[li].start.x < 11.5f)
@@ -7665,9 +7739,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         const f32 yAfterStep1 = tw.world.getComponent<TransformComponent>(ball.id()).position.y;
         EXPECT_LT(yAfterStep1, 5.0f);
 
-        Vector<PhysicsDebugLine> subLinesRag;
-        PhysicsDebugWorldLineSink subSinkRag(subOpts.maxLines, subLinesRag);
-        BuildEcsPhysicsDebugLinesToSink(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), subSinkRag);
+        Vector<TestPhysicsDebugLine> subLinesRag;
+        CollectEcsPhysicsDebugLinesForTest(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), subLinesRag);
         b8 foundRagdollAtNeg8 = false;
         for(usize li = 0u; li < subLinesRag.size(); ++li){
             if(subLinesRag[li].start.x < -7.5f && subLinesRag[li].start.x > -8.5f)
@@ -8204,7 +8277,7 @@ void VerifyPhysicsEdgeCases_Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture(){
         ShapeDef chunkSd;
         chunkSd.density = 1.0f;
         ASSERT_TRUE(fracW.createHullShape(srcBody, chunkSd, boxH).has_value());
-        const f32 origMass = fracW.bodyMass(srcBody);
+        const f32 origMass = fracW.tryGetBodyMass(srcBody).value_or(0.0f);
         const Expected<FractureSpawnResult> spawnRes = SpawnFracturedHullBody(srcBody, boxH, chunkSd, fp, 1.5f, true, fracW);
         ASSERT_TRUE(spawnRes.has_value());
         EXPECT_FALSE(fracW.isValidBody(srcBody));
@@ -8213,7 +8286,7 @@ void VerifyPhysicsEdgeCases_Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture(){
         for(usize ci = 0u; ci < spawnRes.value().chunkBodies.size(); ++ci){
             const BodyId cb = spawnRes.value().chunkBodies[ci];
             EXPECT_TRUE(fracW.isValidBody(cb));
-            chunkMassSum += fracW.bodyMass(cb);
+            chunkMassSum += fracW.tryGetBodyMass(cb).value_or(0.0f);
             EXPECT_GT(fracW.tryGetLinearVelocity(cb).value().x, 0.25f);
         }
         EXPECT_NEAR(chunkMassSum, origMass, 1.0e-2f);
@@ -8310,7 +8383,6 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         ASSERT_TRUE(vw.createHullShape(chId, chSd, MakeBoxHull(0.9f, 0.35f, 2.0f, 0.0f).value()).has_value());
 
         VehicleEngineDef eng;
-        eng.useSolverImpulses = true;
         eng.automaticTransmission = true;
         eng.torqueCurvePoints.push_back(f32x2u(900.0f, 260.0f));
         eng.torqueCurvePoints.push_back(f32x2u(2800.0f, 520.0f));
@@ -8528,7 +8600,6 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         bones[2u].hullRadius = 0.01f;
 
         for(usize bi = 1u; bi < bones.size(); ++bi){
-            bones[bi].useSolverMotors = true;
             bones[bi].motorMaxTorque = 120.0f;
             bones[bi].motorHertz = 10.0f;
             bones[bi].motorDamping = 1.0f;
@@ -8689,8 +8760,8 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         links[1u].inertiaTensor = SymMat3(0.2f, 0.02f, 0.01f, 0.25f, 0.01f, 0.18f);
         links[1u].enableDrive = true;
         links[1u].driveTargetPos3 = f32x4(0.45f, -0.35f, 0.0f, 0.0f);
-        links[1u].driveStiffness = 90.0f;
-        links[1u].driveDamping = 10.0f;
+        links[1u].driveStiffness3 = f32x4(90.0f, 90.0f, 90.0f, 0.0f);
+        links[1u].driveDamping3 = f32x4(10.0f, 10.0f, 10.0f, 0.0f);
 
         links[2u].parentIndex = 1u;
         links[2u].jointType = ArticulationJointType::Spherical;
@@ -8704,8 +8775,8 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         links[2u].upperLimits = f32x4(0.4f, 0.4f, 0.4f, 0.0f);
         links[2u].enableDrive = true;
         links[2u].driveTargetPos3 = f32x4(0.25f, 0.2f, -0.15f, 0.0f);
-        links[2u].driveStiffness = 60.0f;
-        links[2u].driveDamping = 6.0f;
+        links[2u].driveStiffness3 = f32x4(60.0f, 60.0f, 60.0f, 0.0f);
+        links[2u].driveDamping3 = f32x4(6.0f, 6.0f, 6.0f, 0.0f);
 
         Articulation art;
         ASSERT_TRUE(art.init(Transform3D(VectorSingle(0.0f, 4.0f, 0.0f, 0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(links.data(), 3u)));
@@ -8724,9 +8795,9 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         mLinks[1u].parentIndex = 0u;
         mLinks[1u].jointType = ArticulationJointType::Revolute;
         mLinks[1u].enableDrive = true;
-        mLinks[1u].driveTargetPos = 0.35f;
-        mLinks[1u].driveStiffness = 120.0f;
-        mLinks[1u].driveDamping = 12.0f;
+        mLinks[1u].driveTargetPos3 = f32x4(0.35f, 0.0f, 0.0f, 0.0f);
+        mLinks[1u].driveStiffness3 = f32x4(120.0f, 0.0f, 0.0f, 0.0f);
+        mLinks[1u].driveDamping3 = f32x4(12.0f, 0.0f, 0.0f, 0.0f);
         mLinks[2u].parentIndex = 1u;
         mLinks[2u].jointType = ArticulationJointType::Revolute;
 
@@ -8757,8 +8828,8 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
 
         for(u32 st = 0u; st < 15u; ++st)
             mimArt.step(mimW, dt);
-        EXPECT_GT(mimArt.linkStates[2u].q, 0.1f);
-        EXPECT_TRUE(IsFinite(VectorSingle(mimArt.linkStates[2u].q)));
+        EXPECT_GT(mimArt.linkStates[2u].q3.x, 0.1f);
+        EXPECT_TRUE(IsFinite(VectorSingle(mimArt.linkStates[2u].q3.x)));
 
         WorldDef hitDef;
         hitDef.hitEventThreshold = 0.01f;
@@ -8795,7 +8866,7 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         Articulation hitArt;
         ASSERT_TRUE(hitArt.init(Transform3D(VectorSingle(0.0f, 0.25f, 0.0f, 0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(hitLinks.data(), 2u)));
         hitArt.enableContactCoupling = true;
-        hitArt.linkStates[1u].qd = -6.0f;
+        hitArt.linkStates[1u].qd3 = f32x4(-6.0f, 0.0f, 0.0f, 0.0f);
         hitArt.step(hitW, dt);
         EXPECT_GT(preSolveHits, 0u);
         EXPECT_FALSE(hitW.contactHitEvents().empty());
@@ -8825,7 +8896,7 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         ASSERT_TRUE(scArt.init(Transform3D(VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(scLinks.data(), 3u)));
         scArt.enableSelfCollision = true;
         scArt.step(scW, dt);
-        EXPECT_TRUE(IsFinite(VectorSingle(scArt.linkStates[1u].qd)));
+        EXPECT_TRUE(IsFinite(VectorSingle(scArt.linkStates[1u].qd3.x)));
 
         PhysicsWorld slpW;
         slpW.setGravity(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
@@ -9130,8 +9201,8 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         EXPECT_EQ(b1Joints.size(), 2u);
         ASSERT_EQ(jc1.runtimeExtraJointIds.size(), 1u);
         EXPECT_TRUE(physSys.tryGetJointAngle(joint1.id()).has_value());
-        EXPECT_TRUE(physSys.tryGetJointAngle(jc1.runtimeJointId).has_value());
-        EXPECT_TRUE(physSys.tryGetJointTranslation(jc1.runtimeExtraJointIds[0u]).has_value());
+        EXPECT_TRUE(physSys.physicsWorld().tryGetJointAngle(jc1.runtimeJointId).has_value());
+        EXPECT_TRUE(physSys.physicsWorld().tryGetJointTranslation(jc1.runtimeExtraJointIds[0u]).has_value());
         EXPECT_TRUE(physSys.tryGetJointConstraintForce(joint1.id()).has_value());
         EXPECT_TRUE(physSys.tryGetJointConstraintTorque(joint1.id()).has_value());
 
@@ -9235,7 +9306,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         }
 
         ASSERT_TRUE(tw.world.tick(dt).has_value());
-        EXPECT_NEAR(physSys.physicsWorld().bodyMass(ent.getComponent<RigidBodyComponent>().runtimeBodyId), 17.5f, 1.0e-4f);
+        EXPECT_NEAR(physSys.physicsWorld().tryGetBodyMass(ent.getComponent<RigidBodyComponent>().runtimeBodyId).value_or(0.0f), 17.5f, 1.0e-4f);
         ASSERT_EQ(ent.getComponent<ColliderComponent>().runtimeExtraShapeIds.size(), 1u);
         const ShapeId stableExtra0 = ent.getComponent<ColliderComponent>().runtimeExtraShapeIds[0u];
         EXPECT_TRUE(stableExtra0.valid());
@@ -9243,7 +9314,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         ASSERT_EQ(ent.getComponent<ColliderComponent>().runtimeExtraShapeIds.size(), 1u);
         EXPECT_EQ(ent.getComponent<ColliderComponent>().runtimeExtraShapeIds[0u], stableExtra0);
-        EXPECT_NEAR(physSys.physicsWorld().bodyMass(ent.getComponent<RigidBodyComponent>().runtimeBodyId), 17.5f, 1.0e-4f);
+        EXPECT_NEAR(physSys.physicsWorld().tryGetBodyMass(ent.getComponent<RigidBodyComponent>().runtimeBodyId).value_or(0.0f), 17.5f, 1.0e-4f);
 
         {
             mut ColliderComponent colMut = ent.getComponent<ColliderComponent>();
@@ -9251,7 +9322,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             colMut.dirty = true;
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
-        EXPECT_NEAR(physSys.physicsWorld().bodyMass(ent.getComponent<RigidBodyComponent>().runtimeBodyId), 17.5f, 1.0e-4f);
+        EXPECT_NEAR(physSys.physicsWorld().tryGetBodyMass(ent.getComponent<RigidBodyComponent>().runtimeBodyId).value_or(0.0f), 17.5f, 1.0e-4f);
 
         u32 activeHullsBefore = 0u;
         for(usize hi = 0u; hi < physSys.physicsWorld().m_hullRefCounts.size(); ++hi){
@@ -9440,9 +9511,9 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             l1.jointType = ArticulationJointType::Revolute;
             l1.jointToChild = Transform3D(VectorSingle(0.0f, -0.5f, 0.0f, 0.0f), QuaternionIdentity());
             l1.enableDrive = true;
-            l1.driveStiffness = 50.0f;
-            l1.driveDamping = 5.0f;
-            l1.driveTargetPos = 0.4f;
+            l1.driveStiffness3 = f32x4(50.0f, 0.0f, 0.0f, 0.0f);
+            l1.driveDamping3 = f32x4(5.0f, 0.0f, 0.0f, 0.0f);
+            l1.driveTargetPos3 = f32x4(0.4f, 0.0f, 0.0f, 0.0f);
             ac.links.push_back(l0);
             ac.links.push_back(l1);
             ac.proxyEntityNames.push_back(Name("artStat"));
@@ -10363,8 +10434,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
 
         PhysicsDebugDrawOptions colOpts;
         colOpts.colorMode = PhysicsDebugColorMode::Backend;
-        Vector<PhysicsDebugLine> backendLines;
-        BuildPhysicsDebugLines(pw, colOpts, backendLines);
+        Vector<TestPhysicsDebugLine> backendLines;
+        CollectPhysicsDebugLinesForTest(pw, colOpts, backendLines);
         ASSERT_FALSE(backendLines.empty());
         const f32x4 firstColor = backendLines[0u].color;
         b8 sawDistinctBackendColor = false;
@@ -10381,8 +10452,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         EXPECT_TRUE(sawDistinctBackendColor);
 
         colOpts.colorMode = PhysicsDebugColorMode::Speed;
-        Vector<PhysicsDebugLine> speedLines;
-        BuildPhysicsDebugLines(pw, colOpts, speedLines);
+        Vector<TestPhysicsDebugLine> speedLines;
+        CollectPhysicsDebugLinesForTest(pw, colOpts, speedLines);
         ASSERT_FALSE(speedLines.empty());
         b8 sawDistinctSpeedColor = false;
         for(usize i = 1u; i < speedLines.size(); ++i){
@@ -10394,8 +10465,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         EXPECT_TRUE(sawDistinctSpeedColor);
 
         colOpts.colorMode = PhysicsDebugColorMode::Layer;
-        Vector<PhysicsDebugLine> layerLines;
-        BuildPhysicsDebugLines(pw, colOpts, layerLines);
+        Vector<TestPhysicsDebugLine> layerLines;
+        CollectPhysicsDebugLinesForTest(pw, colOpts, layerLines);
         ASSERT_FALSE(layerLines.empty());
         b8 sawDistinctLayerColor = false;
         for(usize i = 1u; i < layerLines.size(); ++i){
@@ -10424,8 +10495,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         hfSolidRes.value().flipDiagonal = true;
         ASSERT_TRUE(hfWorld.createHeightfieldShape(hbId, ShapeDef(), hfSolidRes.value()).has_value());
         PhysicsDebugDrawOptions hfOpts;
-        Vector<PhysicsDebugLine> solidLines;
-        BuildPhysicsDebugLines(hfWorld, hfOpts, solidLines);
+        Vector<TestPhysicsDebugLine> solidLines;
+        CollectPhysicsDebugLinesForTest(hfWorld, hfOpts, solidLines);
 
         b8 foundFlipDiag = false;
         for(usize li = 0u; li < solidLines.size(); ++li){
@@ -10443,8 +10514,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         hfHole.cellHoles.resize(4u, 0u);
         hfHole.cellHoles[0u] = 1u;
         ASSERT_TRUE(holeWorld.createHeightfieldShape(hhId, ShapeDef(), hfHole).has_value());
-        Vector<PhysicsDebugLine> holeLines;
-        BuildPhysicsDebugLines(holeWorld, hfOpts, holeLines);
+        Vector<TestPhysicsDebugLine> holeLines;
+        CollectPhysicsDebugLinesForTest(holeWorld, hfOpts, holeLines);
         EXPECT_LT(holeLines.size(), solidLines.size());
     }
 
@@ -10486,8 +10557,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         impOnly.drawJoints = false;
         impOnly.drawContacts = false;
         impOnly.drawContactImpulses = true;
-        Vector<PhysicsDebugLine> impLines;
-        BuildPhysicsDebugLines(w, impOnly, impLines);
+        Vector<TestPhysicsDebugLine> impLines;
+        CollectPhysicsDebugLinesForTest(w, impOnly, impLines);
         EXPECT_FALSE(impLines.empty());
 
         PhysicsDebugDrawOptions forceOnly;
@@ -10495,16 +10566,17 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         forceOnly.drawJoints = false;
         forceOnly.drawContacts = false;
         forceOnly.drawJointForces = true;
-        Vector<PhysicsDebugLine> forceLines;
-        BuildPhysicsDebugLines(w, forceOnly, forceLines);
+        Vector<TestPhysicsDebugLine> forceLines;
+        CollectPhysicsDebugLinesForTest(w, forceOnly, forceLines);
         EXPECT_FALSE(forceLines.empty());
 
         PhysicsDebugDrawOptions allOpts;
         allOpts.maxLines = 16u;
-        PhysicsDebugWorldLineSink vecSink(16u, impLines);
+        GpuDebugLineCollector collector;
+        PhysicsGpuDebugLineSink gpuSink(collector, 16u, allOpts.depthTest);
         const PhysicsDebugScreenProjector noProj = PhysicsDebugScreenProjector();
         PhysicsDebugDrawScratch scratch;
-        const PhysicsDebugDrawStats st = BuildPhysicsDebugLinesToSink<PhysicsDebugWorldLineSink>(w, allOpts, noProj, vecSink, scratch);
+        const PhysicsDebugDrawStats st = BuildPhysicsDebugLinesToSink<PhysicsGpuDebugLineSink>(w, allOpts, noProj, gpuSink, scratch);
         EXPECT_EQ(st.emittedLines, 16u);
     }
 
@@ -11027,9 +11099,9 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
             al1.parentIndex = 0u;
             al1.jointToChild = Transform3D(VectorSingle(0.0f, -1.0f, 0.0f, 0.0f), QuaternionIdentity());
             al1.enableDrive = true;
-            al1.driveStiffness = 200.0f;
-            al1.driveDamping = 5.0f;
-            al1.driveTargetPos = 1.0f;
+            al1.driveStiffness3 = f32x4(200.0f, 0.0f, 0.0f, 0.0f);
+            al1.driveDamping3 = f32x4(5.0f, 0.0f, 0.0f, 0.0f);
+            al1.driveTargetPos3 = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
             acAwake.links.push_back(al0);
             acAwake.links.push_back(al1);
         }
@@ -11576,7 +11648,8 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
         SoftBodyMeshCreateParams emptyParams;
-        const Expected<SoftBody> emptyRes = CreateSoftBodyFromMesh(emptyMesh, emptyParams);
+        Vector<u32> emptyMap;
+        const Expected<SoftBody> emptyRes = CreateSoftBodyFromMesh(emptyMesh, emptyParams, emptyMap);
         EXPECT_FALSE(emptyRes.has_value());
         EXPECT_GE(logger.errorCount(), 1u);
     }
@@ -11616,7 +11689,7 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
 
     SoftBodyRuntimeMeshCpuState meshBuilder;
     TransformComponent identityXf;
-    ASSERT_TRUE(meshBuilder.rebuildTopology(rawSb, identityXf));
+    ASSERT_TRUE(meshBuilder.rebuildTopology(rawSb, identityXf, s_NameNone));
     for(usize i = 0u; i < meshBuilder.uv0.size(); ++i){
         meshBuilder.uv0[i] = f32x2u(0.05f + 0.08f * cast<f32>(i), 0.1f + 0.07f * cast<f32>(i));
         meshBuilder.colors[i] = MakeHalf4U(0.1f + 0.08f * cast<f32>(i), 0.9f - 0.05f * cast<f32>(i), 0.5f, 1.0f);
@@ -11655,9 +11728,11 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
     EXPECT_FALSE(sb.distanceConstraints.empty());
     EXPECT_FALSE(sb.dihedralBendingConstraints.empty());
 
+    SoftBodyCachedSourceMesh cachedSource;
+    ExtractSoftBodyCachedSourceMesh(sourceMesh, cachedSource);
     SoftBodyRuntimeMeshCpuState softCpu;
-    ASSERT_TRUE(softCpu.rebuildTopologyFromMesh(sb, identityXf, sourceMesh, sourceMesh.virtualPath()));
-    EXPECT_FALSE(softCpu.needsTopologyRebuild(sb, sourceMesh.virtualPath()));
+    ASSERT_TRUE(softCpu.rebuildTopologyFromCachedSource(sb, identityXf, cachedSource, sourceMesh.virtualPath()));
+    EXPECT_FALSE(softCpu.needsTopologyRebuild(sb, identityXf, sourceMesh.virtualPath()));
     EXPECT_FALSE(softCpu.emptySurfaceSentinel);
     const u64 revAfterBuild = softCpu.editRevision;
     const u64 contentAfterBuild = softCpu.contentRevision;
@@ -11696,8 +11771,8 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
 
     EXPECT_GT(sb.topologyVersion, 0u);
     EXPECT_EQ(sb.particleSourceIndices.size(), sb.particles.size());
-    EXPECT_TRUE(softCpu.needsTopologyRebuild(sb, sourceMesh.virtualPath()));
-    ASSERT_TRUE(softCpu.rebuildTopologyFromMesh(sb, identityXf, sourceMesh, sourceMesh.virtualPath()));
+    EXPECT_TRUE(softCpu.needsTopologyRebuild(sb, identityXf, sourceMesh.virtualPath()));
+    ASSERT_TRUE(softCpu.rebuildTopologyFromCachedSource(sb, identityXf, cachedSource, sourceMesh.virtualPath()));
     EXPECT_GT(softCpu.editRevision, revAfterBuild);
     for(usize pi = 0u; pi < sb.particles.size(); ++pi){
         const u32 mappedSrc = sb.particleSourceIndices[pi];
@@ -11755,8 +11830,8 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
     {
         sb.surfaceTriangles.clear();
         ++sb.topologyVersion;
-        EXPECT_TRUE(softCpu.needsTopologyRebuild(sb, sourceMesh.virtualPath()));
-        ASSERT_TRUE(softCpu.rebuildTopologyFromMesh(sb, identityXf, sourceMesh, sourceMesh.virtualPath()));
+        EXPECT_TRUE(softCpu.needsTopologyRebuild(sb, identityXf, sourceMesh.virtualPath()));
+        ASSERT_TRUE(softCpu.rebuildTopologyFromCachedSource(sb, identityXf, cachedSource, sourceMesh.virtualPath()));
         EXPECT_TRUE(softCpu.emptySurfaceSentinel);
         EXPECT_EQ(softCpu.meshlets.size(), 1u);
         EXPECT_EQ(softCpu.meshletPrimitiveIndices.size(), 3u);
@@ -11786,7 +11861,8 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
         mut TransformComponent xf = sbEnt.addComponent<TransformComponent>();
         xf.position = f32x4(2.0f, 3.0f, 0.0f, 0.0f);
         mut SoftBodyComponent sbComp = sbEnt.addComponent<SoftBodyComponent>();
-        const SoftBody meshSb = CreateSoftBodyFromMesh(sourceMesh, meshParams).value();
+        Vector<u32> meshSbMap;
+        const SoftBody meshSb = CreateSoftBodyFromMesh(sourceMesh, meshParams, meshSbMap).value();
         sbComp.softBody = meshSb;
         EXPECT_FALSE(sbComp.softBody.isWorldSpaceBaked());
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
@@ -12305,16 +12381,16 @@ void VerifyPhysicsEdgeCases_Wave3SubsystemsPartAEdgeCases(){
         screwLinks[1u].jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
         screwLinks[1u].screwPitch = 0.25f;
         screwLinks[1u].enableDrive = true;
-        screwLinks[1u].driveTargetPos = 2.0f;
-        screwLinks[1u].driveStiffness = 120.0f;
-        screwLinks[1u].driveDamping = 14.0f;
+        screwLinks[1u].driveTargetPos3 = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
+        screwLinks[1u].driveStiffness3 = f32x4(120.0f, 0.0f, 0.0f, 0.0f);
+        screwLinks[1u].driveDamping3 = f32x4(14.0f, 0.0f, 0.0f, 0.0f);
 
         Articulation screwArt;
         ASSERT_TRUE(screwArt.init(Transform3D(VectorSingle(0.0f), QuaternionIdentity()), true, Span<ArticulationLinkDef>(screwLinks.data(), 2u)));
         for(u32 st = 0u; st < 20u; ++st)
             screwArt.step(artW, dt);
-        EXPECT_GT(screwArt.linkStates[1u].q, 0.2f);
-        EXPECT_NEAR(screwArt.linkStates[1u].worldTransform.position.z, screwArt.linkStates[1u].q * 0.25f, 1.0e-3f);
+        EXPECT_GT(screwArt.linkStates[1u].q3.x, 0.2f);
+        EXPECT_NEAR(screwArt.linkStates[1u].worldTransform.position.z, screwArt.linkStates[1u].q3.x * 0.25f, 1.0e-3f);
 
         Array<ArticulationLinkDef, 3u> sphereLinks;
         sphereLinks[0u].parentIndex = s_NullIndex;
@@ -12322,15 +12398,14 @@ void VerifyPhysicsEdgeCases_Wave3SubsystemsPartAEdgeCases(){
         sphereLinks[1u].jointType = ArticulationJointType::Spherical;
         sphereLinks[1u].jointToChild = Transform3D(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), QuaternionIdentity());
         sphereLinks[1u].enableLimit = true;
-        sphereLinks[1u].usePerDofLimits = true;
         sphereLinks[1u].useEllipticConeLimit = true;
         sphereLinks[1u].lowerLimits = f32x4(-0.4f, -0.35f, -0.55f, 0.0f);
         sphereLinks[1u].upperLimits = f32x4( 0.4f,  0.35f,  0.55f, 0.0f);
         sphereLinks[1u].enableDrive = true;
         sphereLinks[1u].useQuatDrive = true;
         sphereLinks[1u].driveTargetQuat = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.2f));
-        sphereLinks[1u].driveStiffness = 80.0f;
-        sphereLinks[1u].driveDamping = 8.0f;
+        sphereLinks[1u].driveStiffness3 = f32x4(80.0f, 80.0f, 80.0f, 0.0f);
+        sphereLinks[1u].driveDamping3 = f32x4(8.0f, 8.0f, 8.0f, 0.0f);
         sphereLinks[2u].parentIndex = 1u;
         sphereLinks[2u].jointType = ArticulationJointType::Prismatic;
         sphereLinks[2u].jointAxisLocal = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
@@ -12349,7 +12424,7 @@ void VerifyPhysicsEdgeCases_Wave3SubsystemsPartAEdgeCases(){
         sTen.upperLimit = 1.6f;
         sTen.stiffness = 100.0f;
         coneArt.spatialTendons.push_back(sTen);
-        coneArt.linkStates[2u].q = 0.8f;
+        coneArt.linkStates[2u].q3 = f32x4(0.8f, 0.0f, 0.0f, 0.0f);
         for(u32 st = 0u; st < 20u; ++st)
             coneArt.step(artW, dt);
         const f32 tipDist = Vector3Length(VectorSingle(coneArt.linkStates[2u].worldTransform.position) - VectorSingle(coneArt.baseTransform.position)).x;
@@ -12599,12 +12674,12 @@ void VerifyPhysicsEdgeCases_Wave4SubsystemsPartBEdgeCases(){
         mirrorXf.scale = f32x4(-1.0f, 1.0f, 1.0f, 0.0f);
         SoftBodyRuntimeMeshCpuState cpuPos;
         yzSb.setWorldSpaceBaked(true);
-        ASSERT_TRUE(cpuPos.rebuildTopology(yzSb, TransformComponent()));
+        ASSERT_TRUE(cpuPos.rebuildTopology(yzSb, TransformComponent(), s_NameNone));
         EXPECT_NEAR(cpuPos.uv0[1u].x, 1.0f, 1.0e-4f);
         EXPECT_NEAR(cpuPos.uv0[2u].y, 1.0f, 1.0e-4f);
         EXPECT_TRUE(cpuPos.needsTopologyRebuild(yzSb, mirrorXf, s_NameNone));
         SoftBodyRuntimeMeshCpuState cpuMir;
-        ASSERT_TRUE(cpuMir.rebuildTopology(yzSb, mirrorXf));
+        ASSERT_TRUE(cpuMir.rebuildTopology(yzSb, mirrorXf, s_NameNone));
         const VectorSingle pPos0(cpuPos.positions[cpuPos.triangleIndices[0u]].x, cpuPos.positions[cpuPos.triangleIndices[0u]].y, cpuPos.positions[cpuPos.triangleIndices[0u]].z, 0.0f);
         const VectorSingle pPos1(cpuPos.positions[cpuPos.triangleIndices[1u]].x, cpuPos.positions[cpuPos.triangleIndices[1u]].y, cpuPos.positions[cpuPos.triangleIndices[1u]].z, 0.0f);
         const VectorSingle pPos2(cpuPos.positions[cpuPos.triangleIndices[2u]].x, cpuPos.positions[cpuPos.triangleIndices[2u]].y, cpuPos.positions[cpuPos.triangleIndices[2u]].z, 0.0f);
@@ -13405,7 +13480,6 @@ void VerifyPhysicsEdgeCases_Wave4CodecsRigAssetsAndFractureComponent(){
         GpuRenderTransformExportComponent gxIn;
         gxIn.target = GpuRenderTransformExportTarget::FractureBody;
         gxIn.subTargetIndex = 3u;
-        gxIn.instanceIndex = 7u;
         gxIn.flags = 5u;
         gxIn.localScale = f32x4(2.0f, 3.0f, 4.0f, 0.0f);
         ASSERT_TRUE(subCodec.serializeGpuRenderTransformExport(gxIn, payload));
@@ -13413,7 +13487,6 @@ void VerifyPhysicsEdgeCases_Wave4CodecsRigAssetsAndFractureComponent(){
         ASSERT_TRUE(gxOut.has_value());
         EXPECT_EQ(gxOut.value().target, GpuRenderTransformExportTarget::FractureBody);
         EXPECT_EQ(gxOut.value().subTargetIndex, 3u);
-        EXPECT_EQ(gxOut.value().instanceIndex, 7u);
         EXPECT_EQ(gxOut.value().flags, 5u);
         EXPECT_NEAR(gxOut.value().localScale.x, 2.0f, 1.0e-5f);
         EXPECT_NEAR(gxOut.value().localScale.y, 3.0f, 1.0e-5f);

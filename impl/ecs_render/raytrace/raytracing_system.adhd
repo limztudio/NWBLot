@@ -214,9 +214,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 splitOpaqueSoftResolve,
         in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
-    public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources){
-        return this.renderShadowVisibility(commandList, targets, deferredLightingResources, false, false, false, Optional<in LightSpaceShadowSnapshot>());
-    }
     public Expected<GpuTaskId> declareShadowVisibilityTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,

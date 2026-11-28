@@ -4070,11 +4070,15 @@ u32 StepFractureClusterFromWorldHits(
         f32 otherMass = 0.0f;
         if(otherShape.valid() && world.isValidShape(otherShape) && otherShape.index < cast<u32>(world.m_shapes.size())){
             const BodyId otherBody = world.makeBodyId(world.m_shapes[otherShape.index].bodyId);
-            if(world.isValidBody(otherBody))
-                otherMass = world.bodyMass(otherBody);
+            const Expected<f32> otherMassRes = world.tryGetBodyMass(otherBody);
+            if(otherMassRes.has_value())
+                otherMass = otherMassRes.value();
         }
-        if(otherMass <= 0.0f)
-            otherMass = Max(1.0f, world.bodyMass(targetBody));
+        if(otherMass <= 0.0f){
+            const Expected<f32> targetMassRes = world.tryGetBodyMass(targetBody);
+            if(targetMassRes.has_value())
+                otherMass = Max(1.0f, targetMassRes.value());
+        }
         if(otherMass <= 0.0f)
             otherMass = Max(1.0f, cluster.totalMass);
 
@@ -4148,7 +4152,7 @@ Expected<FractureSpawnResult> SpawnFracturedHullBody(
     const VectorSingle srcRot = SafeNormalizeQuat(QuaternionMultiply(srcBodyRot, SafeNormalizeQuat(VectorSingle(shapeLocalXf.rotation))));
     const VectorSingle srcLinVel = VectorSingle(lvRes.value());
     const VectorSingle srcAngVel = VectorSingle(avRes.value());
-    const f32 srcMass = world.bodyMass(sourceBodyId);
+    const f32 srcMass = world.tryGetBodyMass(sourceBodyId).value_or(0.0f);
     const Expected<f32> ldRes = world.tryGetLinearDamping(sourceBodyId);
     const Expected<f32> adRes = world.tryGetAngularDamping(sourceBodyId);
     const Expected<f32> gsRes = world.tryGetGravityScale(sourceBodyId);

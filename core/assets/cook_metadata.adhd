@@ -73,9 +73,6 @@ extern Expected<b8> ParseMetadataBoolField(in Path a0, in StringView a1, in auto
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedDocumentMetadataParsers")]
 extern AssetMetadataParseResult TryAutoCollectedDocumentMetadataParsers(mut auto a0);
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedValueMetadataParsers")]
-extern AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(mut auto a0);
-
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedAssetBunchExpanders")]
 extern Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure> TryAutoCollectedAssetBunchExpanders(in auto a0);
 
@@ -97,9 +94,6 @@ extern void RegisterNonStandaloneAssetType(in Name a0, in StringView a1 = {});
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneFirstTokenSuffix")]
 extern void RegisterNonStandaloneFirstTokenSuffix(in StringView a0);
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::IsNonStandaloneAssetType")]
-extern b8 IsNonStandaloneAssetType(in Name a0);
-
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::IsLikelyNonStandaloneFirstToken")]
 extern b8 IsLikelyNonStandaloneFirstToken(in StringView a0);
 
@@ -114,17 +108,6 @@ extern Expected<T> ReadCookDependencyEntry<T>(in CookDependencyItemContext conte
 
 [cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ParseCookMetadataDocument"), cpp_flags(scratch_arena)]
 extern Expected<T> ParseCookMetadataDocument<T>(in Path a0, in StringView a1, in Path a2, in auto a3, in StringView a4, in auto a5);
-
-
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AddPlannedFileCount")]
-extern b8 AddPlannedFileCount(in u64 additional, mut u64 total);
-
-
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneAssetType")]
-extern void RegisterNonStandaloneAssetType(in Name type, in StringView label);
-
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneFirstTokenSuffix")]
-extern void RegisterNonStandaloneFirstTokenSuffix(in StringView suffix);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

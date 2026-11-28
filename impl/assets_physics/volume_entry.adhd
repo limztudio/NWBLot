@@ -945,7 +945,7 @@ void AppendScenePhysicsRefCompEntries<T>(in Span<T> entries, in EcsPhysicsSceneR
     }
 }
 
-b8 ValidateScenePhysicsEntityReferencesWithCache(
+b8 ValidateScenePhysicsEntityReferences(
     in Span<SceneCookEntry> scenes,
     in Span<EntityCookEntry> entities,
     in Span<RigidBodyComponentCookEntry> rigidBodies,
@@ -1065,7 +1065,7 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
                 }
                 else if(refEntry.kind == EcsPhysicsSceneRefCompKind::Vehicle){
                     in VehicleComponent vc = vehicles[refEntry.index].component;
-                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "wheel_entity_names", vc.wheelEntityNames, sceneEntityNames))
+                    if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "wheel_entities", vc.wheelEntityNames, sceneEntityNames))
                         allValid = false;
                     if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", vc.skeletonEntityName, sceneEntityNames))
                         allValid = false;
@@ -1097,35 +1097,6 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
         }
     }
     return allValid;
-}
-
-b8 ValidateScenePhysicsEntityReferences(
-    in Span<SceneCookEntry> scenes,
-    in Span<EntityCookEntry> entities,
-    in Span<RigidBodyComponentCookEntry> rigidBodies,
-    in Span<ColliderComponentCookEntry> colliders,
-    in Span<JointComponentCookEntry> joints,
-    in Span<PhysicsParentComponentCookEntry> parents,
-    in Span<VehicleComponentCookEntry> vehicles,
-    in Span<RagdollComponentCookEntry> ragdolls,
-    in Span<ArticulationComponentCookEntry> articulations,
-    in Span<SoftBodyComponentCookEntry> softBodies,
-    in b8 allowPartialEntityTable
-){
-    return ValidateScenePhysicsEntityReferencesWithCache(
-        scenes,
-        entities,
-        rigidBodies,
-        colliders,
-        joints,
-        parents,
-        vehicles,
-        ragdolls,
-        articulations,
-        softBodies,
-        Span<Name>(),
-        allowPartialEntityTable
-    );
 }
 
 

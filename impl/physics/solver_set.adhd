@@ -3260,40 +3260,6 @@ void CollideConvexProxyWithUnwrappedLeafMulti(
     }
 }
 
-void CollideConvexProxyWithLeafShapeMulti(
-    in ShapeProxyView proxyA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in Shape shapeB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in Vector<HeightfieldShape> heightfieldShapes,
-    in Vector<ScaledShape> scaledShapes,
-    in Vector<ChainShape> chainShapes,
-    in Vector<SdfShape> sdfShapes,
-    in ShapeId shapeIdB,
-    in Optional<TriangleFilterCallback> triFilter,
-    mut Manifold outPrimary,
-    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
-){
-    ShapeType leafType = ShapeType::kCount;
-    VectorSingle g0(0.0f);
-    VectorSingle g1(0.0f);
-    u32 gIdx = s_NullIndex;
-    VectorSingle scaleB(1.0f);
-    VectorSingle invScaleB(1.0f);
-    b8 isScaledB = false;
-    if(!UnwrapScaledShapeLeaf(shapeB, scaledShapes, leafType, g0, g1, gIdx, scaleB, invScaleB, isScaledB)){
-        outPrimary = Manifold();
-        outExtraManifolds.clear();
-        return;
-    }
-    CollideConvexProxyWithUnwrappedLeafMulti(proxyA, posA, rotA, leafType, g0, g1, gIdx, scaleB, invScaleB, isScaledB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdB, triFilter, outPrimary, outExtraManifolds);
-}
-
 b8 ComputeUnwrappedNonConvexBoundsAndRadius(
     in ShapeType leafType,
     in u32 gIdx,

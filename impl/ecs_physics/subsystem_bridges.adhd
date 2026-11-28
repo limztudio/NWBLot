@@ -914,21 +914,6 @@ void BuildScaledEcsVehicleDefs(
     }
 }
 
-void InitializeEcsVehicleController(
-    in EntityID entity,
-    in BodyId chassisId,
-    in b8 hasAnyPhysicsParents,
-    mut World world,
-    mut HashMap<EntityID, EcsWorldPose> poseCache,
-    mut Vector<VehicleWheelDef> scaledWheelsScratch,
-    mut VehicleComponent vc
-){
-    VehicleEngineDef scaledEng;
-    VectorSingle signedScale(1.0f, 1.0f, 1.0f, 0.0f);
-    BuildScaledEcsVehicleDefs(entity, hasAnyPhysicsParents, world, poseCache, vc, scaledEng, scaledWheelsScratch, signedScale);
-    vc.controller.init(chassisId, scaledEng, Span<VehicleWheelDef>(scaledWheelsScratch.data(), scaledWheelsScratch.size()));
-}
-
 EntityID ResolveEcsSkeletonTargetEntity(
     in EntityID ownerEntity,
     in EntityID explicitEntity,
@@ -1725,10 +1710,10 @@ void BuildRagdollWorldTargetPose(
 void ScaleArticulationJointDofs(in ArticulationLinkDef src, in VectorSingle absScale, mut ArticulationLinkDef dst){
     if(src.jointType == ArticulationJointType::Prismatic){
         const f32 axisScale = Max(Vector3Length(VectorSingle(src.jointAxisLocal) * absScale).x, 1.0e-4f);
-        dst.lowerLimit *= axisScale;
-        dst.upperLimit *= axisScale;
-        dst.driveTargetPos *= axisScale;
-        dst.driveTargetVel *= axisScale;
+        dst.lowerLimits = f32x4(src.lowerLimits.x * axisScale, src.lowerLimits.y, src.lowerLimits.z, 0.0f);
+        dst.upperLimits = f32x4(src.upperLimits.x * axisScale, src.upperLimits.y, src.upperLimits.z, 0.0f);
+        dst.driveTargetPos3 = f32x4(src.driveTargetPos3.x * axisScale, src.driveTargetPos3.y, src.driveTargetPos3.z, 0.0f);
+        dst.driveTargetVel3 = f32x4(src.driveTargetVel3.x * axisScale, src.driveTargetVel3.y, src.driveTargetVel3.z, 0.0f);
     }
     else if(src.jointType == ArticulationJointType::Helical){
         const f32 axisScale = Max(Vector3Length(VectorSingle(src.jointAxisLocal) * absScale).x, 1.0e-4f);
@@ -1744,10 +1729,6 @@ void ScaleArticulationJointDofs(in ArticulationLinkDef src, in VectorSingle absS
         const VectorSingle axis1 = SafeNormalizeVec3(refUp - axis0 * Vector3Dot(refUp, axis0).x, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const f32 s0 = Max(Vector3Length(axis0 * absScale).x, 1.0e-4f);
         const f32 s1 = Max(Vector3Length(axis1 * absScale).x, 1.0e-4f);
-        dst.lowerLimit *= s0;
-        dst.upperLimit *= s0;
-        dst.driveTargetPos *= s0;
-        dst.driveTargetVel *= s0;
         dst.lowerLimits = f32x4(src.lowerLimits.x * s0, src.lowerLimits.y * s1, src.lowerLimits.z, 0.0f);
         dst.upperLimits = f32x4(src.upperLimits.x * s0, src.upperLimits.y * s1, src.upperLimits.z, 0.0f);
         dst.driveTargetPos3 = f32x4(src.driveTargetPos3.x * s0, src.driveTargetPos3.y * s1, src.driveTargetPos3.z, 0.0f);
@@ -1938,25 +1919,19 @@ void ApplyArticulationDriveFromSkeleton(
 
         ad.enableDrive = (gain > 0.0f);
         if(gain > 0.0f){
-            if(ad.driveStiffness <= 0.0f && ad.driveStiffness3.x <= 0.0f){
-                ad.driveStiffness = 150.0f * gain;
-                ad.driveDamping = 20.0f * gain;
+            if(ad.driveStiffness3.x <= 0.0f && ad.driveStiffness3.y <= 0.0f && ad.driveStiffness3.z <= 0.0f){
                 ad.driveStiffness3 = f32x4(150.0f * gain, 150.0f * gain, 150.0f * gain, 0.0f);
                 ad.driveDamping3 = f32x4(20.0f * gain, 20.0f * gain, 20.0f * gain, 0.0f);
             }
             else{
-                ad.driveStiffness *= gain;
-                ad.driveDamping *= gain;
                 ad.driveStiffness3 = f32x4(VectorSetW(VectorSingle(ad.driveStiffness3) * gain, 0.0f));
                 ad.driveDamping3 = f32x4(VectorSetW(VectorSingle(ad.driveDamping3) * gain, 0.0f));
-                ad.driveMaxForce *= gain;
                 ad.driveMaxForce3 = f32x4(VectorSetW(VectorSingle(ad.driveMaxForce3) * gain, 0.0f));
             }
         }
         if(ad.jointType == ArticulationJointType::Revolute){
             const VectorSingle ax0 = SafeNormalizeVec3(VectorSingle(ad.jointAxisLocal), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
             const f32 ang = Vector3Dot(ArticulationRotVecFromQuat(jointTargetQ), ax0).x;
-            ad.driveTargetPos = ang;
             ad.driveTargetPos3 = f32x4(ang, 0.0f, 0.0f, 0.0f);
         }
         else if(ad.jointType == ArticulationJointType::Universal){
@@ -1968,7 +1943,6 @@ void ApplyArticulationDriveFromSkeleton(
             const f32 q0 = ATan2(VectorSingle(Vector3Dot(rA1, a2).x), VectorSingle(Vector3Dot(rA1, a1).x)).x;
             const VectorSingle rInvA0 = Vector3InverseRotate(a0, jointTargetQ);
             const f32 q1 = ATan2(VectorSingle(Vector3Dot(rInvA0, a2).x), VectorSingle(Vector3Dot(rInvA0, a0).x)).x;
-            ad.driveTargetPos = q0;
             ad.driveTargetPos3 = f32x4(q0, q1, 0.0f, 0.0f);
         }
         else if(ad.jointType == ArticulationJointType::Spherical){
@@ -2049,7 +2023,6 @@ u64 ComputeEcsVehicleLiveSyncSignature(in VehicleComponent vc, in VectorSingle s
     h = FluidHashMixU64(h, cast<u64>(eng.useAckermanSteering));
     h = FluidHashMixU64(h, cast<u64>(eng.automaticTransmission));
     h = FluidHashMixU64(h, cast<u64>(eng.useTorqueConverter));
-    h = FluidHashMixU64(h, cast<u64>(eng.useSolverImpulses));
     h = FluidHashMixU64(h, cast<u64>(eng.enableAbs));
     h = FluidHashMixU64(h, cast<u64>(eng.enableTcs));
     h = FluidHashMixU64(h, cast<u64>(eng.enableEsp));
@@ -2092,7 +2065,7 @@ u64 ComputeEcsVehicleLiveSyncSignature(in VehicleComponent vc, in VectorSingle s
         h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(w.antiRollPairIndex)));
         h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(w.trackSide)));
         h = FluidHashMixU64(h, cast<u64>(w.wheelCastMode));
-        h = FluidHashMixU64(h, cast<u64>(w.isSteerable) | (cast<u64>(w.isDriven) << 1u) | (cast<u64>(w.handbrakeAffected) << 2u) | (cast<u64>(w.useSweptCast) << 3u) | (cast<u64>(w.attachedToTrailer) << 4u));
+        h = FluidHashMixU64(h, cast<u64>(w.isSteerable) | (cast<u64>(w.isDriven) << 1u) | (cast<u64>(w.handbrakeAffected) << 2u) | (cast<u64>(w.attachedToTrailer) << 3u));
     }
     return h;
 }
@@ -2127,15 +2100,13 @@ void ComputeEcsArticulationLiveSignatures(
         h = FluidHashMixU64(h, cast<u64>(s.jointType));
         h = FluidHashMixU64(h, cast<u64>(s.limitDofMask));
         h = FluidHashMixU64(h, cast<u64>(s.driveDofMask));
-        h = FluidHashMixU64(h, cast<u64>(s.enableLimit) | (cast<u64>(s.enableDrive) << 1u) | (cast<u64>(s.usePerDofLimits) << 2u) | (cast<u64>(s.usePerDofDrives) << 3u) | (cast<u64>(s.useImplicitDrive) << 4u) | (cast<u64>(s.useEllipticConeLimit) << 5u) | (cast<u64>(s.useQuatDrive) << 6u));
-        h = FluidHashVec4(h, VectorSingle(s.lowerLimit, s.upperLimit, s.limitStiffness, s.limitDamping));
+        h = FluidHashMixU64(h, cast<u64>(s.enableLimit) | (cast<u64>(s.enableDrive) << 1u) | (cast<u64>(s.useImplicitDrive) << 2u) | (cast<u64>(s.useEllipticConeLimit) << 3u) | (cast<u64>(s.useQuatDrive) << 4u));
+        h = FluidHashVec4(h, VectorSingle(s.limitStiffness, s.limitDamping, s.jointDamping, s.jointFriction));
         h = FluidHashVec4(h, VectorSingle(s.lowerLimits));
         h = FluidHashVec4(h, VectorSingle(s.upperLimits));
-        h = FluidHashVec4(h, VectorSingle(s.driveTargetPos, s.driveTargetVel, s.driveStiffness, s.driveDamping));
         h = FluidHashVec4(h, VectorSingle(s.driveTargetPos3));
         h = FluidHashVec4(h, VectorSingle(s.driveTargetVel3));
-        h = FluidHashVec4(h, VectorSingle(s.driveMaxForce, s.jointDamping, s.jointFriction, s.limitRestitution));
-        h = FluidHashVec4(h, VectorSingle(s.screwPitch, s.breakForce, s.breakTorque, 0.0f));
+        h = FluidHashVec4(h, VectorSingle(s.limitRestitution, s.screwPitch, s.breakForce, s.breakTorque));
         h = FluidHashVec4(h, VectorSingle(s.driveStiffness3));
         h = FluidHashVec4(h, VectorSingle(s.driveDamping3));
         h = FluidHashVec4(h, VectorSingle(s.driveMaxForce3));
@@ -2220,28 +2191,19 @@ void SyncArticulationLiveSettings(
             mut ArticulationLinkDef dst = ac.articulation.linkDefs[i];
             dst.proxyBodyId = src.proxyBodyId;
             dst.enableLimit = src.enableLimit;
-            dst.lowerLimit = src.lowerLimit;
-            dst.upperLimit = src.upperLimit;
             dst.lowerLimits = src.lowerLimits;
             dst.upperLimits = src.upperLimits;
             dst.limitStiffness = src.limitStiffness;
             dst.limitDamping = src.limitDamping;
             dst.enableDrive = src.enableDrive;
-            dst.driveTargetPos = src.driveTargetPos;
-            dst.driveTargetVel = src.driveTargetVel;
             dst.driveTargetPos3 = src.driveTargetPos3;
             dst.driveTargetVel3 = src.driveTargetVel3;
-            dst.driveStiffness = src.driveStiffness;
-            dst.driveDamping = src.driveDamping;
-            dst.driveMaxForce = src.driveMaxForce;
             dst.jointDamping = src.jointDamping;
             dst.jointFriction = src.jointFriction;
             dst.limitRestitution = src.limitRestitution;
             dst.screwPitch = src.screwPitch;
             dst.limitDofMask = src.limitDofMask;
             dst.driveDofMask = src.driveDofMask;
-            dst.usePerDofLimits = src.usePerDofLimits;
-            dst.usePerDofDrives = src.usePerDofDrives;
             dst.driveStiffness3 = src.driveStiffness3;
             dst.driveDamping3 = src.driveDamping3;
             dst.driveMaxForce3 = src.driveMaxForce3;
@@ -3405,11 +3367,10 @@ void StepEcsPhysicsSubsystemBridges(
                 }
                 if(ac.links.empty()){
                     if(!ac.urdfXml.empty()){
-                        b8 parsedFixed = ac.isFixedBase;
-                        Vector<ArticulationLinkDef> urdfLinks;
-                        if(ParseUrdfArticulation(StringView(ac.urdfXml), urdfLinks, parsedFixed) && !urdfLinks.empty()){
-                            ac.links = urdfLinks;
-                            ac.isFixedBase = parsedFixed;
+                        ArticulationImportResult urdfRes;
+                        if(ParseUrdfArticulation(StringView(ac.urdfXml), urdfRes) && !urdfRes.links.empty()){
+                            ac.links = urdfRes.links;
+                            ac.isFixedBase = urdfRes.fixedBase;
                             ac.dirty = true;
                         }
                     }
@@ -4473,10 +4434,10 @@ void ProcessEcsFracturePostStepHits(
             if(otherShape.valid() && physicsWorld.isValidShape(otherShape) && otherShape.index < cast<u32>(physicsWorld.m_shapes.size())){
                 const BodyId otherBody = physicsWorld.makeBodyId(physicsWorld.m_shapes[otherShape.index].bodyId);
                 if(physicsWorld.isValidBody(otherBody))
-                    otherMass = physicsWorld.bodyMass(otherBody);
+                    otherMass = physicsWorld.tryGetBodyMass(otherBody).value_or(0.0f);
             }
             if(otherMass <= 0.0f)
-                otherMass = Max(1.0f, physicsWorld.bodyMass(targetBodyId));
+                otherMass = Max(1.0f, physicsWorld.tryGetBodyMass(targetBodyId).value_or(0.0f));
             if(otherMass <= 0.0f)
                 otherMass = Max(1.0f, fc.totalMass);
             const f32 impactImpulse = Max(hit.normalImpulse(), hit.approachSpeed() * otherMass);
@@ -4510,7 +4471,7 @@ void ProcessEcsFracturePostStepHits(
                     secFp.hullRadius = Max(0.0f, fc.convexRadius);
                     secFp.minChunkVolumeRatio = Max(1.0e-5f, fc.minChunkVolumeRatio);
                     secFp.impactPointBias = Clamp(fc.impactPointBias, 0.0f, 1.0f);
-                    const f32 detMass = Max(0.25f, physicsWorld.bodyMass(detBodyId));
+                    const f32 detMass = Max(0.25f, physicsWorld.tryGetBodyMass(detBodyId).value_or(0.0f));
                     const f32 burstSpeed = impactImpulse * Max(0.0f, fc.outwardBurstScale) / detMass;
                     if(fc.cluster.fractureDetachedBody(
                         detBodyId,
@@ -5501,37 +5462,6 @@ b8 TryBuildEcsGpuRenderTransformBinding(
     }
 
     return false;
-}
-
-void CollectEcsGpuRenderTransformBindings(
-    mut World world,
-    in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
-    in Vector<EcsSlotOwner> bodyIndexToEntity,
-    in b8 hasAnyPhysicsParents,
-    in b8 bodyHandlesTrusted,
-    mut HashMap<EntityID, EcsWorldPose> poseCache,
-    in PhysicsWorld physicsWorld,
-    in PhysicsGpuDispatcher gpuDispatcher,
-    mut Vector<GpuPhysicsRenderTransformBinding> outBindings,
-    mut Vector<GpuPhysicsBodyPose> outCustomPoses
-){
-    outBindings.clear();
-    outCustomPoses.clear();
-    const auto exportView = world.view<GpuRenderTransformExportComponent>();
-    const usize candidateCount = exportView.candidateCount();
-    if(candidateCount == 0u)
-        return;
-
-    outBindings.reserve(candidateCount);
-    for(in auto row : exportView){
-        const EntityID entity = Get<0>(row);
-        if(!Get<1>(row).enabled)
-            continue;
-        const f32x4 localScaleRaw = Get<1>(row).localScale;
-        GpuPhysicsRenderTransformBinding binding;
-        if(TryBuildEcsGpuRenderTransformBinding(entity, Get<1>(row).target, Get<1>(row).subTargetIndex, Get<1>(row).instanceIndex, Get<1>(row).flags, VectorSingle(localScaleRaw), entityRecords, bodyIndexToEntity, hasAnyPhysicsParents, bodyHandlesTrusted, physicsWorld, poseCache, false, true, false, gpuDispatcher, world, outCustomPoses, binding))
-            outBindings.push_back(binding);
-    }
 }
 
 void CollectEcsPassGpuRenderTransformBindings(

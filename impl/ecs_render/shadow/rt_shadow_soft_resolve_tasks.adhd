@@ -518,7 +518,15 @@ class ShadowVisibilityGraphTask{
 
         b8 shadowVisibilityWritten = false;
         if(this.m_prepared && this.m_hardwareShadowSupported){
-            shadowVisibilityWritten = this.m_raytracingSystem.renderShadowVisibility(commandList, this.m_targets, this.m_deferredLightingResources).has_value();
+            shadowVisibilityWritten = this.m_raytracingSystem.renderShadowVisibility(
+                commandList,
+                this.m_targets,
+                this.m_deferredLightingResources,
+                false,
+                false,
+                false,
+                Optional<in LightSpaceShadowSnapshot>()
+            ).has_value();
             if(!shadowVisibilityWritten)
                 warning("RendererSystem: ray-traced shadow visibility pass failed");
         }

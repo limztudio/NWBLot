@@ -1410,20 +1410,6 @@ class FluidVolume{
         this.evaluateSurfaceInternal(p, surfNorm, waveT1, waveT2, timeSec, wantNormal, trustPreparedCache, outDepth, outFlowVel, outNormal);
     }
 
-    public void evaluateSurfaceWithWaveBasis(
-        in VectorSingle p,
-        in VectorSingle surfNorm,
-        in VectorSingle waveT1,
-        in VectorSingle waveT2,
-        in f32 timeSec,
-        in b8 wantNormal,
-        mut f32 outDepth,
-        mut VectorSingle outFlowVel,
-        mut VectorSingle outNormal
-    )const{
-        this.evaluateSurfaceInternal(p, surfNorm, waveT1, waveT2, timeSec, wantNormal, false, outDepth, outFlowVel, outNormal);
-    }
-
     public void evaluateSurfaceAt(
         in VectorSingle p,
         in VectorSingle surfNorm,
@@ -1436,20 +1422,6 @@ class FluidVolume{
         VectorSingle t2(0.0f);
         this.computeSurfaceTangentBasis(surfNorm, t1, t2);
         this.evaluateSurfaceInternal(p, surfNorm, t1, t2, timeSec, true, false, outDepth, outFlowVel, outNormal);
-    }
-
-    public void evaluateSurfaceAtDepthAndFlow(
-        in VectorSingle p,
-        in VectorSingle surfNorm,
-        in f32 timeSec,
-        mut f32 outDepth,
-        mut VectorSingle outFlowVel
-    )const{
-        VectorSingle t1(0.0f);
-        VectorSingle t2(0.0f);
-        VectorSingle unusedNormal(0.0f);
-        this.computeSurfaceTangentBasis(surfNorm, t1, t2);
-        this.evaluateSurfaceInternal(p, surfNorm, t1, t2, timeSec, false, false, outDepth, outFlowVel, unusedNormal);
     }
 
     public VectorSingle surfaceNormalAt(in VectorSingle p, in VectorSingle surfNorm, in f32 timeSec)const{
@@ -1637,10 +1609,6 @@ class ForceField{
         this.sampleVectorFieldCore(worldPos, true, outVel, outCurl);
     }
 
-    public void setSphereCenter(in VectorSingle centerWorld){
-        this.obbCenter = f32x4(centerWorld, 1.0f);
-    }
-
     public void shiftOrigin(in VectorSingle negDelta){
         const VectorSingle d(negDelta, 0.0f);
         if(this.useBounds || (this.type == ForceFieldType::VectorField && !this.vectorFieldSamples.empty())){
@@ -1660,7 +1628,7 @@ class ForceField{
     }
 
     public VectorSingle sphereShapeCenter()const{
-        if(this.obbCenter.w != 0.0f || Vector3LengthSq(VectorSingle(this.obbCenter, 0.0f)).x > 0.0f)
+        if(Vector3LengthSq(VectorSingle(this.obbCenter, 0.0f)).x > 0.0f)
             return VectorSingle(this.obbCenter, 0.0f);
         if(
             this.type == ForceFieldType::PointGravity
@@ -1683,9 +1651,7 @@ class ForceField{
         }
         if(this.shape == ForceFieldShape::Sphere){
             const VectorSingle c = this.sphereShapeCenter();
-            f32 sr = this.radius;
-            if(sr <= 0.0f)
-                sr = Max(0.0f, this.obbHalfExtents.x);
+            const f32 sr = Max(0.0f, this.radius);
             return Vector3LengthSq(VectorSingle(pos - c, 0.0f)).x <= sr * sr;
         }
         if(this.shape == ForceFieldShape::Capsule){
@@ -4898,9 +4864,7 @@ b8 ResolveForceFieldDirectionAndQueryBox(in ForceField field, mut VectorSingle o
         }
         if(field.shape == ForceFieldShape::Sphere){
             const VectorSingle c = field.sphereShapeCenter();
-            f32 sr = field.radius;
-            if(sr <= 0.0f)
-                sr = Max(0.0f, field.obbHalfExtents.x);
+            const f32 sr = Max(0.0f, field.radius);
             const VectorSingle rVec(sr, sr, sr, 0.0f);
             outQueryBox = Aabb3D(c - rVec, c + rVec);
             return true;
@@ -5037,13 +5001,6 @@ u32 ResetWorldForceFieldGravityOverrideEpoch(mut PhysicsWorld world){
     return BumpEnvSingleFieldGravEpoch(world);
 }
 
-void ApplyForceFieldWithEpoch(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt, in u32 gravEpoch){
-    u32 effEpoch = 0u;
-    if(field.type == ForceFieldType::LocalGravityOverride)
-        effEpoch = gravEpoch;
-    ApplyForceFieldInternal(world, field, timeSec, dt, world.m_cpuScratch.envSingleFieldGravStamps, effEpoch);
-}
-
 void ApplyForceField(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt){
     u32 epoch = 0u;
     if(field.type == ForceFieldType::LocalGravityOverride)
@@ -5125,13 +5082,6 @@ void ApplyForceFieldWithSchedulerEpoch(mut PhysicsWorld world, in ForceField fie
     ApplyForceFieldWithSchedulerInternal(world, field, timeSec, dt, cpuScheduler, world.m_cpuScratch.envSingleFieldGravStamps, effEpoch);
 }
 
-void ApplyForceFieldWithScheduler(mut PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt, mut CpuTaskScheduler cpuScheduler){
-    u32 epoch = 0u;
-    if(field.type == ForceFieldType::LocalGravityOverride)
-        epoch = BumpEnvSingleFieldGravEpoch(world);
-    ApplyForceFieldWithSchedulerInternal(world, field, timeSec, dt, cpuScheduler, world.m_cpuScratch.envSingleFieldGravStamps, epoch);
-}
-
 void ApplyFluidVolumeToSingleBodyPrepared(
     mut PhysicsWorld world,
     in BodyId bodyId,
@@ -5176,18 +5126,6 @@ void ApplyFluidVolumeToSingleBodyPrepared(
         aSim.setForce(aSim.force() + f);
         aSim.setTorque(aSim.torque() + t);
     }
-}
-
-void ApplyFluidVolumeToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in FluidVolume fluid, in f32 timeSec, in f32 dt){
-    if(!fluid.enabled || dt <= 0.0f || !world.isValidBody(bodyId))
-        return;
-    world.flushDirtyBodyMasses();
-    const VectorSingle surfNorm = fluid.normalizedSurfaceNormal();
-    VectorSingle waveT1(0.0f);
-    VectorSingle waveT2(0.0f);
-    fluid.computeSurfaceTangentBasis(surfNorm, waveT1, waveT2);
-    BuoyancySubmersionScratch scratch;
-    ApplyFluidVolumeToSingleBodyPrepared(world, bodyId, fluid, surfNorm, waveT1, waveT2, world.gravity(), timeSec, 1.0f / Max(dt, 1.0e-4f), fluid.isPreparedCacheValidForBatch(surfNorm), scratch);
 }
 
 b8 ApplyForceFieldToSingleBodyPrepared(
@@ -5240,10 +5178,6 @@ b8 ApplyForceFieldToSingleBodyWithGravFlag(
     Aabb3D unusedBox;
     ResolveForceFieldDirectionAndQueryBox(field, hoistedDir, unusedBox);
     return ApplyForceFieldToSingleBodyPrepared(world, bodyId, field, hoistedDir, timeSec, 1.0f / Max(dt, 1.0e-4f), applyWorldGravOverrideSub);
-}
-
-void ApplyForceFieldToSingleBody(mut PhysicsWorld world, in BodyId bodyId, in ForceField field, in f32 timeSec, in f32 dt){
-    ApplyForceFieldToSingleBodyWithGravFlag(world, bodyId, field, timeSec, dt, true);
 }
 
 class PhysicsEnvironment{

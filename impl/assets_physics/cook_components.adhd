@@ -355,7 +355,7 @@ b8 ReadPhysicsF32OrNaNValue(
 ){
     if(fieldVal.isString()){
         const StringView text = fieldVal.asString();
-        if(text == "nan" || text == "NaN"){
+        if(text == "nan"){
             outVal = bit_cast<f32>(0x7fc00000u);
             return true;
         }
@@ -399,37 +399,23 @@ b8 ParseHeightfieldCellHolesValue(
     const usize cellCount = cast<usize>(cellCols) * cast<usize>(cellRows);
     const usize byteCount = (cellCount + 7u) / 8u;
     outCellHoles.assign(byteCount, 0u);
-    if(items[0u].isList()){
-        for(usize i = 0u; i < items.size(); ++i){
-            in MetascriptValue pairVal = items[i];
-            if(!pairVal.isList() || pairVal.listView().size() != 2u){
-                error("{} '{}': '{}[{}]' must be a [col, row] 2-element list", prefix, PathToString(file), field, i);
-                return false;
-            }
-            const Span<MetascriptValue> coords = pairVal.listView();
-            u32 cx = 0u;
-            u32 cz = 0u;
-            if(!ReadPhysicsU32Value(file, coords[0u], prefix, field, cx) || !ReadPhysicsU32Value(file, coords[1u], prefix, field, cz))
-                return false;
-            if(cx >= cellCols || cz >= cellRows){
-                error("{} '{}': '{}[{}]' cell ({}, {}) out of bounds ({}x{})", prefix, PathToString(file), field, i, cx, cz, cellCols, cellRows);
-                return false;
-            }
-            const usize cellIdx = cast<usize>(cz) * cast<usize>(cellCols) + cast<usize>(cx);
-            outCellHoles[cellIdx >> 3u] = outCellHoles[cellIdx >> 3u] | cast<u8>(1u << (cellIdx & 7u));
-        }
-        return true;
-    }
-    if(items.size() != cellCount){
-        error("{} '{}': field '{}' flat list must have {} entries", prefix, PathToString(file), field, cellCount);
-        return false;
-    }
-    for(usize i = 0u; i < cellCount; ++i){
-        b8 isHole = false;
-        if(!ReadPhysicsBoolValue(file, items[i], prefix, field, isHole))
+    for(usize i = 0u; i < items.size(); ++i){
+        in MetascriptValue pairVal = items[i];
+        if(!pairVal.isList() || pairVal.listView().size() != 2u){
+            error("{} '{}': '{}[{}]' must be a [col, row] 2-element list", prefix, PathToString(file), field, i);
             return false;
-        if(isHole)
-            outCellHoles[i >> 3u] = outCellHoles[i >> 3u] | cast<u8>(1u << (i & 7u));
+        }
+        const Span<MetascriptValue> coords = pairVal.listView();
+        u32 cx = 0u;
+        u32 cz = 0u;
+        if(!ReadPhysicsU32Value(file, coords[0u], prefix, field, cx) || !ReadPhysicsU32Value(file, coords[1u], prefix, field, cz))
+            return false;
+        if(cx >= cellCols || cz >= cellRows){
+            error("{} '{}': '{}[{}]' cell ({}, {}) out of bounds ({}x{})", prefix, PathToString(file), field, i, cx, cz, cellCols, cellRows);
+            return false;
+        }
+        const usize cellIdx = cast<usize>(cz) * cast<usize>(cellCols) + cast<usize>(cx);
+        outCellHoles[cellIdx >> 3u] = outCellHoles[cellIdx >> 3u] | cast<u8>(1u << (cellIdx & 7u));
     }
     return true;
 }

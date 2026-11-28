@@ -106,7 +106,7 @@ namespace __hidden_assets_physics_volume_entry_registration{
         return true;
 
     const auto walkDocument = [&](const Core::Metascript::Document& doc)noexcept{
-        doc.forEachDeclaration([&](const Core::Metascript::MStringView /*declType*/, const Core::Metascript::MStringView declVar) -> b8{
+        doc.forEachDeclaration([&](const Core::Metascript::MStringView, const Core::Metascript::MStringView declVar) -> b8{
             const Core::Metascript::Value* varVal = doc.findVariable(declVar);
             if(varVal != nullptr)
                 (void)CollectExternalPathsFromMetascriptValue(context.discoveredNwbFile.filePath, *varVal, context.scratchArena, outPaths, outCanUseCache);
@@ -114,24 +114,18 @@ namespace __hidden_assets_physics_volume_entry_registration{
         });
     };
 
-    if(context.ensureParsedDocument != nullptr){
-        const Core::Metascript::Document* const parsedDoc = context.ensureParsedDocument(context.ensureParsedDocumentUser);
-        if(parsedDoc == nullptr){
-            outCanUseCache = false;
-            return true;
-        }
-        walkDocument(*parsedDoc);
-        return true;
-    }
-
-    Core::Metascript::MetaArena parseArena(Name("physics_cook/external_source_parse"));
-    Core::Metascript::Document doc(parseArena);
-    if(!doc.parse(context.metaText)){
+    if(context.ensureParsedDocument == nullptr){
         outCanUseCache = false;
         return true;
     }
 
-    walkDocument(doc);
+    const Core::Metascript::Document* const parsedDoc = context.ensureParsedDocument(context.ensureParsedDocumentUser);
+    if(parsedDoc == nullptr){
+        outCanUseCache = false;
+        return true;
+    }
+
+    walkDocument(*parsedDoc);
     return true;
 }
 
@@ -246,7 +240,7 @@ template<typename EntryT>
             cachedPaths.push_back(cachedPath);
     }
 
-    return ValidateScenePhysicsEntityReferencesWithCache(
+    return ValidateScenePhysicsEntityReferences(
         scenes,
         TryCookEntrySpan<EntityCookEntry>(registry, EntityAsset::AssetTypeName()),
         TryCookEntrySpan<RigidBodyComponentCookEntry>(registry, RigidBodyComponentAsset::AssetTypeName()),

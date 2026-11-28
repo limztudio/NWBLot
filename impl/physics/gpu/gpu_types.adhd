@@ -1497,9 +1497,7 @@ GpuPhysicsForceField PackGpuForceField(in ForceField field){
     }
     else if(field.shape == ForceFieldShape::Sphere){
         const VectorSingle sc = field.sphereShapeCenter();
-        f32 sr = field.radius;
-        if(sr <= 0.0f)
-            sr = Max(0.0f, field.obbHalfExtents.x);
+        const f32 sr = Max(0.0f, field.radius);
         outField.shapeCenterOrCapA = f32x4(sc.x, sc.y, sc.z, sr);
         outField.shapeRotOrCapB = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
     }

@@ -284,9 +284,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         MetascriptValue valHfF(testArena);
         ASSERT_TRUE(ParseAssetValueFromScript(colHfFlat, docHfF, valHfF));
         const auto colHfFRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfF);
-        ASSERT_TRUE(colHfFRes.has_value());
-        ASSERT_EQ(colHfFRes.value().component.primaryShape.heightfieldCellHoles.size(), cast<usize>(1u));
-        EXPECT_EQ(colHfFRes.value().component.primaryShape.heightfieldCellHoles[0u], 0x0Au);
+        EXPECT_FALSE(colHfFRes.has_value());
 
         const StringView jointScript =
             "joint_component asset;\nasset.type = \"six_dof\";\nasset.enable_twist_limit = 1;\nasset.enable_slerp_drive = 1;\nasset.target_orientation_euler_degrees = [0.0, 90.0, 0.0];\nasset.slerp_hertz = 6.5;\nasset.slerp_damping_ratio = 0.85;\nasset.slerp_max_torque = 120.0;\nasset.six_dof_swing_limit_mode = \"cone\";\nasset.six_dof_swing_limit_y = 0.6;\nasset.six_dof_swing_limit_z = 0.45;\n";
@@ -1072,6 +1070,7 @@ void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
             Span<RagdollComponentCookEntry>(ragdolls),
             Span<ArticulationComponentCookEntry>(articulations),
             Span<SoftBodyComponentCookEntry>(softBodies),
+            Span<Name>(),
             false
         ));
         EXPECT_EQ(logger.errorCount(), errValid);
@@ -1090,6 +1089,7 @@ void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
             Span<RagdollComponentCookEntry>(ragdolls),
             Span<ArticulationComponentCookEntry>(articulations),
             Span<SoftBodyComponentCookEntry>(softBodies),
+            Span<Name>(),
             false
         ));
         EXPECT_GE(logger.errorCount(), errBroken + 2u);
@@ -1110,6 +1110,7 @@ void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
             Span<RagdollComponentCookEntry>(ragdolls),
             Span<ArticulationComponentCookEntry>(articulations),
             Span<SoftBodyComponentCookEntry>(softBodies),
+            Span<Name>(),
             false
         ));
         EXPECT_GT(logger.errorCount(), errMissingStrict);
@@ -1126,6 +1127,7 @@ void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
             Span<RagdollComponentCookEntry>(ragdolls),
             Span<ArticulationComponentCookEntry>(articulations),
             Span<SoftBodyComponentCookEntry>(softBodies),
+            Span<Name>(),
             true
         ));
         EXPECT_EQ(logger.errorCount(), errMissingPartial);
@@ -1136,7 +1138,7 @@ void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
         cachedPaths.push_back(Name("project/comp/rb_b"));
 
         const u32 errCachedPartial = logger.errorCount();
-        EXPECT_TRUE(ValidateScenePhysicsEntityReferencesWithCache(
+        EXPECT_TRUE(ValidateScenePhysicsEntityReferences(
             Span<SceneCookEntry>(scenes),
             Span<EntityCookEntry>(entities),
             Span<RigidBodyComponentCookEntry>(rigidBodies),
@@ -1153,7 +1155,7 @@ void VerifyPhysicsCook_Wave4DependenciesAndSceneEntityValidation(){
         EXPECT_EQ(logger.errorCount(), errCachedPartial);
 
         const u32 errCachedStrict = logger.errorCount();
-        EXPECT_FALSE(ValidateScenePhysicsEntityReferencesWithCache(
+        EXPECT_FALSE(ValidateScenePhysicsEntityReferences(
             Span<SceneCookEntry>(scenes),
             Span<EntityCookEntry>(entities),
             Span<RigidBodyComponentCookEntry>(rigidBodies),

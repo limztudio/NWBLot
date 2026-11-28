@@ -2351,22 +2351,6 @@ void CollideConvexProxyAndHeightfieldMulti(
     CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, hfShapeId, triFilter, outManifold, outExtraManifolds);
 }
 
-Manifold CollideConvexProxyAndHeightfield(
-    in ShapeProxyView proxyA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in HeightfieldShape hfB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
-    Optional<TriangleFilterCallback> noFilter;
-    CollideConvexProxyAndHeightfieldMulti(proxyA, posA, rotA, hfB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
-    return primary;
-}
-
 void PushHeightfieldASmoothedPoint(
     in VectorSingle candNInit,
     in VectorSingle candPtInit,

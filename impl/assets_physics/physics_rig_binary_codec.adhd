@@ -297,8 +297,7 @@ const u8 s_PhysicsBodyFlagEnableGyroscopicTorque = 0x20u;
 const u8 s_PhysicsBodyAllFlagsMask = 0x3fu;
 
 const u8 s_RagdollBoneExtraFlagUseSixDof = 0x01u;
-const u8 s_RagdollBoneExtraFlagUseSolverMotors = 0x02u;
-const u8 s_RagdollBoneExtraFlagApplyPresetOnCreate = 0x04u;
+const u8 s_RagdollBoneExtraFlagApplyPresetOnCreate = 0x02u;
 
 [serialize]
 class RagdollBoneFullBinary{
@@ -425,12 +424,10 @@ class ArticulationPayloadHeaderBinary{
 const u16 s_ArticulationLinkFlagUseFullInertiaTensor = 0x0001u;
 const u16 s_ArticulationLinkFlagEnableLimit = 0x0002u;
 const u16 s_ArticulationLinkFlagEnableDrive = 0x0004u;
-const u16 s_ArticulationLinkFlagUsePerDofLimits = 0x0008u;
-const u16 s_ArticulationLinkFlagUsePerDofDrives = 0x0010u;
-const u16 s_ArticulationLinkFlagUseImplicitDrive = 0x0020u;
-const u16 s_ArticulationLinkFlagUseEllipticConeLimit = 0x0040u;
-const u16 s_ArticulationLinkFlagUseQuatDrive = 0x0080u;
-const u16 s_ArticulationLinkAllFlagsMask = 0x00ffu;
+const u16 s_ArticulationLinkFlagUseImplicitDrive = 0x0008u;
+const u16 s_ArticulationLinkFlagUseEllipticConeLimit = 0x0010u;
+const u16 s_ArticulationLinkFlagUseQuatDrive = 0x0020u;
+const u16 s_ArticulationLinkAllFlagsMask = 0x003fu;
 
 [serialize]
 class ArticulationLinkFullBinary{
@@ -459,15 +456,8 @@ class ArticulationLinkFullBinary{
     public f32 inertiaM11 = 0.0f;
     public f32 inertiaM12 = 0.0f;
     public f32 inertiaM22 = 0.0f;
-    public f32 lowerLimit = -s_Pi;
-    public f32 upperLimit = s_Pi;
     public f32 limitStiffness = 0.0f;
     public f32 limitDamping = 0.0f;
-    public f32 driveTargetPos = 0.0f;
-    public f32 driveTargetVel = 0.0f;
-    public f32 driveStiffness = 0.0f;
-    public f32 driveDamping = 0.0f;
-    public f32 driveMaxForce = 1.0e6f;
     public f32 jointDamping = 0.0f;
     public f32 jointFriction = 0.0f;
     public f32 limitRestitution = 0.0f;
@@ -556,18 +546,16 @@ class VehicleAssetHeaderBinary{
 const u16 s_VehicleFlagUseAckerman = 0x0001u;
 const u16 s_VehicleFlagAutomaticTransmission = 0x0002u;
 const u16 s_VehicleFlagUseTorqueConverter = 0x0004u;
-const u16 s_VehicleFlagUseSolverImpulses = 0x0008u;
-const u16 s_VehicleFlagEnableAbs = 0x0010u;
-const u16 s_VehicleFlagEnableTcs = 0x0020u;
-const u16 s_VehicleFlagEnableEsp = 0x0040u;
-const u16 s_VehicleAllFlagsMask = 0x007fu;
+const u16 s_VehicleFlagEnableAbs = 0x0008u;
+const u16 s_VehicleFlagEnableTcs = 0x0010u;
+const u16 s_VehicleFlagEnableEsp = 0x0020u;
+const u16 s_VehicleAllFlagsMask = 0x003fu;
 
 const u8 s_VehicleWheelFullFlagSteerable = 0x01u;
 const u8 s_VehicleWheelFullFlagDriven = 0x02u;
 const u8 s_VehicleWheelFullFlagHandbrake = 0x04u;
-const u8 s_VehicleWheelFullFlagSweptCast = 0x08u;
-const u8 s_VehicleWheelFullFlagAttachedToTrailer = 0x10u;
-const u8 s_VehicleWheelFullAllFlagsMask = 0x1fu;
+const u8 s_VehicleWheelFullFlagAttachedToTrailer = 0x08u;
+const u8 s_VehicleWheelFullAllFlagsMask = 0x0fu;
 
 [serialize]
 class VehiclePayloadHeaderBinary{
@@ -1995,7 +1983,6 @@ class PhysicsRigBinaryCodec{
             if(b.bodyDef.allowFastRotation) bbin.bodyFlags |= s_PhysicsBodyFlagAllowFastRotation;
             if(b.bodyDef.enableGyroscopicTorque) bbin.bodyFlags |= s_PhysicsBodyFlagEnableGyroscopicTorque;
             if(b.useSixDof) bbin.extraFlags |= s_RagdollBoneExtraFlagUseSixDof;
-            if(b.useSolverMotors) bbin.extraFlags |= s_RagdollBoneExtraFlagUseSolverMotors;
             if(b.applyPresetOnCreate) bbin.extraFlags |= s_RagdollBoneExtraFlagApplyPresetOnCreate;
             bbin.shapeType = cast<u8>(b.shapeType);
             bbin.preset = cast<u8>(b.preset);
@@ -2116,7 +2103,7 @@ class PhysicsRigBinaryCodec{
                 || bbin.extraShapeCount > 4u
                 || (bbin.shapeFlags & ~s_PhysicsShapeAllFlagsMask) != 0u
                 || (bbin.bodyFlags & ~s_PhysicsBodyAllFlagsMask) != 0u
-                || (bbin.extraFlags & ~(s_RagdollBoneExtraFlagUseSixDof | s_RagdollBoneExtraFlagUseSolverMotors | s_RagdollBoneExtraFlagApplyPresetOnCreate)) != 0u
+                || (bbin.extraFlags & ~(s_RagdollBoneExtraFlagUseSixDof | s_RagdollBoneExtraFlagApplyPresetOnCreate)) != 0u
                 || bbin.bodyType >= cast<u8>(BodyType::kCount)
                 || bbin.shapeType >= cast<u8>(RagdollBoneShapeType::kCount)
                 || bbin.preset >= cast<u8>(RagdollJointPreset::kCount)
@@ -2160,7 +2147,6 @@ class PhysicsRigBinaryCodec{
             b.shapeDef.userData = bbin.shapeUserData;
             this.unpackShapeDefFlags(bbin.shapeFlags, b.shapeDef);
             b.useSixDof = (bbin.extraFlags & s_RagdollBoneExtraFlagUseSixDof) != 0u;
-            b.useSolverMotors = (bbin.extraFlags & s_RagdollBoneExtraFlagUseSolverMotors) != 0u;
             b.applyPresetOnCreate = (bbin.extraFlags & s_RagdollBoneExtraFlagApplyPresetOnCreate) != 0u;
             b.jointAnchorWorld = bbin.jointAnchorWorld;
             b.jointAxisWorld = bbin.jointAxisWorld;
@@ -2379,19 +2365,15 @@ class PhysicsRigBinaryCodec{
                 || !IsFinite(VectorSingle(l.inertiaTensor.m11, l.inertiaTensor.m12, l.inertiaTensor.m22, 0.0f))
                 || l.mass <= 0.0f
                 || l.inertiaDiag.x <= 0.0f || l.inertiaDiag.y <= 0.0f || l.inertiaDiag.z <= 0.0f
-                || !IsFinite(VectorSingle(l.lowerLimit, l.upperLimit, l.limitStiffness, l.limitDamping))
+                || !IsFinite(VectorSingle(l.limitStiffness, l.limitDamping, l.jointDamping, l.jointFriction))
                 || !IsFinite(VectorSingle(l.lowerLimits)) || !IsFinite(VectorSingle(l.upperLimits))
-                || !IsFinite(VectorSingle(l.driveTargetPos, l.driveTargetVel, l.driveStiffness, l.driveDamping))
-                || !IsFinite(VectorSingle(l.driveMaxForce, l.jointDamping, l.jointFriction, l.limitRestitution))
+                || !IsFinite(VectorSingle(l.limitRestitution, l.screwPitch, l.breakForce, l.breakTorque))
                 || !IsFinite(VectorSingle(l.driveTargetPos3)) || !IsFinite(VectorSingle(l.driveTargetVel3))
                 || !IsFinite(VectorSingle(l.driveStiffness3)) || !IsFinite(VectorSingle(l.driveDamping3))
                 || !IsFinite(VectorSingle(l.driveMaxForce3)) || !IsFinite(VectorSingle(l.armature))
                 || !ValidPhysicsQuaternion(VectorSingle(l.driveTargetQuat))
-                || !IsFinite(VectorSingle(l.screwPitch, l.breakForce, l.breakTorque, 0.0f))
-                || l.lowerLimit > l.upperLimit
                 || l.lowerLimits.x > l.upperLimits.x || l.lowerLimits.y > l.upperLimits.y || l.lowerLimits.z > l.upperLimits.z
                 || l.limitStiffness < 0.0f || l.limitDamping < 0.0f || l.limitRestitution < 0.0f
-                || l.driveStiffness < 0.0f || l.driveDamping < 0.0f || l.driveMaxForce < 0.0f
                 || l.driveStiffness3.x < 0.0f || l.driveStiffness3.y < 0.0f || l.driveStiffness3.z < 0.0f
                 || l.driveDamping3.x < 0.0f || l.driveDamping3.y < 0.0f || l.driveDamping3.z < 0.0f
                 || l.driveMaxForce3.x < 0.0f || l.driveMaxForce3.y < 0.0f || l.driveMaxForce3.z < 0.0f
@@ -2550,7 +2532,7 @@ class PhysicsRigBinaryCodec{
     )const{
         static_assert(
             size_of<ArticulationPayloadHeaderBinary>() == 96u
-            && size_of<ArticulationLinkFullBinary>() == 384u
+            && size_of<ArticulationLinkFullBinary>() == 352u
             && size_of<ArticulationMimicFullBinary>() == 32u
             && size_of<ArticulationTendonFullBinary>() == 128u
             && size_of<ArticulationSpatialTendonBinary>() == 192u
@@ -2615,15 +2597,8 @@ class PhysicsRigBinaryCodec{
             lbin.inertiaM11 = l.inertiaTensor.m11;
             lbin.inertiaM12 = l.inertiaTensor.m12;
             lbin.inertiaM22 = l.inertiaTensor.m22;
-            lbin.lowerLimit = l.lowerLimit;
-            lbin.upperLimit = l.upperLimit;
             lbin.limitStiffness = l.limitStiffness;
             lbin.limitDamping = l.limitDamping;
-            lbin.driveTargetPos = l.driveTargetPos;
-            lbin.driveTargetVel = l.driveTargetVel;
-            lbin.driveStiffness = l.driveStiffness;
-            lbin.driveDamping = l.driveDamping;
-            lbin.driveMaxForce = l.driveMaxForce;
             lbin.jointDamping = l.jointDamping;
             lbin.jointFriction = l.jointFriction;
             lbin.limitRestitution = l.limitRestitution;
@@ -2633,8 +2608,6 @@ class PhysicsRigBinaryCodec{
             if(l.useFullInertiaTensor) lbin.flags |= s_ArticulationLinkFlagUseFullInertiaTensor;
             if(l.enableLimit) lbin.flags |= s_ArticulationLinkFlagEnableLimit;
             if(l.enableDrive) lbin.flags |= s_ArticulationLinkFlagEnableDrive;
-            if(l.usePerDofLimits) lbin.flags |= s_ArticulationLinkFlagUsePerDofLimits;
-            if(l.usePerDofDrives) lbin.flags |= s_ArticulationLinkFlagUsePerDofDrives;
             if(l.useImplicitDrive) lbin.flags |= s_ArticulationLinkFlagUseImplicitDrive;
             if(l.useEllipticConeLimit) lbin.flags |= s_ArticulationLinkFlagUseEllipticConeLimit;
             if(l.useQuatDrive) lbin.flags |= s_ArticulationLinkFlagUseQuatDrive;
@@ -2811,19 +2784,12 @@ class PhysicsRigBinaryCodec{
             l.inertiaTensor.m11 = lbin.inertiaM11;
             l.inertiaTensor.m12 = lbin.inertiaM12;
             l.inertiaTensor.m22 = lbin.inertiaM22;
-            l.lowerLimit = lbin.lowerLimit;
-            l.upperLimit = lbin.upperLimit;
             l.lowerLimits = lbin.lowerLimits;
             l.upperLimits = lbin.upperLimits;
             l.limitStiffness = lbin.limitStiffness;
             l.limitDamping = lbin.limitDamping;
-            l.driveTargetPos = lbin.driveTargetPos;
-            l.driveTargetVel = lbin.driveTargetVel;
             l.driveTargetPos3 = lbin.driveTargetPos3;
             l.driveTargetVel3 = lbin.driveTargetVel3;
-            l.driveStiffness = lbin.driveStiffness;
-            l.driveDamping = lbin.driveDamping;
-            l.driveMaxForce = lbin.driveMaxForce;
             l.jointDamping = lbin.jointDamping;
             l.jointFriction = lbin.jointFriction;
             l.limitRestitution = lbin.limitRestitution;
@@ -2840,8 +2806,6 @@ class PhysicsRigBinaryCodec{
             l.useFullInertiaTensor = (lbin.flags & s_ArticulationLinkFlagUseFullInertiaTensor) != 0u;
             l.enableLimit = (lbin.flags & s_ArticulationLinkFlagEnableLimit) != 0u;
             l.enableDrive = (lbin.flags & s_ArticulationLinkFlagEnableDrive) != 0u;
-            l.usePerDofLimits = (lbin.flags & s_ArticulationLinkFlagUsePerDofLimits) != 0u;
-            l.usePerDofDrives = (lbin.flags & s_ArticulationLinkFlagUsePerDofDrives) != 0u;
             l.useImplicitDrive = (lbin.flags & s_ArticulationLinkFlagUseImplicitDrive) != 0u;
             l.useEllipticConeLimit = (lbin.flags & s_ArticulationLinkFlagUseEllipticConeLimit) != 0u;
             l.useQuatDrive = (lbin.flags & s_ArticulationLinkFlagUseQuatDrive) != 0u;
@@ -3159,7 +3123,6 @@ class PhysicsRigBinaryCodec{
         if(e.useAckermanSteering) hdr.flags |= s_VehicleFlagUseAckerman;
         if(e.automaticTransmission) hdr.flags |= s_VehicleFlagAutomaticTransmission;
         if(e.useTorqueConverter) hdr.flags |= s_VehicleFlagUseTorqueConverter;
-        if(e.useSolverImpulses) hdr.flags |= s_VehicleFlagUseSolverImpulses;
         if(e.enableAbs) hdr.flags |= s_VehicleFlagEnableAbs;
         if(e.enableTcs) hdr.flags |= s_VehicleFlagEnableTcs;
         if(e.enableEsp) hdr.flags |= s_VehicleFlagEnableEsp;
@@ -3214,7 +3177,6 @@ class PhysicsRigBinaryCodec{
             if(w.isSteerable) wbin.flags |= s_VehicleWheelFullFlagSteerable;
             if(w.isDriven) wbin.flags |= s_VehicleWheelFullFlagDriven;
             if(w.handbrakeAffected) wbin.flags |= s_VehicleWheelFullFlagHandbrake;
-            if(w.useSweptCast) wbin.flags |= s_VehicleWheelFullFlagSweptCast;
             if(w.attachedToTrailer) wbin.flags |= s_VehicleWheelFullFlagAttachedToTrailer;
             AppendPOD(outBinary, wbin);
         }
@@ -3319,7 +3281,6 @@ class PhysicsRigBinaryCodec{
         e.useAckermanSteering = (hdr.flags & s_VehicleFlagUseAckerman) != 0u;
         e.automaticTransmission = (hdr.flags & s_VehicleFlagAutomaticTransmission) != 0u;
         e.useTorqueConverter = (hdr.flags & s_VehicleFlagUseTorqueConverter) != 0u;
-        e.useSolverImpulses = (hdr.flags & s_VehicleFlagUseSolverImpulses) != 0u;
         e.enableAbs = (hdr.flags & s_VehicleFlagEnableAbs) != 0u;
         e.enableTcs = (hdr.flags & s_VehicleFlagEnableTcs) != 0u;
         e.enableEsp = (hdr.flags & s_VehicleFlagEnableEsp) != 0u;
@@ -3383,7 +3344,6 @@ class PhysicsRigBinaryCodec{
             w.isSteerable = (wbin.flags & s_VehicleWheelFullFlagSteerable) != 0u;
             w.isDriven = (wbin.flags & s_VehicleWheelFullFlagDriven) != 0u;
             w.handbrakeAffected = (wbin.flags & s_VehicleWheelFullFlagHandbrake) != 0u;
-            w.useSweptCast = (wbin.flags & s_VehicleWheelFullFlagSweptCast) != 0u;
             w.attachedToTrailer = (wbin.flags & s_VehicleWheelFullFlagAttachedToTrailer) != 0u;
             data.wheels.push_back(w);
         }

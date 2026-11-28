@@ -98,6 +98,31 @@ Path OwnPath(Storage& storage, const ::Path<Arena>& source){
     return Path(storage.arena, source);
 }
 
+inline void PrepareCacheRecord(
+    const Path& assetCacheDirectory,
+    const Core::Assets::DiscoveredNwbFile& discoveredNwbFile,
+    const AStringView metaText,
+    const Sha256Digest& producerDigest,
+    Core::Alloc::ScratchArena& scratchArena,
+    Core::Assets::ScratchString& inOutSourcePathText,
+    Core::Assets::ScratchString& inOutCacheFileName,
+    Core::Assets::NwbFileAssetCacheRecord& outRecord
+){
+    Core::Assets::CookMetadataDetail::CookMetadataRegistrySnapshot registrySnapshot(scratchArena);
+    Core::Assets::CookMetadataDetail::CaptureMetadataRegistrySnapshot(registrySnapshot);
+    Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
+        assetCacheDirectory,
+        discoveredNwbFile,
+        metaText,
+        producerDigest,
+        registrySnapshot,
+        scratchArena,
+        inOutSourcePathText,
+        inOutCacheFileName,
+        outRecord
+    );
+}
+
 };
 NWB_END
 

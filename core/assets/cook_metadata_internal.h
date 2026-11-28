@@ -57,6 +57,8 @@ struct CookMetadataRegistrySnapshot final{
     Vector<Name, ScratchArena> nonStandaloneTypes;
     Vector<AStringView, ScratchArena> nonStandaloneTokens;
     Vector<AStringView, ScratchArena> nonStandaloneTokenSuffixes;
+    Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules;
+    Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena> externalSourceCollectors;
 
 
 public:
@@ -66,6 +68,8 @@ public:
         , nonStandaloneTypes(arena)
         , nonStandaloneTokens(arena)
         , nonStandaloneTokenSuffixes(arena)
+        , pairedSidecarRules(arena)
+        , externalSourceCollectors(arena)
     {}
 };
 
@@ -95,7 +99,6 @@ private:
 };
 
 void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRules);
-void CopyCookExternalSourceCollectors(Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena>& outCollectors);
 void CaptureMetadataRegistrySnapshot(CookMetadataRegistrySnapshot& outSnapshot);
 [[nodiscard]] AssetMetadataParseResult::Enum TryDocumentMetadataParsers(const CookMetadataRegistrySnapshot& snapshot, AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryValueMetadataParsers(const CookMetadataRegistrySnapshot& snapshot, AssetValueMetadataParseContext& context);
@@ -106,8 +109,7 @@ void CaptureMetadataRegistrySnapshot(CookMetadataRegistrySnapshot& outSnapshot);
     const DiscoveredNwbFile& discoveredNwbFile,
     AStringView metaText,
     const Sha256Digest& producerDigest,
-    Span<const AssetPairedSidecarRule> pairedSidecarRules,
-    Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    const CookMetadataRegistrySnapshot& registrySnapshot,
     ScratchArena& scratchArena,
     ScratchString& outSourcePathText,
     ScratchString& outCacheFileName,
@@ -129,8 +131,7 @@ void PrepareNwbFileAssetCacheRecord(
     const DiscoveredNwbFile& discoveredNwbFile,
     AStringView metaText,
     const Sha256Digest& producerDigest,
-    Span<const AssetPairedSidecarRule> pairedSidecarRules,
-    Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    const CookMetadataRegistrySnapshot& registrySnapshot,
     ScratchArena& scratchArena,
     ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,
@@ -139,22 +140,12 @@ void PrepareNwbFileAssetCacheRecord(
     EnsureCookParsedDocumentFunction ensureParsedDocument = nullptr,
     void* ensureParsedDocumentUser = nullptr
 );
-void PrepareNwbFileAssetCacheRecord(
-    const Path& assetCacheDirectory,
-    const DiscoveredNwbFile& discoveredNwbFile,
-    AStringView metaText,
-    const Sha256Digest& producerDigest,
-    ScratchArena& scratchArena,
-    ScratchString& inOutSourcePathText,
-    ScratchString& inOutCacheFileName,
-    NwbFileAssetCacheRecord& outRecord
-);
 [[nodiscard]] NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
     NwbFileAssetCacheRecord& inOutRecord,
     ScratchArena& scratchArena,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
     const ParsedAssetMetadata& metadata,
-    const CookMetadataRegistrySnapshot* registrySnapshot = nullptr
+    const CookMetadataRegistrySnapshot& registrySnapshot
 );
 
 

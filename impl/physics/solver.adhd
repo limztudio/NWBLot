@@ -11363,63 +11363,6 @@ void StepPhysicsWorld(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mu
     SolveStepCpu(world, dt, subStepCount, cpuScheduler);
 }
 
-void PhysicsRayCastBatch(
-    in PhysicsWorld world,
-    in Span<RayCastInput> inputs,
-    mut Vector<RayCastHit> outHits,
-    mut CpuTaskScheduler cpuScheduler
-){
-    const usize count = inputs.size();
-    outHits.resize(count);
-    if(count == 0u)
-        return;
-    if(cpuScheduler.isParallelEnabled() && count >= 32u){
-        in PhysicsWorld worldRef = world;
-        const usize grain = ComputePhysicsGrain(cpuScheduler, count, cast<usize>(8u));
-        const auto res = cpuScheduler.parallelFor(
-            0u,
-            count,
-            grain,
-            lambda[in worldRef, in inputs, mut outHits](in usize idx) -> void{
-                outHits[idx] = worldRef.rayCastClosest(inputs[idx]);
-            },
-            CpuTaskOptions()
-        );
-        if(res.has_value())
-            return;
-    }
-    world.rayCastBatch(inputs, outHits);
-}
-
-void PhysicsShapeCastBatch(
-    in PhysicsWorld world,
-    in Span<ShapeProxy> queryProxies,
-    in Span<ShapeCastInput> inputs,
-    mut Vector<ShapeCastHit> outHits,
-    mut CpuTaskScheduler cpuScheduler
-){
-    const usize count = Min(queryProxies.size(), inputs.size());
-    outHits.resize(count);
-    if(count == 0u)
-        return;
-    if(cpuScheduler.isParallelEnabled() && count >= 32u){
-        in PhysicsWorld worldRef = world;
-        const usize grain = ComputePhysicsGrain(cpuScheduler, count, cast<usize>(8u));
-        const auto res = cpuScheduler.parallelFor(
-            0u,
-            count,
-            grain,
-            lambda[in worldRef, in queryProxies, in inputs, mut outHits](in usize idx) -> void{
-                outHits[idx] = worldRef.shapeCastClosest(queryProxies[idx], inputs[idx]);
-            },
-            CpuTaskOptions()
-        );
-        if(res.has_value())
-            return;
-    }
-    world.shapeCastBatch(queryProxies, inputs, outHits);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

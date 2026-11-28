@@ -78,20 +78,20 @@ MeshletBounds FinalizeMeshletBoundsCone(
     return bounds;
 }
 
-MeshletBounds BuildMeshletBoundsWithAabb(
+MeshletBounds BuildMeshletBounds(
     in Span<f32x3u> meshPositions,
     in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
     in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
     in Span<u8> meshletPrimitiveIndices,
-    in MeshletDesc meshlet,
-    mut VectorSingle outMinBounds,
-    mut VectorSingle outMaxBounds
+    in MeshletDesc meshlet
 ){
     const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
     Array<f32x4, s_MeshMaxMeshletVertices> positions;
+    VectorSingle unusedMinBounds(0.0f);
+    VectorSingle unusedMaxBounds(0.0f);
     VectorSingle center(0.0f);
     VectorSingle radius(0.0f);
-    BuildMeshletBoundingSphereAndAabb(meshPositions, meshletPositionStreamRefs, meshlet, positions, outMinBounds, outMaxBounds, center, radius);
+    BuildMeshletBoundingSphereAndAabb(meshPositions, meshletPositionStreamRefs, meshlet, positions, unusedMinBounds, unusedMaxBounds, center, radius);
 
     VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
     Array<f32x4, s_MeshMaxMeshletTriangles> unitNormals;
@@ -153,26 +153,6 @@ MeshletBounds BuildMeshletBoundsWithAabbCachedNormals(
     }
 
     return FinalizeMeshletBoundsCone(center, radius, areaWeightedNormal, unitNormals, validFaceNormalCount, primitiveCount);
-}
-
-MeshletBounds BuildMeshletBounds(
-    in Span<f32x3u> meshPositions,
-    in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
-    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
-    in Span<u8> meshletPrimitiveIndices,
-    in MeshletDesc meshlet
-){
-    VectorSingle minBounds(0.0f);
-    VectorSingle maxBounds(0.0f);
-    return BuildMeshletBoundsWithAabb(
-        meshPositions,
-        meshletPositionStreamRefs,
-        meshletLocalVertexRefs,
-        meshletPrimitiveIndices,
-        meshlet,
-        minBounds,
-        maxBounds
-    );
 }
 
 b8 FlushBuiltMeshlet(

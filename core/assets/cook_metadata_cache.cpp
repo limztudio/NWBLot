@@ -12,6 +12,7 @@
 #include "built_asset_format.h"
 
 #include <core/common/log.h>
+#include <core/metascript/parser.h>
 
 #include <global/algorithm.h>
 #include <global/binary.h>
@@ -94,12 +95,37 @@ template<typename PathArenaT>
     if(externalSourceCollectors.empty())
         return true;
 
+    Optional<Core::Metascript::MetaArena> parseArena;
+    Optional<Core::Metascript::Document> parsedDoc;
+    b8 attemptedParse = false;
+    b8 parsedOk = false;
+    struct LocalParseThunk final{
+        AStringView metaText;
+        Optional<Core::Metascript::MetaArena>* arena = nullptr;
+        Optional<Core::Metascript::Document>* doc = nullptr;
+        b8* attempted = nullptr;
+        b8* ok = nullptr;
+    };
+    LocalParseThunk parseThunk{ metaText, &parseArena, &parsedDoc, &attemptedParse, &parsedOk };
+    const auto localEnsureDoc = [](void* const user) -> const Core::Metascript::Document*{
+        auto* const thunk = static_cast<LocalParseThunk*>(user);
+        if(!*thunk->attempted){
+            *thunk->attempted = true;
+            thunk->arena->emplace(Name("cook_meta/ext_parse"));
+            thunk->doc->emplace(**thunk->arena);
+            *thunk->ok = (*thunk->doc)->parse(thunk->metaText);
+        }
+        return *thunk->ok ? &**thunk->doc : nullptr;
+    };
+    const CookMetadataDetail::EnsureCookParsedDocumentFunction effectiveEnsureDoc = (ensureParsedDocument != nullptr) ? ensureParsedDocument : localEnsureDoc;
+    void* const effectiveEnsureUser = (ensureParsedDocument != nullptr) ? ensureParsedDocumentUser : &parseThunk;
+
     const CookExternalSourceCollectContext collectContext{
         discoveredNwbFile,
         metaText,
         scratchArena,
-        ensureParsedDocument,
-        ensureParsedDocumentUser
+        effectiveEnsureDoc,
+        effectiveEnsureUser
     };
     Vector<::Path<ScratchArena>, ScratchArena> rawPaths(scratchArena);
     for(const NotNull<CookExternalSourceCollectorFunction> collector : externalSourceCollectors){
@@ -272,8 +298,7 @@ b8 ComputeNwbFileAssetCacheData(
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView metaText,
     const Sha256Digest& producerDigest,
-    const Span<const AssetPairedSidecarRule> pairedSidecarRules,
-    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    const CookMetadataRegistrySnapshot& registrySnapshot,
     ScratchArena& scratchArena,
     ScratchString& outSourcePathText,
     ScratchString& outCacheFileName,
@@ -295,8 +320,8 @@ b8 ComputeNwbFileAssetCacheData(
         AStringView(outSourcePathText),
         metaText,
         producerDigest,
-        pairedSidecarRules,
-        externalSourceCollectors,
+        Span<const AssetPairedSidecarRule>(registrySnapshot.pairedSidecarRules.data(), registrySnapshot.pairedSidecarRules.size()),
+        Span<const NotNull<CookExternalSourceCollectorFunction>>(registrySnapshot.externalSourceCollectors.data(), registrySnapshot.externalSourceCollectors.size()),
         externalDigestCache,
         ensureParsedDocument,
         ensureParsedDocumentUser,
@@ -327,8 +352,7 @@ void PrepareNwbFileAssetCacheRecord(
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView metaText,
     const Sha256Digest& producerDigest,
-    const Span<const AssetPairedSidecarRule> pairedSidecarRules,
-    const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    const CookMetadataRegistrySnapshot& registrySnapshot,
     ScratchArena& scratchArena,
     ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,
@@ -342,8 +366,7 @@ void PrepareNwbFileAssetCacheRecord(
         discoveredNwbFile,
         metaText,
         producerDigest,
-        pairedSidecarRules,
-        externalSourceCollectors,
+        registrySnapshot,
         scratchArena,
         inOutSourcePathText,
         inOutCacheFileName,
@@ -355,40 +378,12 @@ void PrepareNwbFileAssetCacheRecord(
     PopulateNwbFileAssetCacheRecord(assetCacheDirectory, AStringView(inOutSourcePathText), AStringView(inOutCacheFileName), paramSha256, canUseCache, outRecord);
 }
 
-void PrepareNwbFileAssetCacheRecord(
-    const Path& assetCacheDirectory,
-    const DiscoveredNwbFile& discoveredNwbFile,
-    const AStringView metaText,
-    const Sha256Digest& producerDigest,
-    ScratchArena& scratchArena,
-    ScratchString& inOutSourcePathText,
-    ScratchString& inOutCacheFileName,
-    NwbFileAssetCacheRecord& outRecord
-){
-    Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
-    CopyPairedSidecarRules(pairedSidecarRules);
-    Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena> externalSourceCollectors(scratchArena);
-    CopyCookExternalSourceCollectors(externalSourceCollectors);
-    PrepareNwbFileAssetCacheRecord(
-        assetCacheDirectory,
-        discoveredNwbFile,
-        metaText,
-        producerDigest,
-        Span<const AssetPairedSidecarRule>(pairedSidecarRules.data(), pairedSidecarRules.size()),
-        Span<const NotNull<CookExternalSourceCollectorFunction>>(externalSourceCollectors.data(), externalSourceCollectors.size()),
-        scratchArena,
-        inOutSourcePathText,
-        inOutCacheFileName,
-        outRecord
-    );
-}
-
 NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
     NwbFileAssetCacheRecord& inOutRecord,
     ScratchArena& scratchArena,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
     const ParsedAssetMetadata& metadata,
-    const CookMetadataRegistrySnapshot* const registrySnapshot
+    const CookMetadataRegistrySnapshot& registrySnapshot
 ){
     inOutRecord.cachedVirtualPaths.clear();
 
@@ -409,9 +404,7 @@ NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
         return NwbCacheLoadResult::Miss;
 
     for(const DecodedBuiltAssetEntryView& entry : decodedEntries){
-        const b8 nonStandalone = (registrySnapshot != nullptr)
-            ? IsNonStandaloneAssetType(*registrySnapshot, entry.assetType)
-            : Assets::IsNonStandaloneAssetType(entry.assetType);
+        const b8 nonStandalone = IsNonStandaloneAssetType(registrySnapshot, entry.assetType);
         if(!entry.assetType || nonStandalone || !metadata.entryRegistry.has(entry.assetType))
             return NwbCacheLoadResult::Miss;
     }

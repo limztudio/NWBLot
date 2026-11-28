@@ -394,20 +394,13 @@ class ArticulationLinkDef{
     public SymMat3 inertiaTensor;
     public b8 useFullInertiaTensor = false;
     public b8 enableLimit = false;
-    public f32 lowerLimit = -s_Pi;
-    public f32 upperLimit = s_Pi;
     public f32x4 lowerLimits(-s_Pi, -s_Pi, -s_Pi, 0.0f);
     public f32x4 upperLimits(s_Pi, s_Pi, s_Pi, 0.0f);
     public f32 limitStiffness = 0.0f;
     public f32 limitDamping = 0.0f;
     public b8 enableDrive = false;
-    public f32 driveTargetPos = 0.0f;
-    public f32 driveTargetVel = 0.0f;
     public f32x4 driveTargetPos3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 driveTargetVel3(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 driveStiffness = 0.0f;
-    public f32 driveDamping = 0.0f;
-    public f32 driveMaxForce = 1.0e6f;
     public f32 jointDamping = 0.0f;
     public f32 jointFriction = 0.0f;
     public f32 limitRestitution = 0.0f;
@@ -416,8 +409,6 @@ class ArticulationLinkDef{
     public f32 screwPitch = 0.0f;
     public u8 limitDofMask = 0x7u;
     public u8 driveDofMask = 0x7u;
-    public b8 usePerDofLimits = false;
-    public b8 usePerDofDrives = false;
     public f32x4 driveStiffness3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 driveDamping3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 driveMaxForce3(1.0e6f, 1.0e6f, 1.0e6f, 0.0f);
@@ -431,16 +422,11 @@ class ArticulationLinkDef{
 }
 
 class ArticulationLinkState{
-    public f32 q = 0.0f;
-    public f32 qd = 0.0f;
-    public f32 qdd = 0.0f;
-    public f32 externalTau = 0.0f;
     public f32x4 q3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 qd3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 qdd3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 externalTau3(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 jointRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32 measuredJointTorque = 0.0f;
     public f32x4 measuredJointTorque3(0.0f, 0.0f, 0.0f, 0.0f);
     public SpatialVec measuredReactionForce;
     public Transform3D worldTransform;
@@ -778,9 +764,6 @@ class Articulation{
     private Vector<SpatialVec> m_reactionForceScratch;
     private Vector<f32x4> m_impU3;
     private Vector<SpatialVec> m_impDv;
-    private Vector<f32> m_syncedQ;
-    private Vector<f32> m_syncedQd;
-    private Vector<f32> m_syncedTau;
     private Vector<f32x4> m_syncedQ3;
     private Vector<f32x4> m_syncedJointRot;
     private Vector<ShapeId> m_proxyShapesScratch;
@@ -912,9 +895,6 @@ class Articulation{
         this.m_reactionForceScratch.clear();
         this.m_impU3.clear();
         this.m_impDv.clear();
-        this.m_syncedQ.clear();
-        this.m_syncedQd.clear();
-        this.m_syncedTau.clear();
         this.m_syncedQ3.clear();
         this.m_syncedJointRot.clear();
         this.m_proxyShapesScratch.clear();
@@ -1083,9 +1063,6 @@ class Articulation{
         this.m_ownBodyLookup.clear();
         this.m_ownBodyFallbackMap.clear();
         this.m_ownBodyUseMap = false;
-        this.m_syncedQ.clear();
-        this.m_syncedQd.clear();
-        this.m_syncedTau.clear();
         this.m_syncedQ3.clear();
         this.m_syncedJointRot.clear();
         this.m_relP2C.resize(n);
@@ -1332,11 +1309,8 @@ class Articulation{
 
     private void syncDofStateInputs(){
         const usize n = this.linkStates.size();
-        const b8 resizeSync = (this.m_syncedQ.size() != n);
+        const b8 resizeSync = (this.m_syncedQ3.size() != n);
         if(resizeSync){
-            this.m_syncedQ.resize(n, 0.0f);
-            this.m_syncedQd.resize(n, 0.0f);
-            this.m_syncedTau.resize(n, 0.0f);
             this.m_syncedQ3.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
             this.m_syncedJointRot.resize(n, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
             this.m_fkDirty = true;
@@ -1346,25 +1320,8 @@ class Articulation{
         for(usize i = 0u; i < n; ++i){
             in ArticulationLinkDef d = this.linkDefs[i];
             mut ArticulationLinkState s = this.linkStates[i];
-            if(s.q != this.m_syncedQ[i]){
-                s.q3.x = s.q;
-                this.m_fkDirty = true;
-            }
-            else{
-                s.q = s.q3.x;
-            }
             if(s.q3.x != this.m_syncedQ3[i].x || s.q3.y != this.m_syncedQ3[i].y || s.q3.z != this.m_syncedQ3[i].z)
                 this.m_fkDirty = true;
-
-            if(s.qd != this.m_syncedQd[i])
-                s.qd3.x = s.qd;
-            else
-                s.qd = s.qd3.x;
-
-            if(s.externalTau != this.m_syncedTau[i])
-                s.externalTau3.x = s.externalTau;
-            else
-                s.externalTau = s.externalTau3.x;
 
             if(d.jointType == ArticulationJointType::Spherical && i > 0u){
                 const f32 q3DeltaSq = Vector3LengthSq(VectorSingle(s.q3) - VectorSingle(this.m_syncedQ3[i])).x;
@@ -1381,15 +1338,11 @@ class Articulation{
                     else{
                         const VectorSingle rv = ArticulationRotVecFromQuat(VectorSingle(s.jointRotation));
                         s.q3 = f32x4(Vector3Dot(rv, a0).x, Vector3Dot(rv, a1).x, Vector3Dot(rv, a2).x, 0.0f);
-                        s.q = s.q3.x;
                     }
                     this.m_fkDirty = true;
                 }
             }
 
-            this.m_syncedQ[i] = s.q;
-            this.m_syncedQd[i] = s.qd;
-            this.m_syncedTau[i] = s.externalTau;
             this.m_syncedQ3[i] = s.q3;
             this.m_syncedJointRot[i] = s.jointRotation;
         }
@@ -1401,10 +1354,7 @@ class Articulation{
 
     private void commitDofStateOutputs(){
         const usize n = this.linkStates.size();
-        if(this.m_syncedQ.size() != n){
-            this.m_syncedQ.resize(n, 0.0f);
-            this.m_syncedQd.resize(n, 0.0f);
-            this.m_syncedTau.resize(n, 0.0f);
+        if(this.m_syncedQ3.size() != n){
             this.m_syncedQ3.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
             this.m_syncedJointRot.resize(n, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
         }
@@ -1418,14 +1368,6 @@ class Articulation{
                 const VectorSingle rv = ArticulationRotVecFromQuat(VectorSingle(s.jointRotation));
                 s.q3 = f32x4(Vector3Dot(rv, a0).x, Vector3Dot(rv, a1).x, Vector3Dot(rv, a2).x, 0.0f);
             }
-            s.q = s.q3.x;
-            s.qd = s.qd3.x;
-            if(i > 0u)
-                s.qdd = s.qdd3.x;
-            s.externalTau = s.externalTau3.x;
-            this.m_syncedQ[i] = s.q;
-            this.m_syncedQd[i] = s.qd;
-            this.m_syncedTau[i] = s.externalTau;
             this.m_syncedQ3[i] = s.q3;
             this.m_syncedJointRot[i] = s.jointRotation;
         }
@@ -1597,9 +1539,6 @@ class Articulation{
         this.m_linkDofOffsets.clear();
         this.m_totalDofCount = 0u;
         this.m_hasPoseDependentSubspace = false;
-        this.m_syncedQ.clear();
-        this.m_syncedQd.clear();
-        this.m_syncedTau.clear();
         this.m_syncedQ3.clear();
         this.m_syncedJointRot.clear();
         this.m_cachedProxyBodies.clear();
@@ -1658,7 +1597,6 @@ class Articulation{
 
         this.computeForwardDynamicsABA(VectorSingle(0.0f));
         for(usize i = 0u; i < n; ++i){
-            this.linkStates[i].qdd = 0.0f;
             this.linkStates[i].qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             this.m_accel[i] = SpatialVec();
         }
@@ -1761,28 +1699,8 @@ class Articulation{
     }
 
     private void resolveAxisLimit(in ArticulationLinkDef d, in u32 dofIdx, mut f32 outLo, mut f32 outHi)const{
-        if(dofIdx == 0u){
-            if(d.usePerDofLimits || this.isMultiDofJoint(d.jointType)){
-                outLo = d.lowerLimits.x;
-                outHi = d.upperLimits.x;
-                if(!d.usePerDofLimits && (d.lowerLimit != -s_Pi || d.upperLimit != s_Pi) && d.lowerLimits.x == -s_Pi && d.upperLimits.x == s_Pi){
-                    outLo = d.lowerLimit;
-                    outHi = d.upperLimit;
-                }
-            }
-            else{
-                outLo = d.lowerLimit;
-                outHi = d.upperLimit;
-            }
-            return;
-        }
-        if(dofIdx == 1u){
-            outLo = d.lowerLimits.y;
-            outHi = d.upperLimits.y;
-            return;
-        }
-        outLo = d.lowerLimits.z;
-        outHi = d.upperLimits.z;
+        outLo = this.readLinkDofVal(VectorSingle(d.lowerLimits), dofIdx);
+        outHi = this.readLinkDofVal(VectorSingle(d.upperLimits), dofIdx);
     }
 
     private void resolveAxisDriveParams(
@@ -1794,31 +1712,11 @@ class Articulation{
         mut f32 outDamping,
         mut f32 outMaxForce
     )const{
-        const b8 useVec3 = d.usePerDofDrives || this.isMultiDofJoint(d.jointType) || dofIdx > 0u;
-        if(useVec3){
-            outPos = this.readLinkDofVal(VectorSingle(d.driveTargetPos3), dofIdx);
-            outVel = this.readLinkDofVal(VectorSingle(d.driveTargetVel3), dofIdx);
-            outStiffness = this.readLinkDofVal(VectorSingle(d.driveStiffness3), dofIdx);
-            outDamping = this.readLinkDofVal(VectorSingle(d.driveDamping3), dofIdx);
-            outMaxForce = this.readLinkDofVal(VectorSingle(d.driveMaxForce3), dofIdx);
-            if(dofIdx == 0u && !d.usePerDofDrives){
-                if(d.driveTargetPos != 0.0f && d.driveTargetPos3.x == 0.0f)
-                    outPos = d.driveTargetPos;
-                if(d.driveTargetVel != 0.0f && d.driveTargetVel3.x == 0.0f)
-                    outVel = d.driveTargetVel;
-            }
-            if(!d.usePerDofDrives && outStiffness == 0.0f && outDamping == 0.0f){
-                outStiffness = d.driveStiffness;
-                outDamping = d.driveDamping;
-                outMaxForce = d.driveMaxForce;
-            }
-            return;
-        }
-        outPos = d.driveTargetPos;
-        outVel = d.driveTargetVel;
-        outStiffness = d.driveStiffness;
-        outDamping = d.driveDamping;
-        outMaxForce = d.driveMaxForce;
+        outPos = this.readLinkDofVal(VectorSingle(d.driveTargetPos3), dofIdx);
+        outVel = this.readLinkDofVal(VectorSingle(d.driveTargetVel3), dofIdx);
+        outStiffness = this.readLinkDofVal(VectorSingle(d.driveStiffness3), dofIdx);
+        outDamping = this.readLinkDofVal(VectorSingle(d.driveDamping3), dofIdx);
+        outMaxForce = this.readLinkDofVal(VectorSingle(d.driveMaxForce3), dofIdx);
     }
 
     private void computeForwardDynamicsAbaCore(in VectorSingle gravityWorld, in f32 subDt, in b8 runSyncAndCache, in b8 computeReactions){
@@ -2182,7 +2080,6 @@ class Articulation{
             mut ArticulationLinkState s = this.linkStates[i];
             if(this.isLinkDetached(i)){
                 s.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                s.qdd = 0.0f;
                 accel[i] = SpatialVec();
                 continue;
             }
@@ -2208,19 +2105,16 @@ class Articulation{
                     aOut = SpatialAdd(aOut, SpatialScale(sub.cols[a], acc));
                 }
                 s.qdd3 = f32x4(qddArr[0u], qddArr[1u], qddArr[2u], 0.0f);
-                s.qdd = qddArr[0u];
                 accel[i] = aOut;
             }
             else{
                 s.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                s.qdd = 0.0f;
                 accel[i] = aPrime;
             }
         }
 
         if(!this.fixedBase){
-            this.linkStates[0u].qdd = Vector3Length(VectorSingle(accel[0u].lin)).x;
-            this.linkStates[0u].qdd3 = f32x4(this.linkStates[0u].qdd, 0.0f, 0.0f, 0.0f);
+            this.linkStates[0u].qdd3 = f32x4(Vector3Length(VectorSingle(accel[0u].lin)).x, 0.0f, 0.0f, 0.0f);
         }
 
         if(computeReactions){
@@ -2238,13 +2132,11 @@ class Articulation{
                 if(i > 0u && this.isLinkDetached(i)){
                     s.measuredReactionForce = SpatialVec();
                     s.measuredJointTorque3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                    s.measuredJointTorque = 0.0f;
                     continue;
                 }
                 s.measuredReactionForce = reac[i];
                 if(i == 0u){
                     s.measuredJointTorque3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                    s.measuredJointTorque = 0.0f;
                     break;
                 }
                 in ArticulationLinkDef d = this.linkDefs[i];
@@ -2254,7 +2146,6 @@ class Articulation{
                 for(u32 a = 0u; a < sub.dofCount; ++a)
                     tauM[a] = SpatialDot(sub.cols[a], reac[i]);
                 s.measuredJointTorque3 = f32x4(tauM[0u], tauM[1u], tauM[2u], 0.0f);
-                s.measuredJointTorque = tauM[0u];
                 in Transform3D rp = relP2C[i];
                 reac[d.parentIndex] = SpatialAdd(reac[d.parentIndex], SpatialTransformForceC2P(VectorSingle(rp.position), VectorSingle(rp.rotation), reac[i]));
             }
@@ -2750,9 +2641,6 @@ class Articulation{
             if(k < dqd3.size()){
                 mut ArticulationLinkState sk = this.linkStates[k];
                 sk.qd3 = f32x4(VectorSingle(sk.qd3) + VectorSingle(dqd3[k]) * scale, 0.0f);
-                sk.qd = sk.qd3.x;
-                if(k < this.m_syncedQd.size())
-                    this.m_syncedQd[k] = sk.qd;
             }
             if(k < dv.size())
                 this.linkStates[k].spatialVelocity = SpatialAdd(this.linkStates[k].spatialVelocity, SpatialScale(dv[k], scale));
@@ -2774,9 +2662,6 @@ class Articulation{
             }
             mut ArticulationLinkState sk = this.linkStates[k];
             sk.qd3 = f32x4(VectorSingle(sk.qd3) + VectorSingle(dqd3[k]) * scale, 0.0f);
-            sk.qd = sk.qd3.x;
-            if(k < this.m_syncedQd.size())
-                this.m_syncedQd[k] = sk.qd;
             sk.spatialVelocity = SpatialAdd(sk.spatialVelocity, SpatialScale(dv[k], scale));
         }
     }
@@ -2790,9 +2675,6 @@ class Articulation{
             const usize idx = unitBaseOff + k;
             mut ArticulationLinkState sk = this.linkStates[k];
             sk.qd3 = f32x4(VectorSingle(sk.qd3) + VectorSingle(this.m_pgsUnitDqdScratch[idx]) * scale, 0.0f);
-            sk.qd = sk.qd3.x;
-            if(k < this.m_syncedQd.size())
-                this.m_syncedQd[k] = sk.qd;
             sk.spatialVelocity = SpatialAdd(sk.spatialVelocity, SpatialScale(this.m_pgsUnitDvScratch[idx], scale));
         }
     }
@@ -2823,7 +2705,6 @@ class Articulation{
                     const f32 prev = this.readLinkDofVal(VectorSingle(s.measuredJointTorque3), a);
                     s.measuredJointTorque3 = f32x4(this.withVecComp(VectorSingle(s.measuredJointTorque3), a, prev + tau), 0.0f);
                 }
-                s.measuredJointTorque = s.measuredJointTorque3.x;
             }
             if(d.parentIndex >= this.linkDefs.size() || cur >= this.m_relP2C.size())
                 break;
@@ -2842,7 +2723,6 @@ class Articulation{
         mut ArticulationLinkState s = this.linkStates[linkIdx];
         const f32 curMeas = this.readLinkDofVal(VectorSingle(s.measuredJointTorque3), dofIdx);
         s.measuredJointTorque3 = f32x4(this.withVecComp(VectorSingle(s.measuredJointTorque3), dofIdx, curMeas + tau), 0.0f);
-        s.measuredJointTorque = s.measuredJointTorque3.x;
         s.measuredReactionForce = SpatialAdd(s.measuredReactionForce, SpatialScale(this.m_linkSubspaces[linkIdx].cols[dofIdx], tau));
     }
 
@@ -2875,7 +2755,6 @@ class Articulation{
             return;
 
         const b8 isPackedQdd = !forceZeroQdd && targetQddPacked.size() == cast<usize>(totalDofs);
-        const b8 isPerLinkQdd = !forceZeroQdd && !isPackedQdd && targetQddPacked.size() == n;
         u32 baseDofs = 6u;
         if(this.fixedBase)
             baseDofs = 0u;
@@ -2930,41 +2809,20 @@ class Articulation{
                     jXf = Transform3D();
                 }
                 else if(d.jointType == ArticulationJointType::Revolute){
-                    f32 qUse = s.q3.x;
-                    if(i < this.m_syncedQ.size() && s.q != this.m_syncedQ[i])
-                        qUse = s.q;
-                    else if(s.q3.x == 0.0f && s.q != 0.0f)
-                        qUse = s.q;
-                    jXf = Transform3D(VectorSingle(0.0f), QuaternionRotationNormal(a0, qUse));
+                    jXf = Transform3D(VectorSingle(0.0f), QuaternionRotationNormal(a0, s.q3.x));
                 }
                 else if(d.jointType == ArticulationJointType::Helical){
-                    f32 qUse = s.q3.x;
-                    if(i < this.m_syncedQ.size() && s.q != this.m_syncedQ[i])
-                        qUse = s.q;
-                    else if(s.q3.x == 0.0f && s.q != 0.0f)
-                        qUse = s.q;
-                    jXf = Transform3D(a0 * (d.screwPitch * qUse), QuaternionRotationNormal(a0, qUse));
+                    jXf = Transform3D(a0 * (d.screwPitch * s.q3.x), QuaternionRotationNormal(a0, s.q3.x));
                 }
                 else if(d.jointType == ArticulationJointType::Prismatic){
-                    f32 qUse = s.q3.x;
-                    if(i < this.m_syncedQ.size() && s.q != this.m_syncedQ[i])
-                        qUse = s.q;
-                    else if(s.q3.x == 0.0f && s.q != 0.0f)
-                        qUse = s.q;
-                    jXf = Transform3D(a0 * qUse, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
+                    jXf = Transform3D(a0 * s.q3.x, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
                 }
                 else if(d.jointType == ArticulationJointType::Universal){
-                    f32 q0Use = s.q3.x;
-                    if(s.q != 0.0f && s.q3.x == 0.0f)
-                        q0Use = s.q;
-                    const VectorSingle qRot = SafeNormalizeQuat(QuaternionMultiply(QuaternionRotationNormal(a0, q0Use), QuaternionRotationNormal(a1, s.q3.y)));
+                    const VectorSingle qRot = SafeNormalizeQuat(QuaternionMultiply(QuaternionRotationNormal(a0, s.q3.x), QuaternionRotationNormal(a1, s.q3.y)));
                     jXf = Transform3D(VectorSingle(0.0f), qRot);
                 }
                 else if(d.jointType == ArticulationJointType::Planar){
-                    f32 q0Use = s.q3.x;
-                    if(s.q != 0.0f && s.q3.x == 0.0f)
-                        q0Use = s.q;
-                    jXf = Transform3D(a0 * q0Use + a1 * s.q3.y, QuaternionRotationNormal(a2, s.q3.z));
+                    jXf = Transform3D(a0 * s.q3.x + a1 * s.q3.y, QuaternionRotationNormal(a2, s.q3.z));
                 }
                 else{
                     VectorSingle jRotQ = SafeNormalizeQuat(VectorSingle(s.jointRotation));
@@ -2985,10 +2843,6 @@ class Articulation{
 
                 Array<f32, 3u> qdArr;
                 qdArr[0u] = s.qd3.x;
-                if(i < this.m_syncedQd.size() && s.qd != this.m_syncedQd[i])
-                    qdArr[0u] = s.qd;
-                else if(s.qd3.x == 0.0f && s.qd != 0.0f)
-                    qdArr[0u] = s.qd;
                 qdArr[1u] = s.qd3.y;
                 qdArr[2u] = s.qd3.z;
                 SpatialVec vJ;
@@ -3011,9 +2865,6 @@ class Articulation{
                             if(cast<usize>(curPackedOff + a) < targetQddPacked.size())
                                 qddArr[a] = targetQddPacked[curPackedOff + a];
                         }
-                    }
-                    else if(isPerLinkQdd && sub.dofCount > 0u){
-                        qddArr[0u] = targetQddPacked[i];
                     }
                 }
                 curPackedOff += sub.dofCount;
@@ -3119,43 +2970,6 @@ class Articulation{
         mut SpatialVec outRootWrench
     )const{
         this.computeInverseDynamicsRneaImpl(gravityWorld, rootAccel, targetQddPacked, false, outTorquesPacked, outRootWrench);
-    }
-
-    public void computeInverseDynamicsRNEA(in VectorSingle gravityWorld, in Span<f32> targetQdd, mut Vector<f32> outTorques)const{
-        const usize n = this.linkDefs.size();
-        const u32 totalDofs = this.totalDofCount();
-        if(n == 0u){
-            outTorques.clear();
-            return;
-        }
-
-        SpatialVec rootAcc;
-        if(!this.fixedBase && this.m_accel.size() == n)
-            rootAcc = this.m_accel[0u];
-
-        if(targetQdd.size() == cast<usize>(totalDofs) && totalDofs != cast<u32>(n)){
-            SpatialVec unusedRootWrench;
-            this.computeInverseDynamicsRNEA(gravityWorld, rootAcc, targetQdd, outTorques, unusedRootWrench);
-            return;
-        }
-
-        Vector<f32> packedTorques;
-        SpatialVec unusedWrench;
-        this.computeInverseDynamicsRNEA(gravityWorld, rootAcc, targetQdd, packedTorques, unusedWrench);
-        if(targetQdd.size() == cast<usize>(totalDofs) && this.fixedBase && totalDofs == cast<u32>(n)){
-            outTorques = packedTorques;
-            return;
-        }
-        outTorques.assign(n, 0.0f);
-        u32 runningOff = 6u;
-        if(this.fixedBase)
-            runningOff = 0u;
-        for(usize i = 1u; i < n; ++i){
-            const u32 dofs = this.linkDofCount(i);
-            if(dofs > 0u && cast<usize>(runningOff) < packedTorques.size())
-                outTorques[i] = packedTorques[runningOff];
-            runningOff += dofs;
-        }
     }
 
     public void computeGravityAndCoriolisTorques(in VectorSingle gravityWorld, mut Vector<f32> outBiasTorquesPacked)const{
@@ -3412,14 +3226,13 @@ class Articulation{
             && this.m_fkValid
             && !this.baseTransformChangedSinceSync()
             && this.linkStates.size() == n
-            && this.m_syncedQ.size() == n
+            && this.m_syncedQ3.size() == n
         );
         if(canUseLiveXfs){
             for(usize i = 0u; i < n; ++i){
                 in ArticulationLinkState s = this.linkStates[i];
                 if(
-                    s.q != this.m_syncedQ[i]
-                    || s.q3.x != this.m_syncedQ3[i].x
+                    s.q3.x != this.m_syncedQ3[i].x
                     || s.q3.y != this.m_syncedQ3[i].y
                     || s.q3.z != this.m_syncedQ3[i].z
                     || s.jointRotation.x != this.m_syncedJointRot[i].x
@@ -3506,15 +3319,14 @@ class Articulation{
 
     private b8 hasExternalPoseChange()const{
         const usize n = this.linkDefs.size();
-        if(this.m_cachesDirty || this.m_fkDirty || !this.m_fkValid || this.linkStates.size() != n || this.m_syncedQ.size() != n)
+        if(this.m_cachesDirty || this.m_fkDirty || !this.m_fkValid || this.linkStates.size() != n || this.m_syncedQ3.size() != n)
             return true;
         if(this.baseTransformChangedSinceSync())
             return true;
         for(usize i = 0u; i < n; ++i){
             in ArticulationLinkState s = this.linkStates[i];
             if(
-                s.q != this.m_syncedQ[i]
-                || s.q3.x != this.m_syncedQ3[i].x
+                s.q3.x != this.m_syncedQ3[i].x
                 || s.q3.y != this.m_syncedQ3[i].y
                 || s.q3.z != this.m_syncedQ3[i].z
                 || s.jointRotation.x != this.m_syncedJointRot[i].x
@@ -3894,7 +3706,7 @@ class Articulation{
                     world.applyCombinedContactMaterials(linkShape, linkRot, hitShape, rotB, tmpContact);
                     f32 effFriction = tmpContact.friction;
                     if(this.overrideContactFriction && !world.m_materialCombineCallback.has_value()){
-                        const SurfaceMaterial resolvedHitMat = world.resolveShapeContactMaterial(hitShape, m.materialTriangleB);
+                        const SurfaceMaterial resolvedHitMat = world.resolveShapeContactMaterial(hitShape, m.materialTriangleB, m.materialSubShapeB);
                         effFriction = Sqrt(VectorSingle(baseFriction * Max(0.0f, resolvedHitMat.friction))).x;
                     }
                     f32 effRestitution = Max(baseRest, tmpContact.restitution);
@@ -6328,8 +6140,6 @@ class Articulation{
                 if(d.enableLimit && d.limitStiffness <= 0.0f)
                     this.applyHardLimitsForLink(i, subDt, invSubDt);
 
-                s.q = s.q3.x;
-                s.qd = s.qd3.x;
                 this.m_fkDirty = true;
             }
 
@@ -6414,9 +6224,7 @@ class Articulation{
                                 world.setLinearVelocity(dk.proxyBodyId, linW);
                                 world.setAngularVelocity(dk.proxyBodyId, angW);
                             }
-                            sk.qd = 0.0f;
                             sk.qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                            sk.qdd = 0.0f;
                             sk.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                             sk.spatialVelocity = SpatialVec();
                         }
@@ -6467,9 +6275,7 @@ class Articulation{
                         if(this.isLinkDetached(i))
                             continue;
                         mut ArticulationLinkState s = this.linkStates[i];
-                        s.qd = 0.0f;
                         s.qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                        s.qdd = 0.0f;
                         s.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                         s.spatialVelocity = SpatialVec();
                     }
@@ -6602,9 +6408,6 @@ class Articulation{
             dstS = srcS;
             dstS.jointBroken = false;
             if(m == 0u){
-                dstS.q = 0.0f;
-                dstS.qd = 0.0f;
-                dstS.qdd = 0.0f;
                 dstS.q3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 dstS.qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                 dstS.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -6696,7 +6499,6 @@ class Articulation{
             s.jointRotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(qSwingNew, qTwistNew)));
             const VectorSingle rvPost = ArticulationRotVecFromQuat(VectorSingle(s.jointRotation));
             s.q3 = f32x4(Vector3Dot(rvPost, a0).x, Vector3Dot(rvPost, a1).x, Vector3Dot(rvPost, a2).x, 0.0f);
-            s.q = s.q3.x;
             return;
         }
 
@@ -6721,7 +6523,6 @@ class Articulation{
             this.resolveLinkBasis(i, d, a0, a1, a2);
             s.jointRotation = f32x4(ArticulationQuatFromRotVec(a0 * s.q3.x + a1 * s.q3.y + a2 * s.q3.z));
         }
-        s.q = s.q3.x;
     }
 
     private void evaluateIkErrors(in Span<ArticulationIkTarget> targets, mut f32 outMaxPosErr, mut f32 outMaxRotErr)const{
@@ -6786,7 +6587,6 @@ class Articulation{
                     s.q3 = f32x4(this.withVecComp(VectorSingle(s.q3), a, cur + dq[off + cast<usize>(a)]), 0.0f);
                 }
             }
-            s.q = s.q3.x;
             if(enforceLimits)
                 this.clampLinkQ3ToLimits(i);
         }
@@ -7042,7 +6842,6 @@ class Articulation{
                             }
                             dTheta = Clamp(dTheta * stepScale, -0.5f, 0.5f);
                             s.q3 = f32x4(s.q3.x + dTheta, s.q3.y, s.q3.z, 0.0f);
-                            s.q = s.q3.x;
                             if(params.enforceLimits)
                                 this.clampLinkQ3ToLimits(cur);
                         }
@@ -7052,7 +6851,6 @@ class Articulation{
                             const VectorSingle axW = Vector3Rotate(a0, qJ);
                             const f32 dSlide = Clamp(Vector3Dot(VectorSingle(t.targetPosition) - endPos, axW).x * stepScale * t.positionWeight, -0.5f, 0.5f);
                             s.q3 = f32x4(s.q3.x + dSlide, s.q3.y, s.q3.z, 0.0f);
-                            s.q = s.q3.x;
                             if(params.enforceLimits)
                                 this.clampLinkQ3ToLimits(cur);
                         }
@@ -7097,7 +6895,6 @@ class Articulation{
                                     this.resolveLinkBasis(cur, d, a0, a1, a2);
                                     s.q3 = f32x4(s.q3.x + Vector3Dot(dLocalJ, a0).x, s.q3.y + Vector3Dot(dLocalJ, a1).x, s.q3.z, 0.0f);
                                 }
-                                s.q = s.q3.x;
                                 if(params.enforceLimits)
                                     this.clampLinkQ3ToLimits(cur);
                             }
@@ -7213,7 +7010,6 @@ class Articulation{
                                     const VectorSingle u2 = v2 * (1.0f / l2);
                                     const f32 dAng = ATan2(VectorSingle(Vector3Dot(axW, Cross(u1, u2)).x), VectorSingle(Clamp(Vector3Dot(u1, u2).x, -1.0f, 1.0f))).x;
                                     s.q3 = f32x4(s.q3.x + dAng, s.q3.y, s.q3.z, 0.0f);
-                                    s.q = s.q3.x;
                                     if(params.enforceLimits)
                                         this.clampLinkQ3ToLimits(lIdx);
                                 }
@@ -7240,7 +7036,6 @@ class Articulation{
                                         this.resolveLinkBasis(lIdx, d, a0, a1, a2);
                                         s.q3 = f32x4(s.q3.x + Vector3Dot(dLocalJ, a0).x, s.q3.y + Vector3Dot(dLocalJ, a1).x, s.q3.z, 0.0f);
                                     }
-                                    s.q = s.q3.x;
                                     if(params.enforceLimits)
                                         this.clampLinkQ3ToLimits(lIdx);
                                 }
@@ -7664,8 +7459,8 @@ b8 BuildArticulationFromSkeleton(
         d.mass = Max(1.0e-3f, ji.mass);
         d.inertiaDiag = ji.inertiaDiag;
         d.enableLimit = ji.enableLimit;
-        d.lowerLimit = ji.lowerLimit;
-        d.upperLimit = ji.upperLimit;
+        d.lowerLimits = f32x4(ji.lowerLimit, -s_Pi, -s_Pi, 0.0f);
+        d.upperLimits = f32x4(ji.upperLimit, s_Pi, s_Pi, 0.0f);
         d.jointDamping = ji.jointDamping;
     }
 
@@ -7832,7 +7627,7 @@ b8 UrdfParseVec3(in StringView s, mut VectorSingle outVec){
     return true;
 }
 
-b8 ParseUrdfArticulationWithGeometry(
+b8 ParseUrdfArticulation(
     in StringView urdfXml,
     mut ArticulationImportResult outResult
 ){
@@ -8215,9 +8010,10 @@ b8 ParseUrdfArticulationWithGeometry(
             d.inertiaDiag = f32x4(links[li].inertiaTensor.m00, links[li].inertiaTensor.m11, links[li].inertiaTensor.m22, 0.0f);
             d.useFullInertiaTensor = links[li].hasInertial;
             d.enableLimit = j.hasLimit;
-            d.lowerLimit = j.lowerLimit;
-            d.upperLimit = j.upperLimit;
-            d.driveMaxForce = Max(0.0f, j.effort);
+            d.lowerLimits = f32x4(j.lowerLimit, -s_Pi, -s_Pi, 0.0f);
+            d.upperLimits = f32x4(j.upperLimit, s_Pi, s_Pi, 0.0f);
+            const f32 urdfMaxF = Max(0.0f, j.effort);
+            d.driveMaxForce3 = f32x4(urdfMaxF, urdfMaxF, urdfMaxF, 0.0f);
             d.jointDamping = Max(0.0f, j.damping);
             d.jointFriction = Max(0.0f, j.friction);
             origToOut[li] = cast<u32>(outResult.links.size());
@@ -8246,18 +8042,6 @@ b8 ParseUrdfArticulationWithGeometry(
             outResult.visualGeoms.push_back(g);
     }
     return true;
-}
-
-b8 ParseUrdfArticulation(
-    in StringView urdfXml,
-    mut Vector<ArticulationLinkDef> outLinks,
-    mut b8 outFixedBase
-){
-    ArticulationImportResult imported;
-    const b8 ok = ParseUrdfArticulationWithGeometry(urdfXml, imported);
-    outLinks = imported.links;
-    outFixedBase = imported.fixedBase;
-    return ok;
 }
 
 VectorSingle QuatFromMjcfTagAttributes(in StringView tag){
@@ -8438,18 +8222,14 @@ b8 ParseMjcfArticulation(
                             hi = t;
                         }
                         if(jCnt == 0u){
-                            d.lowerLimit = lo;
-                            d.upperLimit = hi;
                             d.lowerLimits = f32x4(lo, d.lowerLimits.y, d.lowerLimits.z, 0.0f);
                             d.upperLimits = f32x4(hi, d.upperLimits.y, d.upperLimits.z, 0.0f);
                         }
                         else if(jCnt == 1u){
-                            d.usePerDofLimits = true;
                             d.lowerLimits = f32x4(d.lowerLimits.x, lo, d.lowerLimits.z, 0.0f);
                             d.upperLimits = f32x4(d.upperLimits.x, hi, d.upperLimits.z, 0.0f);
                         }
                         else if(jCnt == 2u){
-                            d.usePerDofLimits = true;
                             d.lowerLimits = f32x4(d.lowerLimits.x, d.lowerLimits.y, lo, 0.0f);
                             d.upperLimits = f32x4(d.upperLimits.x, d.upperLimits.y, hi, 0.0f);
                         }

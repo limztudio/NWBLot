@@ -1257,7 +1257,7 @@ void UpdateTestbedPointerDragTarget(
         if(world.hasComponent<RigidBodyComponent>(inOutGrab.entity) && physicsSystem.has_value()){
             physicsSystem.value().setBodyTransform(inOutGrab.entity, newPos, prevRot);
             physicsSystem.value().setLinearVelocity(inOutGrab.entity, VectorSingle(0.0f));
-            physicsSystem.value().wakeBody(inOutGrab.entity);
+            physicsSystem.value().setBodyAwake(inOutGrab.entity, true);
         }
         if(world.hasComponent<CharacterControllerComponent>(inOutGrab.entity)){
             mut CharacterControllerComponent cc = world.getComponent<CharacterControllerComponent>(inOutGrab.entity);
@@ -1574,9 +1574,9 @@ void ApplySelectedEntityToggleWake(mut NotNullUniquePtr<World> worldHandle, in E
     in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(entity);
     in PhysicsWorld pw = physicsSystem.value().physicsWorld();
     if(rb.runtimeBodyId.valid() && rb.runtimeBodyId.index < pw.m_bodies.size() && pw.m_bodies[rb.runtimeBodyId.index].setIndex == s_AwakeSetIndex)
-        physicsSystem.value().sleepBody(entity);
+        physicsSystem.value().setBodyAwake(entity, false);
     else
-        physicsSystem.value().wakeBody(entity);
+        physicsSystem.value().setBodyAwake(entity, true);
 }
 
 void ApplySelectedEntityToggleEnabled(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
@@ -2329,8 +2329,7 @@ void CreateShowcasePhysicsScene(
         chRb.type = BodyType::Static;
         chRb.dirty = true;
         mut ColliderComponent chCol = chainEnt.addComponent<ColliderComponent>();
-        chCol.primaryShape.shapeType = ShapeType::Segment;
-        chCol.primaryShape.isChain = true;
+        chCol.primaryShape.shapeType = ShapeType::Chain;
         chCol.primaryShape.chainClosed = false;
         chCol.primaryShape.chainRadius = 0.06f;
         chCol.primaryShape.chainPoints.push_back(f32x4(-0.8f, 0.2f, 0.0f, 0.0f));
@@ -2800,10 +2799,10 @@ void CreateShowcasePhysicsScene(
         ac.isFixedBase = true;
         ArticulationLinkDef rootLink = MakeTestbedArticulationLink(s_NullIndex, 0.0f, ArticulationJointType::Revolute, -0.32f, 0.9f);
         rootLink.enableDrive = true;
-        rootLink.driveStiffness = 10.0f;
-        rootLink.driveDamping = 1.5f;
-        rootLink.driveMaxForce = 12.0f;
-        rootLink.driveTargetPos = 0.6f;
+        rootLink.driveStiffness3 = f32x4(10.0f, 0.0f, 0.0f, 0.0f);
+        rootLink.driveDamping3 = f32x4(1.5f, 0.0f, 0.0f, 0.0f);
+        rootLink.driveMaxForce3 = f32x4(12.0f, 1.0e6f, 1.0e6f, 0.0f);
+        rootLink.driveTargetPos3 = f32x4(0.6f, 0.0f, 0.0f, 0.0f);
         ac.links.push_back(rootLink);
         ac.links.push_back(MakeTestbedArticulationLink(0u, -0.50f, ArticulationJointType::Universal, -0.32f, 0.9f));
         ac.links.push_back(MakeTestbedArticulationLink(1u, -0.45f, ArticulationJointType::Spherical, -0.32f, 0.9f));

@@ -181,42 +181,6 @@ void EmitPhysicsDebugWorldIndexedEdges<TSink : IPhysicsDebugLineSink>(
     }
 }
 
-class PhysicsDebugWorldLineSink : IPhysicsDebugLineSink{
-    private mut Vector<PhysicsDebugLine> m_outLines;
-    private u32 m_maxLines;
-
-    public PhysicsDebugWorldLineSink(in u32 maxLines, mut Vector<PhysicsDebugLine> outLines){
-        this.m_maxLines = maxLines;
-        this.m_outLines = outLines;
-    }
-
-    public void clear()override{
-        this.m_outLines.clear();
-    }
-
-    public void reserve(in usize capacity)override{
-        const usize capped = Min(cast<usize>(this.m_maxLines), capacity);
-        if(capped > this.m_outLines.capacity())
-            this.m_outLines.reserve(Min(cast<usize>(this.m_maxLines), Max(capped, this.m_outLines.capacity() * 2u)));
-    }
-
-    public b8 full()const override{
-        return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
-    }
-
-    public b8 emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
-        if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
-            return false;
-        PhysicsDebugLine line;
-        line.start = f32x4(p0, 0.0f);
-        line.end = f32x4(p1, 0.0f);
-        line.color = f32x4(color);
-        this.m_outLines.push_back(line);
-        return true;
-    }
-
-}
-
 class PhysicsGpuDebugLineSink : IPhysicsDebugLineSink{
     private mut GpuDebugLineCollector m_collector;
     private u32 m_maxLines;
@@ -717,21 +681,6 @@ void AppendPhysicsDebugBoxEdges<TSink : IPhysicsDebugLineSink>(
     AppendPhysicsDebugOrientedBoxEdges(worldCenter, ex, ey, ez, color, sink, budget);
 }
 
-void AppendPhysicsDebugBoxEdges(
-    in u32 maxLines,
-    in VectorSingle xfPos,
-    in VectorSingle xfRot,
-    in VectorSingle localCenter,
-    in VectorSingle halfExtents,
-    in VectorSingle boxRotation,
-    in VectorSingle color,
-    mut Vector<PhysicsDebugLine> outLines
-){
-    PhysicsDebugWorldLineSink sink(maxLines, outLines);
-    PhysicsDebugPhaseBudget budget(maxLines);
-    AppendPhysicsDebugBoxEdges(xfPos, xfRot, localCenter, halfExtents, boxRotation, color, sink, budget);
-}
-
 const usize s_PhysicsDebugHullEdgePairCapacity = s_MaxHullEdges * 2u;
 
 void AppendPhysicsDebugHullWithSkin<TSink : IPhysicsDebugLineSink>(
@@ -811,19 +760,6 @@ void AppendPhysicsDebugHullWithSkin<TSink : IPhysicsDebugLineSink>(
             AppendPhysicsDebugLine(wv, wv + wDir * skinRadius, skinColor, sink, budget);
         }
     }
-}
-
-void AppendPhysicsDebugHullWithSkin<TSink : IPhysicsDebugLineSink>(
-    in VectorSingle xfPos,
-    in VectorSingle xfRot,
-    in HullShape hull,
-    in VectorSingle color,
-    in f32 skinRadius,
-    in VectorSingle skinColor,
-    mut TSink sink,
-    mut PhysicsDebugPhaseBudget budget
-){
-    AppendPhysicsDebugHullWithSkin(xfPos, xfRot, hull, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), color, skinRadius, skinColor, sink, budget);
 }
 
 u64 HashQuantizedDebugPoint(in VectorSingle p){
@@ -1114,23 +1050,6 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
     if(!hasTrianglesToDraw)
         return;
     AppendPhysicsDebugMeshTriangleRange(mesh, 0u, mesh.triangles.size(), pos, col0, col1, col2, hasLinear, deduplicateEdges, color, seenEdges, sink, budget);
-}
-
-void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
-    in VectorSingle pos,
-    in VectorSingle q,
-    in MeshShape mesh,
-    in PhysicsDebugScreenProjector projector,
-    in b8 useProjector,
-    in b8 deduplicateEdges,
-    in b8 drawTriangles,
-    in b8 drawBvh,
-    in VectorSingle color,
-    mut PhysicsDebugEdgeDedupTable seenEdges,
-    mut TSink sink,
-    mut PhysicsDebugPhaseBudget budget
-){
-    AppendPhysicsDebugMeshLines(pos, q, mesh, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), projector, useProjector, deduplicateEdges, drawTriangles, drawBvh, color, seenEdges, sink, budget);
 }
 
 void ComputePhysicsJointRefBasis(
@@ -1788,18 +1707,6 @@ void AppendPhysicsDebugHeightfieldLines<TSink : IPhysicsDebugLineSink>(
         if(IsFinite(VectorSingle(cH11)))
             AppendPhysicsDebugLine(originW + spanX + spanZ + upW * cH11, b11, thickCol, sink, budget);
     }
-}
-
-void AppendPhysicsDebugHeightfieldLines<TSink : IPhysicsDebugLineSink>(
-    in HeightfieldShape hf,
-    in VectorSingle xfPos,
-    in VectorSingle xfRot,
-    in VectorSingle color,
-    mut PhysicsDebugDrawScratch scratch,
-    mut TSink sink,
-    mut PhysicsDebugPhaseBudget budget
-){
-    AppendPhysicsDebugHeightfieldLines(hf, xfPos, xfRot, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), color, scratch, sink, budget);
 }
 
 void EmitPhysicsDebugSdfQuadContour<TSink : IPhysicsDebugLineSink>(
@@ -3621,7 +3528,7 @@ void AppendEcsCharacterDebugLineItem<TSink : IPhysicsDebugLineSink>(
         in PhysicsWorld pw = physicsSystemOpt.value().physicsWorld();
         const u32 hIdx = cc.controller.def.customHullGeometryId.index;
         if(isUnitScale){
-            AppendPhysicsDebugHullWithSkin(pos, rot, pw.m_hullShapes[hIdx], charCol, cc.controller.def.skinWidth, VectorSingle(charCol.x, charCol.y, charCol.z, 0.40f), sink, budget);
+            AppendPhysicsDebugHullWithSkin(pos, rot, pw.m_hullShapes[hIdx], VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), charCol, cc.controller.def.skinWidth, VectorSingle(charCol.x, charCol.y, charCol.z, 0.40f), sink, budget);
         }
         else{
             AppendPhysicsDebugScaledLocalAabbObb(pos, rot, pw.m_hullLocalAabbs[hIdx], customScale, charCol, sink, budget);
@@ -3651,7 +3558,7 @@ void AppendEcsCharacterDebugLineItem<TSink : IPhysicsDebugLineSink>(
             else if(sub.type == ShapeType::Hull && cast<usize>(sub.geometryIndex) < pw.m_hullShapes.size()){
                 if(isUnitScale){
                     in HullShape chHull = pw.m_hullShapes[sub.geometryIndex];
-                    AppendPhysicsDebugHullWithSkin(subPosW, subRotW, chHull, charCol, chHull.radius(), VectorSingle(charCol.x, charCol.y, charCol.z, 0.40f), sink, budget);
+                    AppendPhysicsDebugHullWithSkin(subPosW, subRotW, chHull, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), charCol, chHull.radius(), VectorSingle(charCol.x, charCol.y, charCol.z, 0.40f), sink, budget);
                 }
                 else if(cast<usize>(sub.geometryIndex) < pw.m_hullLocalAabbs.size()){
                     AppendPhysicsDebugScaledLocalAabbObb(subPosW, subRotW, pw.m_hullLocalAabbs[sub.geometryIndex], customScale, charCol, sink, budget);
@@ -4284,10 +4191,7 @@ void AppendEcsForceFieldDebugLineItem<TSink : IPhysicsDebugLineSink>(
         else if(field.shape == ForceFieldShape::Sphere){
             const VectorSingle c = field.sphereShapeCenter();
             occOrigin = c;
-            f32 sr = field.radius;
-            if(sr <= 0.0f)
-                sr = Max(0.25f, field.obbHalfExtents.x);
-            sr = Clamp(sr, 0.25f, 25.0f);
+            const f32 sr = Clamp(field.radius, 0.25f, 25.0f);
             if(!useProjector || projector.isSphereVisible(c, sr))
                 AppendPhysicsDebugAxisAlignedSphereWireframe(c, sr, fieldCol, sink, budget);
         }
@@ -4807,15 +4711,13 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
 
             if(def.jointType == ArticulationJointType::Revolute){
                 AppendPhysicsDebugLine(pivotPos - wAxis0 * 0.22f, pivotPos + wAxis0 * 0.22f, jointAxisCol, sink, budget);
-                if(def.enableLimit && def.lowerLimit <= def.upperLimit){
-                    const f32 lo = Clamp(def.lowerLimit, -s_Pi, s_Pi);
-                    const f32 hi = Clamp(def.upperLimit, -s_Pi, s_Pi);
+                if(def.enableLimit && def.lowerLimits.x <= def.upperLimits.x){
+                    const f32 lo = Clamp(def.lowerLimits.x, -s_Pi, s_Pi);
+                    const f32 hi = Clamp(def.upperLimits.x, -s_Pi, s_Pi);
                     AppendPhysicsDebugArc(pivotPos, wAxis1, wAxis2, 0.14f, lo, hi, jointAxisCol, sink, budget);
                 }
                 if(def.enableDrive){
-                    f32 tgtAng = def.driveTargetPos3.x;
-                    if(def.driveTargetPos != 0.0f && def.driveTargetPos3.x == 0.0f)
-                        tgtAng = def.driveTargetPos;
+                    const f32 tgtAng = def.driveTargetPos3.x;
                     VectorSingle sT(0.0f); VectorSingle cT(0.0f);
                     VectorSinCos(sT, cT, VectorSingle(tgtAng, 0.0f, 0.0f, 0.0f));
                     AppendPhysicsDebugLine(pivotPos, pivotPos + (wAxis1 * cT.x + wAxis2 * sT.x) * 0.16f, driveCol, sink, budget);
@@ -4824,18 +4726,15 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
             else if(def.jointType == ArticulationJointType::Prismatic){
                 f32 lo = -0.3f;
                 f32 hi = 0.3f;
-                if(def.enableLimit && def.lowerLimit <= def.upperLimit){
-                    lo = Clamp(def.lowerLimit, -20.0f, 20.0f);
-                    hi = Clamp(def.upperLimit, -20.0f, 20.0f);
+                if(def.enableLimit && def.lowerLimits.x <= def.upperLimits.x){
+                    lo = Clamp(def.lowerLimits.x, -20.0f, 20.0f);
+                    hi = Clamp(def.upperLimits.x, -20.0f, 20.0f);
                 }
                 AppendPhysicsDebugLine(pivotPos + wAxis0 * lo, pivotPos + wAxis0 * hi, jointAxisCol, sink, budget);
-                const VectorSingle curPos = pivotPos + wAxis0 * st.q;
+                const VectorSingle curPos = pivotPos + wAxis0 * st.q3.x;
                 AppendPhysicsDebugLine(curPos - wAxis1 * 0.07f, curPos + wAxis1 * 0.07f, VectorSingle(1.0f, 0.98f, 0.45f, 0.98f), sink, budget);
                 if(def.enableDrive){
-                    f32 tgtPos = def.driveTargetPos3.x;
-                    if(def.driveTargetPos != 0.0f && def.driveTargetPos3.x == 0.0f)
-                        tgtPos = def.driveTargetPos;
-                    const VectorSingle dPt = pivotPos + wAxis0 * tgtPos;
+                    const VectorSingle dPt = pivotPos + wAxis0 * def.driveTargetPos3.x;
                     AppendPhysicsDebugLine(dPt - wAxis2 * 0.07f, dPt + wAxis2 * 0.07f, driveCol, sink, budget);
                 }
             }
@@ -5813,16 +5712,6 @@ PhysicsDebugDrawStats BuildPhysicsDebugLinesToSink<TSink : IPhysicsDebugLineSink
     return stats;
 }
 
-PhysicsDebugDrawStats BuildPhysicsDebugLinesToSink<TSink : IPhysicsDebugLineSink>(
-    in PhysicsWorld world,
-    in PhysicsDebugDrawOptions options,
-    in PhysicsDebugScreenProjector projector,
-    mut TSink sink
-){
-    PhysicsDebugDrawScratch scratch;
-    return BuildPhysicsDebugLinesToSink(world, options, projector, sink, scratch);
-}
-
 PhysicsDebugDrawStats BuildEcsPhysicsDebugLinesToSink<TSink : IPhysicsDebugLineSink>(
     mut World ecsWorld,
     in PhysicsSystem physicsSystem,
@@ -5851,50 +5740,6 @@ PhysicsDebugDrawStats BuildEcsPhysicsDebugLinesToSink<TSink : IPhysicsDebugLineS
     stats.truncated = stats.droppedLines > 0u;
     stats.lineThickness = ResolvePhysicsDebugLineThickness(options);
     return stats;
-}
-
-PhysicsDebugDrawStats BuildEcsPhysicsDebugLinesToSink<TSink : IPhysicsDebugLineSink>(
-    mut World ecsWorld,
-    in PhysicsSystem physicsSystem,
-    in PhysicsDebugDrawOptions options,
-    in PhysicsDebugScreenProjector projector,
-    mut TSink sink
-){
-    PhysicsDebugDrawScratch scratch;
-    return BuildEcsPhysicsDebugLinesToSink(ecsWorld, physicsSystem, options, projector, sink, scratch);
-}
-
-PhysicsDebugDrawStats BuildPhysicsDebugLines(
-    in PhysicsWorld world,
-    in PhysicsDebugDrawOptions options,
-    in PhysicsDebugScreenProjector projector,
-    mut Vector<PhysicsDebugLine> outLines
-){
-    PhysicsDebugWorldLineSink sink(options.maxLines, outLines);
-    return BuildPhysicsDebugLinesToSink(world, options, projector, sink);
-}
-
-PhysicsDebugDrawStats BuildPhysicsDebugLines(
-    in PhysicsWorld world,
-    in PhysicsDebugDrawOptions options,
-    mut Vector<PhysicsDebugLine> outLines
-){
-    const PhysicsDebugScreenProjector emptyProjector = PhysicsDebugScreenProjector();
-    PhysicsDebugWorldLineSink sink(options.maxLines, outLines);
-    return BuildPhysicsDebugLinesToSink(world, options, emptyProjector, sink);
-}
-
-b8 ProjectPhysicsWorldSegmentToScreen(
-    in TransformComponent cameraTransform,
-    in CameraProjection projection,
-    in f32 viewportWidth,
-    in f32 viewportHeight,
-    in VectorSingle worldP0,
-    in VectorSingle worldP1,
-    mut VectorSingle outSegment
-){
-    const PhysicsDebugScreenProjector projector(cameraTransform, projection, viewportWidth, viewportHeight);
-    return projector.projectSegment(worldP0, worldP1, outSegment);
 }
 
 void PhysicsSystem::collectDebugLines(mut GpuDebugLineCollector collector, in MatrixSingle viewProj){

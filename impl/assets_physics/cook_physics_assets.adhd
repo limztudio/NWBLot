@@ -299,13 +299,6 @@ b8 LoadCookPhysicsMaterialFromNwb(
             return true;
         });
         if(!foundVar){
-            const Optional<in MetascriptValue> assetOpt = doc.borrowVariable("asset");
-            if(assetOpt.has_value() && assetOpt.value().isMap()){
-                foundVar = true;
-                parseOk = ParseSurfaceMaterialMap(resolvedPath, assetOpt.value(), prefix, outMaterial);
-            }
-        }
-        if(!foundVar){
             error("{} '{}': source .nwb contains no physics_material declaration", prefix, PathToString(resolvedPath));
             return false;
         }
@@ -541,13 +534,6 @@ b8 LoadPhysicsSourceMesh(
                 }
                 return true;
             });
-            if(!foundVar && (sourceSubmesh.empty() || sourceSubmesh == "asset")){
-                const Optional<in MetascriptValue> assetOpt = doc.borrowVariable("asset");
-                if(assetOpt.has_value() && assetOpt.value().isMap()){
-                    foundVar = true;
-                    extractOk = ExtractNwbMeshPositionsAndIndices(resolvedPath, prefix, assetOpt.value(), outVertices, outIndices);
-                }
-            }
             if(!foundVar){
                 error("{} '{}': source .nwb contains no matching mesh declaration", prefix, PathToString(resolvedPath));
                 return false;
@@ -940,7 +926,7 @@ b8 BuildCookMeshShapeFromMapValue(
             sourceSubmesh = subRes.value();
             return true;
         }
-        if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+        if(key == "source_normalize_units"){
             hasSourceTransformOrFilter = true;
             return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
         }
@@ -1291,7 +1277,7 @@ b8 BuildCookHeightfieldFromMapValue(
     TransferVector<SurfaceMaterial>(outHeightfield.materials, materials);
     TransferVector<u16>(outHeightfield.cellMaterialIndices, cellMaterialIndices);
     TransferVector<u8>(outHeightfield.cellHoles, cellHoles);
-    outHeightfield.hierarchy.clear();
+    outHeightfield.buildHierarchy();
     return true;
 }
 
@@ -1398,7 +1384,7 @@ b8 BuildCookSdfShapeFromMapValue(
             sourceSubmesh = subRes.value();
             return true;
         }
-        if(key == "source_normalize_units" || key == "normalize_units_and_axes"){
+        if(key == "source_normalize_units"){
             hasSourceTransformOrFilter = true;
             return ReadPhysicsBoolValue(file, fieldVal, prefix, key, sourceNormalizeUnits);
         }
@@ -1544,7 +1530,6 @@ b8 BuildCookChainShapeFromMapValue(
     Vector<f32x4> points;
     f32 radius = 0.0f;
     b8 isLoop = false;
-    b8 hasLoopFlag = false;
     SurfaceMaterial defaultMat;
     Vector<SurfaceMaterial> materials;
     Vector<u16> segMatIndices;
@@ -1554,20 +1539,13 @@ b8 BuildCookChainShapeFromMapValue(
     b8 hasGhostEnd = false;
 
     if(!mapVal.forEachMapEntry(lambda[
-        in file, in prefix, mut points, mut radius, mut isLoop, mut hasLoopFlag,
+        in file, in prefix, mut points, mut radius, mut isLoop,
         mut defaultMat, mut materials, mut segMatIndices,
         mut ghostStart, mut hasGhostStart, mut ghostEnd, mut hasGhostEnd
     ](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, prefix, key, points);
         if(key == "radius") return ReadPhysicsF32Value(file, fieldVal, prefix, key, radius);
-        if(key == "is_loop" || key == "closed"){
-            if(hasLoopFlag){
-                error("{} '{}': only one of 'is_loop' or 'closed' may be set", prefix, PathToString(file));
-                return false;
-            }
-            hasLoopFlag = true;
-            return ReadPhysicsBoolValue(file, fieldVal, prefix, key, isLoop);
-        }
+        if(key == "is_loop") return ReadPhysicsBoolValue(file, fieldVal, prefix, key, isLoop);
         if(key == "material")
             return ParseSurfaceMaterialWithSourceMap(file, fieldVal, prefix, "material", defaultMat);
         if(key == "materials")
@@ -1758,7 +1736,6 @@ b8 PopulateCompoundChildLeafFromMap(
         HeightfieldShape hf;
         if(!BuildCookHeightfieldFromMapValue(file, geomMap, prefix, hf))
             return false;
-        hf.buildHierarchy();
         outChild.geometryPoolIndex = cast<u32>(outData.heightfields.size());
         outData.heightfields.push_back(hf);
         return true;
@@ -1980,7 +1957,6 @@ Expected<CompoundShapeCookEntry> ParseCompoundShapeCookMetadata(in Name virtualP
                 && key != "shape"
                 && key != "scale"
                 && key != "child"
-                && key != "child_type"
             ){
                 error("{} '{}': unsupported compound child '{}' field '{}'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci, key);
                 rotOk = false;
@@ -2018,58 +1994,34 @@ Expected<CompoundShapeCookEntry> ParseCompoundShapeCookMetadata(in Name virtualP
             child.scale = f32x4(s.x, s.y, s.z, det);
 
             const Optional<in MetascriptValue> innerChildOpt = childMap.borrowField("child");
-            const Optional<in MetascriptValue> inlineChildTypeOpt = childMap.borrowField("child_type");
-            if(innerChildOpt.has_value() && inlineChildTypeOpt.has_value()){
-                error("{} '{}': scaled child '{}' cannot specify both 'child' and 'child_type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+            if(!innerChildOpt.has_value() || !innerChildOpt.value().isMap()){
+                error("{} '{}': scaled child '{}' requires a 'child' map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
                 return MakeUnexpected(Failure());
             }
-            StringView innerTypeName = "";
-            Optional<in MetascriptValue> geomSourceOpt;
-            if(innerChildOpt.has_value()){
-                if(!innerChildOpt.value().isMap()){
-                    error("{} '{}': scaled child '{}' 'child' must be a map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
-                    return MakeUnexpected(Failure());
+            in MetascriptValue innerMap = innerChildOpt.value();
+            b8 innerKeysOk = true;
+            innerMap.forEachMapEntry(lambda[in file, in ci, mut innerKeysOk](in StringView key, in MetascriptValue fv) -> b8{
+                if(key != "type" && key != "shape"){
+                    error("{} '{}': unsupported scaled child[{}] 'child' field '{}'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci, key);
+                    innerKeysOk = false;
+                    return false;
                 }
-                in MetascriptValue innerMap = innerChildOpt.value();
-                b8 innerKeysOk = true;
-                innerMap.forEachMapEntry(lambda[in file, in ci, mut innerKeysOk](in StringView key, in MetascriptValue fv) -> b8{
-                    if(key != "type" && key != "shape"){
-                        error("{} '{}': unsupported scaled child[{}] 'child' field '{}'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci, key);
-                        innerKeysOk = false;
-                        return false;
-                    }
-                    return true;
-                });
-                if(!innerKeysOk)
-                    return MakeUnexpected(Failure());
-                const Optional<in MetascriptValue> innerTypeOpt = innerMap.borrowField("type");
-                if(!innerTypeOpt.has_value()){
-                    error("{} '{}': scaled child '{}' missing 'child.type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
-                    return MakeUnexpected(Failure());
-                }
-                const Expected<StringView> innerTypeRes = ReadPhysicsStringValue(file, innerTypeOpt.value(), s_CompoundShapeDiagnosticPrefix, "child.type");
-                if(!innerTypeRes.has_value())
-                    return MakeUnexpected(Failure());
-                innerTypeName = innerTypeRes.value();
-                geomSourceOpt = innerMap.borrowField("shape");
-                if(!geomSourceOpt.has_value() || !geomSourceOpt.value().isMap()){
-                    error("{} '{}': scaled child '{}' 'child' requires a 'shape' map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
-                    return MakeUnexpected(Failure());
-                }
+                return true;
+            });
+            if(!innerKeysOk)
+                return MakeUnexpected(Failure());
+            const Optional<in MetascriptValue> innerTypeOpt = innerMap.borrowField("type");
+            if(!innerTypeOpt.has_value()){
+                error("{} '{}': scaled child '{}' missing 'child.type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+                return MakeUnexpected(Failure());
             }
-            else if(inlineChildTypeOpt.has_value()){
-                const Expected<StringView> innerTypeRes = ReadPhysicsStringValue(file, inlineChildTypeOpt.value(), s_CompoundShapeDiagnosticPrefix, "child_type");
-                if(!innerTypeRes.has_value())
-                    return MakeUnexpected(Failure());
-                innerTypeName = innerTypeRes.value();
-                if(!shapeOpt.has_value() || !shapeOpt.value().isMap()){
-                    error("{} '{}': scaled child '{}' with 'child_type' requires a 'shape' map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
-                    return MakeUnexpected(Failure());
-                }
-                geomSourceOpt = shapeOpt;
-            }
-            else{
-                error("{} '{}': scaled child '{}' requires 'child' or 'child_type'", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
+            const Expected<StringView> innerTypeRes = ReadPhysicsStringValue(file, innerTypeOpt.value(), s_CompoundShapeDiagnosticPrefix, "child.type");
+            if(!innerTypeRes.has_value())
+                return MakeUnexpected(Failure());
+            const StringView innerTypeName = innerTypeRes.value();
+            const Optional<in MetascriptValue> geomSourceOpt = innerMap.borrowField("shape");
+            if(!geomSourceOpt.has_value() || !geomSourceOpt.value().isMap()){
+                error("{} '{}': scaled child '{}' 'child' requires a 'shape' map", s_CompoundShapeDiagnosticPrefix, PathToString(file), ci);
                 return MakeUnexpected(Failure());
             }
             ShapeType leafType = ShapeType::Sphere;
@@ -2146,14 +2098,7 @@ Expected<CollisionMeshAsset> BuildCollisionMeshAsset(in CollisionMeshCookEntry e
 
 Expected<HeightfieldAsset> BuildHeightfieldAsset(in HeightfieldCookEntry entry){
     HeightfieldAsset asset(entry.virtualPath);
-    if(entry.heightfield.hierarchy.empty()){
-        HeightfieldShape hf = entry.heightfield;
-        hf.buildHierarchy();
-        asset.setHeightfield(hf);
-    }
-    else{
-        asset.setHeightfield(entry.heightfield);
-    }
+    asset.setHeightfield(entry.heightfield);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;

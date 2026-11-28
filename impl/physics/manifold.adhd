@@ -1475,19 +1475,6 @@ Manifold CollideSphereAndMeshFiltered(
     return m;
 }
 
-Manifold CollideSphereAndMesh(
-    in SphereShape sphereA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in MeshShape meshB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Optional<TriangleFilterCallback> noFilter;
-    return CollideSphereAndMeshFiltered(sphereA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter);
-}
-
 b8 ClipSegmentAgainstTriangleEdgePlane(
     in VectorSingle ev0,
     in VectorSingle ev1,
@@ -1813,16 +1800,7 @@ Manifold CollideCapsuleAndMeshFiltered(
     return m;
 }
 
-void MatchManifoldImpulsesCore(
-    in Manifold oldManifold,
-    in b8 hasExplicitBasis,
-    in VectorSingle explicitOldT1,
-    in VectorSingle explicitOldT2,
-    in VectorSingle explicitNewT1,
-    in VectorSingle explicitNewT2,
-    in b8 enableWarmStarting,
-    mut Manifold newManifold
-){
+void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
     const u32 newCount = newManifold.pointCount();
     const u32 oldCount = oldManifold.pointCount();
     if(!enableWarmStarting || newCount == 0u || oldCount == 0u)
@@ -1878,12 +1856,12 @@ void MatchManifoldImpulsesCore(
             }
         }
         if(hasFriction){
-            const b8 sameDefaultBasis = !hasExplicitBasis && nDot > 0.99999f && ((Abs(VectorSingle(oldN.y)).x > 0.9f) == (Abs(VectorSingle(newN.y)).x > 0.9f));
-            VectorSingle oldT1 = explicitOldT1;
-            VectorSingle oldT2 = explicitOldT2;
-            VectorSingle newT1 = explicitNewT1;
-            VectorSingle newT2 = explicitNewT2;
-            if(!hasExplicitBasis && !sameDefaultBasis){
+            const b8 sameDefaultBasis = nDot > 0.99999f && ((Abs(VectorSingle(oldN.y)).x > 0.9f) == (Abs(VectorSingle(newN.y)).x > 0.9f));
+            VectorSingle oldT1(0.0f);
+            VectorSingle oldT2(0.0f);
+            VectorSingle newT1(0.0f);
+            VectorSingle newT2(0.0f);
+            if(!sameDefaultBasis){
                 ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
                 ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
             }
@@ -1920,23 +1898,6 @@ void MatchManifoldImpulsesCore(
         if(hasRoll)
             newManifold.setRollingImpulse(rollImp - newN * Vector3Dot(rollImp, newN).x);
     }
-}
-
-void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
-    const VectorSingle zeroVec(0.0f);
-    MatchManifoldImpulsesCore(oldManifold, false, zeroVec, zeroVec, zeroVec, zeroVec, enableWarmStarting, newManifold);
-}
-
-void MatchManifoldImpulsesWithBasis(
-    in Manifold oldManifold,
-    in VectorSingle oldT1,
-    in VectorSingle oldT2,
-    in VectorSingle newT1,
-    in VectorSingle newT2,
-    in b8 enableWarmStarting,
-    mut Manifold newManifold
-){
-    MatchManifoldImpulsesCore(oldManifold, true, oldT1, oldT2, newT1, newT2, enableWarmStarting, newManifold);
 }
 
 ClipVertex MakeInterpolatedClipVertex(
@@ -3131,30 +3092,6 @@ void CollideConvexProxyAndMeshMulti(
     VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
     RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
     CollideConvexProxyAndMeshWithRelativeMulti(proxyA, posA, rotA, meshB, posB, rotB, localPosA, localRotA, maxDistance, meshShapeId, triFilter, outManifold, outExtraManifolds);
-}
-
-Manifold CollideConvexProxyAndMesh(
-    in ShapeProxyView proxyA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in MeshShape meshB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Manifold primary;
-    if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA))
-        return primary;
-    VectorSingle localPosA(0.0f);
-    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
-    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
-    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
-    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
-    Optional<TriangleFilterCallback> noFilter;
-    BuildConvexProxyAndMeshCandidates(proxyA, posA, rotA, meshB, posB, rotB, localPosA, localRotA, maxDistance, ShapeId(), noFilter, chosenNormal, candidates);
-    if(!candidates.empty())
-        ReduceSinglePlaneMeshCandidates(chosenNormal, candidates, false, primary);
-    return primary;
 }
 
 void CollideConvexProxyAndChainMulti(

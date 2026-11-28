@@ -14934,64 +14934,6 @@ class PhysicsGpuDispatcher{
         return device.readMappedBuffer(this.m_renderTransformOutSlot.buffer.deref(), outTransforms);
     }
 
-    private b8 exportRenderTransformsToBufferImpl(
-        in PhysicsWorld world,
-        in Span<GpuPhysicsRenderTransformBinding> bindings,
-        mut BufferHandle targetBuffer,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4,
-        in b8 waitCompletion,
-        mut QueueSubmissionToken outToken
-    ){
-        outToken = QueueSubmissionToken();
-        if(bindings.empty()){
-            outToken = this.m_lastComputeToken;
-            return true;
-        }
-        if(!targetBuffer.valid() || targetUavSlot == s_NullIndex || instanceStrideFloat4 < 3u)
-            return false;
-        if(!this.validateResources() || !this.isReady())
-            return false;
-
-        mut GraphicsRuntime graphics = this.m_graphics.value();
-        mut Device device = graphics.getDevice();
-        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-        if(!heap.isInitialized())
-            return false;
-
-        u32 maxDstCount = 0u;
-        this.prepareExportRenderTransformSpans(world, bindings, Span<GpuPhysicsBodyPose>(), maxDstCount);
-        const u32 totalActive = cast<u32>(this.m_exportResBindingsScratch.size() + this.m_exportPoseBindingsScratch.size());
-        if(totalActive == 0u || maxDstCount == 0u){
-            outToken = this.m_lastComputeToken;
-            return true;
-        }
-
-        return this.recordAndSubmitRenderTransformExport(graphics, device, heap, totalActive, targetBuffer, targetUavSlot, s_GpuExportModePatchInstanceBuffer, instanceStrideFloat4, waitCompletion, outToken);
-    }
-
-    public b8 exportRenderTransformsToBuffer(
-        in PhysicsWorld world,
-        in Span<GpuPhysicsRenderTransformBinding> bindings,
-        mut BufferHandle targetBuffer,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4
-    ){
-        QueueSubmissionToken unusedToken;
-        return this.exportRenderTransformsToBufferImpl(world, bindings, targetBuffer, targetUavSlot, instanceStrideFloat4, true, unusedToken);
-    }
-
-    public b8 exportRenderTransformsToBufferAsync(
-        in PhysicsWorld world,
-        in Span<GpuPhysicsRenderTransformBinding> bindings,
-        mut BufferHandle targetBuffer,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4,
-        mut QueueSubmissionToken outToken
-    ){
-        return this.exportRenderTransformsToBufferImpl(world, bindings, targetBuffer, targetUavSlot, instanceStrideFloat4, false, outToken);
-    }
-
     private void retireExportSlot(in usize ringIdx, mut PhysicsGpuBufferSlot slot, in b8 tokenBoundToUsingGraph){
         if(!slot.buffer.valid() && !slot.descriptor.valid())
             return;
@@ -17505,20 +17447,6 @@ class PhysicsGpuDispatcher{
             cursor += chunkCount;
         }
         return true;
-    }
-
-    public b8 deformSoftBodyMeshGpu(in SoftBody softBody, in SoftBodyGpuDeformTarget deformTarget){
-        this.m_softParticlePosScratch.clear();
-        u32 pOffset = 0u;
-        u32 pCount = 0u;
-        this.appendSoftBodyGpuParticles(softBody, this.m_softParticlePosScratch, pOffset, pCount);
-        if(pCount == 0u)
-            return false;
-        Array<SoftBodyGpuDeformBatchItem, 1u> singleItem;
-        singleItem[0u].particleOffset = pOffset;
-        singleItem[0u].particleCount = pCount;
-        singleItem[0u].target = deformTarget;
-        return this.deformSoftBodyMeshBatchGpu(Span<f32x4>(this.m_softParticlePosScratch), Span<SoftBodyGpuDeformBatchItem>(singleItem.data(), 1u));
     }
 
     private void packResidentBodyVolumes(in PhysicsWorld world, in u32 awakeCount){
@@ -20388,18 +20316,6 @@ void ReleasePhysicsGpuBufferSlot(mut GpuDescriptorHeap heap, mut PhysicsGpuBuffe
     slot.cpuReadable = false;
 }
 
-b8 WaitPhysicsGpuBufferRelease(
-    mut Device device,
-    mut QueueSubmissionToken lastComputeToken
-){
-    if(lastComputeToken.valid()){
-        if(!device.waitForSubmissionToken(lastComputeToken))
-            return false;
-        lastComputeToken = QueueSubmissionToken();
-    }
-    return true;
-}
-
 Expected<Name> BuildPhysicsExportBufferName(in StringView prefix, in u32 generation){
     if(generation == 0u)
         return ParseName(prefix);
@@ -20450,77 +20366,6 @@ b8 AllocatePhysicsGpuComputeStorageBuffer(
     slot.stride = stride;
     slot.isIndirectArgs = isIndirectArgs;
     slot.cpuReadable = cpuReadable;
-    return true;
-}
-
-b8 EnsurePhysicsGpuComputeStorageBuffer(
-    mut GraphicsRuntime graphics,
-    mut Device device,
-    mut GpuDescriptorHeap heap,
-    mut QueueSubmissionToken lastComputeToken,
-    in Name debugName,
-    in u32 stride,
-    in u32 requiredCount,
-    in b8 isIndirectArgs,
-    in b8 cpuReadable,
-    mut PhysicsGpuBufferSlot slot
-){
-    const u32 targetCount = Max(requiredCount, 64u);
-    if(slot.hasValidUav() && slot.stride == stride && slot.isIndirectArgs == isIndirectArgs && slot.cpuReadable == cpuReadable && slot.capacity >= targetCount)
-        return true;
-
-    const u32 newCap = Max(targetCount, slot.capacity * 2u);
-    if(slot.buffer.valid() || slot.descriptor.valid()){
-        if(!WaitPhysicsGpuBufferRelease(device, lastComputeToken))
-            return false;
-        if(slot.descriptor.valid() && heap.isInitialized())
-            heap.free(slot.descriptor);
-        slot.descriptor = GpuDescriptorHandle();
-        slot.buffer.reset();
-        slot.capacity = 0u;
-        slot.isIndirectArgs = false;
-        slot.cpuReadable = false;
-    }
-
-    return AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, debugName, stride, newCap, isIndirectArgs, cpuReadable, slot);
-}
-
-b8 EnsurePhysicsGpuComputeReadbackBuffer(
-    mut GraphicsRuntime graphics,
-    mut Device device,
-    mut QueueSubmissionToken lastComputeToken,
-    in Name debugName,
-    in u32 stride,
-    in u32 requiredCount,
-    mut PhysicsGpuBufferSlot slot
-){
-    const u32 targetCount = Max(requiredCount, 64u);
-    if(slot.readback.valid() && slot.stride == stride && slot.readbackCapacity >= targetCount)
-        return true;
-
-    const u32 newCap = Max(targetCount, slot.readbackCapacity * 2u);
-    if(slot.readback.valid()){
-        if(!WaitPhysicsGpuBufferRelease(device, lastComputeToken))
-            return false;
-        slot.readback.reset();
-        slot.readbackCapacity = 0u;
-    }
-
-    BufferDesc desc;
-    desc
-        .setDebugName(debugName)
-        .setByteSize(cast<u64>(newCap) * cast<u64>(stride))
-        .setStructStride(stride)
-        .setCanHaveUAVs(false)
-        .setCpuAccess(CpuAccessMode::Read)
-        .enableAutomaticStateTracking(ResourceStates::CopyDest)
-    ;
-    const Expected<BufferHandle> rbResult = graphics.createBuffer(desc);
-    if(!rbResult.has_value())
-        return false;
-
-    slot.readback = rbResult.value();
-    slot.readbackCapacity = newCap;
     return true;
 }
 

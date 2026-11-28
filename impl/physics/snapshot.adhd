@@ -20,11 +20,11 @@ const u32 s_SnapshotVersion = 6u;
 const u32 s_DeltaSnapshotMagic = 0x4442574eu;
 const u32 s_DeltaSnapshotVersion = 1u;
 const u32 s_SubsystemsSnapshotMagic = 0x50535353u;
-const u32 s_SubsystemsSnapshotVersion = 3u;
+const u32 s_SubsystemsSnapshotVersion = 4u;
 const u32 s_SubsystemsDeltaSnapshotMagic = 0x50535344u;
 const u32 s_SubsystemsDeltaSnapshotVersion = 1u;
 const u32 s_FullSnapshotMagic = 0x50534657u;
-const u32 s_FullSnapshotVersion = 2u;
+const u32 s_FullSnapshotVersion = 3u;
 const u32 s_FullDeltaSnapshotMagic = 0x50534644u;
 const u32 s_FullDeltaSnapshotVersion = 1u;
 const u32 s_SnapshotMaxElements = 16777216u;
@@ -5501,7 +5501,6 @@ b8 SnapWriteVehicleController<TSink : ISnapshotSink>(in VehicleController veh, m
     w.writeB8(eng.useAckermanSteering);
     w.writeB8(eng.automaticTransmission);
     w.writeB8(eng.useTorqueConverter);
-    w.writeB8(eng.useSolverImpulses);
     w.writeB8(eng.enableAbs);
     w.writeB8(eng.enableTcs);
     w.writeB8(eng.enableEsp);
@@ -5559,7 +5558,6 @@ b8 SnapWriteVehicleController<TSink : ISnapshotSink>(in VehicleController veh, m
         w.writeB8(wd.isSteerable);
         w.writeB8(wd.isDriven);
         w.writeB8(wd.handbrakeAffected);
-        w.writeB8(wd.useSweptCast);
         w.writeB8(wd.attachedToTrailer);
     }
 
@@ -5678,7 +5676,6 @@ b8 SnapReadVehicleController(in Span<u8> bytes, mut SnapshotByteReader r, mut Ve
         || !r.readB8(bytes, eng.useAckermanSteering)
         || !r.readB8(bytes, eng.automaticTransmission)
         || !r.readB8(bytes, eng.useTorqueConverter)
-        || !r.readB8(bytes, eng.useSolverImpulses)
         || !r.readB8(bytes, eng.enableAbs)
         || !r.readB8(bytes, eng.enableTcs)
         || !r.readB8(bytes, eng.enableEsp)
@@ -5751,7 +5748,6 @@ b8 SnapReadVehicleController(in Span<u8> bytes, mut SnapshotByteReader r, mut Ve
             || !r.readB8(bytes, wd.isSteerable)
             || !r.readB8(bytes, wd.isDriven)
             || !r.readB8(bytes, wd.handbrakeAffected)
-            || !r.readB8(bytes, wd.useSweptCast)
             || !r.readB8(bytes, wd.attachedToTrailer)
         )
             return false;
@@ -5834,20 +5830,13 @@ b8 SnapWriteArticulation<TSink : ISnapshotSink>(in Articulation art, mut TSink w
         SnapWriteSymMat3(w, d.inertiaTensor);
         w.writeB8(d.useFullInertiaTensor);
         w.writeB8(d.enableLimit);
-        w.writeF32(d.lowerLimit);
-        w.writeF32(d.upperLimit);
         SnapWriteVec4(w, VectorSingle(d.lowerLimits));
         SnapWriteVec4(w, VectorSingle(d.upperLimits));
         w.writeF32(d.limitStiffness);
         w.writeF32(d.limitDamping);
         w.writeB8(d.enableDrive);
-        w.writeF32(d.driveTargetPos);
-        w.writeF32(d.driveTargetVel);
         SnapWriteVec4(w, VectorSingle(d.driveTargetPos3));
         SnapWriteVec4(w, VectorSingle(d.driveTargetVel3));
-        w.writeF32(d.driveStiffness);
-        w.writeF32(d.driveDamping);
-        w.writeF32(d.driveMaxForce);
         w.writeF32(d.jointDamping);
         w.writeF32(d.jointFriction);
         w.writeF32(d.limitRestitution);
@@ -5855,8 +5844,6 @@ b8 SnapWriteArticulation<TSink : ISnapshotSink>(in Articulation art, mut TSink w
         w.writeF32(d.screwPitch);
         w.writeU8(d.limitDofMask);
         w.writeU8(d.driveDofMask);
-        w.writeB8(d.usePerDofLimits);
-        w.writeB8(d.usePerDofDrives);
         SnapWriteVec4(w, VectorSingle(d.driveStiffness3));
         SnapWriteVec4(w, VectorSingle(d.driveDamping3));
         SnapWriteVec4(w, VectorSingle(d.driveMaxForce3));
@@ -5873,16 +5860,11 @@ b8 SnapWriteArticulation<TSink : ISnapshotSink>(in Articulation art, mut TSink w
         return false;
     for(usize i = 0u; i < art.linkStates.size(); ++i){
         in ArticulationLinkState s = art.linkStates[i];
-        w.writeF32(s.q);
-        w.writeF32(s.qd);
-        w.writeF32(s.qdd);
-        w.writeF32(s.externalTau);
         SnapWriteVec4(w, VectorSingle(s.q3));
         SnapWriteVec4(w, VectorSingle(s.qd3));
         SnapWriteVec4(w, VectorSingle(s.qdd3));
         SnapWriteVec4(w, VectorSingle(s.externalTau3));
         SnapWriteVec4(w, VectorSingle(s.jointRotation));
-        w.writeF32(s.measuredJointTorque);
         SnapWriteVec4(w, VectorSingle(s.measuredJointTorque3));
         SnapWriteSpatialVec(s.measuredReactionForce, w);
         SnapWriteTransform3D(w, s.worldTransform);
@@ -6035,20 +6017,13 @@ b8 SnapReadArticulation(in Span<u8> bytes, mut SnapshotByteReader r, mut Articul
             || !r.readSymMat3(bytes, d.inertiaTensor)
             || !r.readB8(bytes, d.useFullInertiaTensor)
             || !r.readB8(bytes, d.enableLimit)
-            || !r.readF32(bytes, d.lowerLimit)
-            || !r.readF32(bytes, d.upperLimit)
             || !r.readVec4F(bytes, d.lowerLimits.x, d.lowerLimits.y, d.lowerLimits.z, d.lowerLimits.w)
             || !r.readVec4F(bytes, d.upperLimits.x, d.upperLimits.y, d.upperLimits.z, d.upperLimits.w)
             || !r.readF32(bytes, d.limitStiffness)
             || !r.readF32(bytes, d.limitDamping)
             || !r.readB8(bytes, d.enableDrive)
-            || !r.readF32(bytes, d.driveTargetPos)
-            || !r.readF32(bytes, d.driveTargetVel)
             || !r.readVec4F(bytes, d.driveTargetPos3.x, d.driveTargetPos3.y, d.driveTargetPos3.z, d.driveTargetPos3.w)
             || !r.readVec4F(bytes, d.driveTargetVel3.x, d.driveTargetVel3.y, d.driveTargetVel3.z, d.driveTargetVel3.w)
-            || !r.readF32(bytes, d.driveStiffness)
-            || !r.readF32(bytes, d.driveDamping)
-            || !r.readF32(bytes, d.driveMaxForce)
             || !r.readF32(bytes, d.jointDamping)
             || !r.readF32(bytes, d.jointFriction)
             || !r.readF32(bytes, d.limitRestitution)
@@ -6056,8 +6031,6 @@ b8 SnapReadArticulation(in Span<u8> bytes, mut SnapshotByteReader r, mut Articul
             || !r.readF32(bytes, d.screwPitch)
             || !r.readU8(bytes, d.limitDofMask)
             || !r.readU8(bytes, d.driveDofMask)
-            || !r.readB8(bytes, d.usePerDofLimits)
-            || !r.readB8(bytes, d.usePerDofDrives)
             || !r.readVec4F(bytes, d.driveStiffness3.x, d.driveStiffness3.y, d.driveStiffness3.z, d.driveStiffness3.w)
             || !r.readVec4F(bytes, d.driveDamping3.x, d.driveDamping3.y, d.driveDamping3.z, d.driveDamping3.w)
             || !r.readVec4F(bytes, d.driveMaxForce3.x, d.driveMaxForce3.y, d.driveMaxForce3.z, d.driveMaxForce3.w)
@@ -6084,16 +6057,11 @@ b8 SnapReadArticulation(in Span<u8> bytes, mut SnapshotByteReader r, mut Articul
     for(u32 i = 0u; i < linkStateCnt; ++i){
         mut ArticulationLinkState s = outArt.linkStates[i];
         if(
-            !r.readF32(bytes, s.q)
-            || !r.readF32(bytes, s.qd)
-            || !r.readF32(bytes, s.qdd)
-            || !r.readF32(bytes, s.externalTau)
-            || !r.readVec4F(bytes, s.q3.x, s.q3.y, s.q3.z, s.q3.w)
+            !r.readVec4F(bytes, s.q3.x, s.q3.y, s.q3.z, s.q3.w)
             || !r.readVec4F(bytes, s.qd3.x, s.qd3.y, s.qd3.z, s.qd3.w)
             || !r.readVec4F(bytes, s.qdd3.x, s.qdd3.y, s.qdd3.z, s.qdd3.w)
             || !r.readVec4F(bytes, s.externalTau3.x, s.externalTau3.y, s.externalTau3.z, s.externalTau3.w)
             || !r.readVec4F(bytes, s.jointRotation.x, s.jointRotation.y, s.jointRotation.z, s.jointRotation.w)
-            || !r.readF32(bytes, s.measuredJointTorque)
             || !r.readVec4F(bytes, s.measuredJointTorque3.x, s.measuredJointTorque3.y, s.measuredJointTorque3.z, s.measuredJointTorque3.w)
             || !SnapReadSpatialVec(bytes, r, s.measuredReactionForce)
             || !r.readTransform3D(bytes, s.worldTransform)
@@ -6340,10 +6308,6 @@ b8 SnapWriteRagdollInstance<TSink : ISnapshotSink>(in RagdollInstance rag, mut T
     for(usize i = 0u; i < refQuats.size(); ++i)
         SnapWriteVec4(w, VectorSingle(refQuats[i]));
 
-    const Span<u8> solverFlags = rag.snapshotBoneUseSolverMotor();
-    if(!w.writeCount(solverFlags.size()))
-        return false;
-    w.writeBytes(solverFlags);
     w.writeB8(rag.snapshotArticulationKinematic());
     const Span<u8> boneKinMask = rag.snapshotArticulationBoneKinMask();
     if(!w.writeCount(boneKinMask.size()))
@@ -6420,7 +6384,6 @@ b8 SnapReadRagdollInstance(in Span<u8> bytes, mut SnapshotByteReader r, mut Ragd
     Vector<f32> tmpInertias;
     Vector<Mat3> tmpLocalInertias;
     Vector<f32x4> tmpRestQ;
-    Vector<u8> tmpSolverFlags;
     if(!SnapshotReadF32Vec(bytes, r, tmpInertias))
         return false;
     u32 localInertiaCnt = 0u;
@@ -6435,7 +6398,6 @@ b8 SnapReadRagdollInstance(in Span<u8> bytes, mut SnapshotByteReader r, mut Ragd
     Vector<u8> tmpBoneKinMask;
     if(
         !SnapshotReadVec4Vec(bytes, r, tmpRestQ)
-        || !SnapshotReadU8Vec(bytes, r, tmpSolverFlags)
         || !r.readB8(bytes, artKin)
         || !SnapshotReadU8Vec(bytes, r, tmpBoneKinMask)
     )
@@ -6445,7 +6407,6 @@ b8 SnapReadRagdollInstance(in Span<u8> bytes, mut SnapshotByteReader r, mut Ragd
         Span<f32>(tmpInertias),
         Span<Mat3>(tmpLocalInertias),
         Span<f32x4>(tmpRestQ),
-        Span<u8>(tmpSolverFlags),
         artKin,
         Span<u8>(tmpBoneKinMask)
     );

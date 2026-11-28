@@ -292,13 +292,10 @@ class GpuRenderTransformExportComponentBinary{
     public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);
     public u32 target = 0u;
     public u32 subTargetIndex = 0u;
-    public u32 instanceIndex = 0u;
     public u32 flags = 0u;
     public u8 enabledFlag = 1u;
     public u8 reserved0 = 0u;
     public u16 reserved1 = 0u;
-    public u32 reserved2 = 0u;
-    public u64 reserved3 = 0u;
 }
 
 
@@ -1825,14 +1822,13 @@ class SubsystemPhysicsComponentBinaryCodec{
     }
 
     public b8 appendGpuRenderTransformExportValidated(in GpuRenderTransformExportComponent g, mut Vector<u8> outBinary)const{
-        static_assert(size_of<GpuRenderTransformExportComponentBinary>() == 48u && offset_of<GpuRenderTransformExportComponentBinary>(reserved3) == 40u);
+        static_assert(size_of<GpuRenderTransformExportComponentBinary>() == 32u && offset_of<GpuRenderTransformExportComponentBinary>(reserved1) == 30u);
         if(!CanAppendBytes(outBinary, size_of<GpuRenderTransformExportComponentBinary>()))
             return false;
         GpuRenderTransformExportComponentBinary bin;
         bin.localScale = g.localScale;
         bin.target = cast<u32>(g.target);
         bin.subTargetIndex = g.subTargetIndex;
-        bin.instanceIndex = g.instanceIndex;
         bin.flags = g.flags;
         if(g.enabled)
             bin.enabledFlag = s_GpuExportFlagEnabled;
@@ -1858,7 +1854,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         in GpuRenderTransformExportComponentBinary bin = res.value();
-        if(bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || (bin.enabledFlag & 0xfeu) != 0u){
+        if(bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.enabledFlag & 0xfeu) != 0u){
             error("GpuRenderTransformExportComponentAsset::loadComponentPayload failed: unsupported flags or non-zero reserved bits");
             return MakeUnexpected(Failure());
         }
@@ -1866,7 +1862,6 @@ class SubsystemPhysicsComponentBinaryCodec{
         g.localScale = bin.localScale;
         g.target = cast<GpuRenderTransformExportTarget>(bin.target);
         g.subTargetIndex = bin.subTargetIndex;
-        g.instanceIndex = bin.instanceIndex;
         g.flags = bin.flags;
         g.enabled = (bin.enabledFlag & s_GpuExportFlagEnabled) != 0u;
         if(!this.validGpuRenderTransformExportData(g)){

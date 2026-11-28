@@ -367,13 +367,11 @@ void RegisterCompositeRootAssetType(const Name& assetType);
 [[nodiscard]] b8 IsCompositeRootAssetType(const Name& assetType);
 void RegisterNonStandaloneAssetType(const Name& assetType, AStringView tokenText = {});
 void RegisterNonStandaloneFirstTokenSuffix(AStringView tokenSuffix);
-[[nodiscard]] b8 IsNonStandaloneAssetType(const Name& assetType);
 [[nodiscard]] b8 IsLikelyNonStandaloneFirstToken(AStringView firstToken);
 void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
 void RegisterCookExternalSourceCollector(CookExternalSourceCollectorFunction function);
 [[nodiscard]] b8 AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
-[[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
 [[nodiscard]] b8 ParseAssetMetadata(Span<const DiscoveredNwbFile> nwbFiles, const Path& assetCacheDirectory, CookArena& cookArena, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
 

@@ -695,11 +695,11 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             }
             return this.uploadPendingBatches(latestCrossQueueToken);
         }
-        return this.uploadPendingBatches();
+        return this.uploadPendingBatches(QueueSubmissionToken());
     }
 
     public void render(in FramebufferPtr framebuffer)override{
-        if(!this.uploadPendingBatches())
+        if(!this.uploadPendingBatches(QueueSubmissionToken()))
             warning("SoftBodyMeshSystem: skipped runtime mesh upload because standalone graph submission failed");
     }
 
@@ -984,10 +984,6 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             }
         }
         return true;
-    }
-
-    private b8 uploadPendingBatches(){
-        return this.uploadPendingBatches(QueueSubmissionToken());
     }
 }
 

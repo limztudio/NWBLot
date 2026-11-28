@@ -49,11 +49,6 @@ Expected<SoftBody> CreateSoftBodyFromMesh(
     return sb;
 }
 
-Expected<SoftBody> CreateSoftBodyFromMesh(in Mesh sourceMesh, in SoftBodyMeshCreateParams params){
-    Vector<u32> unusedMap;
-    return CreateSoftBodyFromMesh(sourceMesh, params, unusedMap);
-}
-
 Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(
     in Mesh sourceMesh,
     in f32 cellSize,
@@ -78,11 +73,6 @@ Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(
     }
 
     return sb;
-}
-
-Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(in Mesh sourceMesh, in f32 cellSize, in SoftBodyMeshCreateParams params){
-    SoftBodyCageBinding unusedBinding;
-    return CreateTetrahedralSoftBodyAssetFromMesh(sourceMesh, cellSize, params, unusedBinding);
 }
 
 

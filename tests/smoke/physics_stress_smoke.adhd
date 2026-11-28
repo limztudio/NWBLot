@@ -457,7 +457,6 @@ Entity SpawnSmokeGpuResidentBodyEntity(
     in b8 isBox,
     in VectorSingle boxHalfExtents,
     in f32 sphereRadius,
-    in u32 instanceIndex,
     in VectorSingle localScale
 ){
     Entity ent = world.createEntity();
@@ -483,7 +482,6 @@ Entity SpawnSmokeGpuResidentBodyEntity(
     }
     mut GpuRenderTransformExportComponent exp = ent.addComponent<GpuRenderTransformExportComponent>();
     exp.enabled = true;
-    exp.instanceIndex = instanceIndex;
     exp.flags = 1u;
     exp.localScale = f32x4(localScale, 0.0f);
     return ent;
@@ -1225,29 +1223,31 @@ b8 RunGpuParityResidentAndExportSubtest(mut GraphicsRuntime graphics, mut Physic
 
     mut Device device = graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-    QueueSubmissionToken unusedToken;
     PhysicsGpuBufferSlot targetSlot;
-    if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/export_patch"), cast<u32>(size_of<f32x4>()), 8u, false, true, targetSlot)){
-        error("PhysicsStressSmoke: failed to allocate exportRenderTransformsToBuffer target");
+    if(!AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, Name("physics/smoke/export_patch"), cast<u32>(size_of<f32x4>()), 64u, false, true, targetSlot)){
+        error("PhysicsStressSmoke: failed to allocate exportRenderTransforms target");
         return false;
     }
 
-    const b8 exportOk = gpuDispatcher.exportRenderTransformsToBuffer(
-        resWorld,
-        Span<GpuPhysicsRenderTransformBinding>(bindings.data(), 2u),
-        targetSlot.buffer,
-        targetSlot.descriptor.slot(),
-        4u
+    in PhysicsWorld rWorldRef = resWorld;
+    const Span<GpuPhysicsRenderTransformBinding> rBindSpan(bindings.data(), 2u);
+    in BufferHandle rTargetBuf = targetSlot.buffer;
+    const u32 rTargetUavSlot = targetSlot.descriptor.slot();
+    const auto rToken = graphics.standaloneGraph().submitStandaloneTaskGraph(
+        lambda[mut gpuDispatcher, in rWorldRef, in rBindSpan, in rTargetBuf, in rTargetUavSlot](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+            return DeclareSmokePhysicsExportTask(gpuDispatcher, rWorldRef, rBindSpan, rTargetBuf, rTargetUavSlot, graph);
+        },
+        GpuPhysicalQueueId()
     );
     Vector<f32x4> patched;
     patched.resize(8u);
-    const b8 readOk = exportOk && device.readMappedBuffer(targetSlot.buffer.deref(), patched);
+    const b8 readOk = rToken.has_value() && device.waitForSubmissionToken(rToken.value()) && device.readMappedBuffer(targetSlot.buffer.deref(), patched);
     ReleasePhysicsGpuBufferSlot(heap, targetSlot);
     if(!readOk){
-        error("PhysicsStressSmoke: exportRenderTransformsToBuffer dispatch or readback failed");
+        error("PhysicsStressSmoke: task-graph export dispatch or readback failed");
         return false;
     }
-    return VerifyPatchedTrsPair(Span<f32x4>(patched), dynXf, stXf, VectorSingle(bindings[0u].scalePad), VectorSingle(bindings[1u].scalePad), "exportRenderTransformsToBuffer TRS patch mismatch");
+    return VerifyPatchedTrsPair(Span<f32x4>(patched), dynXf, stXf, VectorSingle(bindings[0u].scalePad), VectorSingle(bindings[1u].scalePad), "Task-graph export TRS patch mismatch");
 }
 
 b8 RunGpuParitySpatialQueriesSubtest(mut PhysicsGpuDispatcher gpuDispatcher){
@@ -1715,9 +1715,8 @@ b8 RunGpuParityAsyncAndTaskGraphExportSubtest(mut GraphicsRuntime graphics, mut 
 
     mut Device device = graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-    QueueSubmissionToken unusedToken;
     PhysicsGpuBufferSlot targetSlot;
-    if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/export_async_tg"), cast<u32>(size_of<f32x4>()), 8u, false, true, targetSlot)){
+    if(!AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, Name("physics/smoke/export_async_tg"), cast<u32>(size_of<f32x4>()), 64u, false, true, targetSlot)){
         error("PhysicsStressSmoke: failed to allocate async/taskgraph target buffer");
         return false;
     }
@@ -1729,27 +1728,11 @@ b8 RunGpuParityAsyncAndTaskGraphExportSubtest(mut GraphicsRuntime graphics, mut 
     bindings[1u].scalePad = f32x4(2.5f, 1.0f, 0.5f, 0.0f);
     const Span<GpuPhysicsRenderTransformBinding> bindSpan(bindings.data(), 2u);
 
-    QueueSubmissionToken asyncToken;
-    b8 ok = gpuDispatcher.exportRenderTransformsToBufferAsync(w, bindSpan, targetSlot.buffer, targetSlot.descriptor.slot(), 4u, asyncToken) && asyncToken.valid();
     Vector<f32x4> patched;
     patched.resize(8u);
-    if(ok)
-        ok = device.waitForSubmissionToken(asyncToken) && device.readMappedBuffer(targetSlot.buffer.deref(), patched);
-    if(ok){
-        const Transform3D xf0 = w.tryGetBodyTransform(b0).value();
-        const Transform3D xf1 = w.tryGetBodyTransform(b1).value();
-        ok = VerifyPatchedTrsPair(Span<f32x4>(patched), xf0, xf1, VectorSingle(bindings[0u].scalePad), VectorSingle(bindings[1u].scalePad), "exportRenderTransformsToBufferAsync TRS mismatch");
-    }
-    else{
-        error("PhysicsStressSmoke: exportRenderTransformsToBufferAsync dispatch or readback failed");
-    }
-
-    if(ok){
-        if(!gpuDispatcher.stepGpuResidentBodies(w, dt, 1u, true)){
-            error("PhysicsStressSmoke: post-async step failed");
-            ok = false;
-        }
-    }
+    b8 ok = gpuDispatcher.stepGpuResidentBodies(w, dt, 1u, true);
+    if(!ok)
+        error("PhysicsStressSmoke: post-async step failed");
 
     if(ok){
         in PhysicsWorld wRef = w;
@@ -2091,8 +2074,8 @@ b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
         if(!ConfigureSmokeGpuResidentEcsWorld(world, physSys, activeSubsystems, "Wave4C"))
             return false;
 
-        Entity e0 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.35f, 0u, VectorSingle(1.5f, 2.0f, 0.75f, 0.0f));
-        Entity e1 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(5.0f, 2.0f, 0.0f, 0.0f), VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.35f, 1u, VectorSingle(2.5f, 1.0f, 0.5f, 0.0f));
+        Entity e0 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.35f, VectorSingle(1.5f, 2.0f, 0.75f, 0.0f));
+        Entity e1 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(5.0f, 2.0f, 0.0f, 0.0f), VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.35f, VectorSingle(2.5f, 1.0f, 0.5f, 0.0f));
 
         const f32 dt = 1.0f / 60.0f;
         for(u32 s = 0u; s < 4u; ++s){
@@ -2111,12 +2094,11 @@ b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
             return false;
         }
 
-        QueueSubmissionToken unusedToken;
         PhysicsGpuBufferSlot opaqueSlot;
         PhysicsGpuBufferSlot avboitSlot;
         b8 subOk =
-            EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/wave4c_opaque"), cast<u32>(size_of<f32x4>()), 12u, false, true, opaqueSlot)
-            && EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/wave4c_avboit"), cast<u32>(size_of<f32x4>()), 12u, false, true, avboitSlot)
+            AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, Name("physics/smoke/wave4c_opaque"), cast<u32>(size_of<f32x4>()), 64u, false, true, opaqueSlot)
+            && AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, Name("physics/smoke/wave4c_avboit"), cast<u32>(size_of<f32x4>()), 64u, false, true, avboitSlot)
             && physSys.prepareInstanceTransformPatches();
         if(!subOk){
             error("PhysicsStressSmoke: Wave4C failed to prepare contributor buffers");
@@ -2476,8 +2458,8 @@ b8 RunGpuParityWave5And6Subtest(
         if(!ConfigureSmokeGpuResidentEcsWorld(world, physSys, activeSubsystems, "Wave6"))
             return false;
 
-        Entity e0 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(2.0f, 3.0f, 0.0f, 0.0f), VectorSingle(3.0f, 0.0f, 0.0f, 0.0f), true, VectorSingle(0.5f, 0.5f, 0.5f, 0.0f), 0.0f, 0u, VectorSingle(2.0f, 0.5f, 4.0f, 0.0f));
-        Entity e1 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(-4.0f, 1.0f, 5.0f, 0.0f), VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.4f, 1u, VectorSingle(1.0f, 2.0f, 1.0f, 0.0f));
+        Entity e0 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(2.0f, 3.0f, 0.0f, 0.0f), VectorSingle(3.0f, 0.0f, 0.0f, 0.0f), true, VectorSingle(0.5f, 0.5f, 0.5f, 0.0f), 0.0f, VectorSingle(2.0f, 0.5f, 4.0f, 0.0f));
+        Entity e1 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(-4.0f, 1.0f, 5.0f, 0.0f), VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.4f, VectorSingle(1.0f, 2.0f, 1.0f, 0.0f));
 
         const f32 dt = 1.0f / 60.0f;
         for(u32 s = 0u; s < 3u; ++s){
@@ -2521,12 +2503,11 @@ b8 RunGpuParityWave5And6Subtest(
         }
         physSys.setDebugDrawEnabled(false);
 
-        QueueSubmissionToken unusedToken;
         PhysicsGpuBufferSlot objSlot;
         PhysicsGpuBufferSlot invSlot;
         b8 ok =
-            EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/wave6_obj"), cast<u32>(size_of<f32x4>()), 8u, false, true, objSlot)
-            && EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/wave6_inv"), cast<u32>(size_of<f32x4>()), 16u, false, true, invSlot)
+            AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, Name("physics/smoke/wave6_obj"), cast<u32>(size_of<f32x4>()), 64u, false, true, objSlot)
+            && AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, Name("physics/smoke/wave6_inv"), cast<u32>(size_of<f32x4>()), 64u, false, true, invSlot)
             && physSys.prepareInstanceTransformPatches();
 
         Array<u32, 2u> entIds;
